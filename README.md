@@ -154,4 +154,4 @@ For details: [Implementation Plan](./docs/impl-plan.md). Stuck? Open a discussio
 
 ## License
 
-GPL-3.0 — matches original vaultmp-extended.
+GPL-3.0.
