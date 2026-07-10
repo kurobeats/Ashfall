@@ -40,7 +40,7 @@ pub fn encode_pipe_return(key: u32, result: &[u8]) -> Vec<u8> {
 
 /// Decode pipe return: returns (opcode, key, result_bytes) or None if malformed.
 pub fn decode_pipe_return(data: &[u8]) -> Option<(u8, u32, Vec<u8>)> {
-    if data.len() < 6 { return None; }
+    if data.len() < 5 { return None; }
     let opcode = data[0];
     let key = u32::from_le_bytes([data[1], data[2], data[3], data[4]]);
     let result = data[5..].to_vec();

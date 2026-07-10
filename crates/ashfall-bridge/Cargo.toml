@@ -7,7 +7,7 @@ edition = "2021"
 # Requires: apt install mingw-w64 (Debian/Ubuntu) or equivalent
 
 [lib]
-crate-type = ["cdylib"]  # produces bridge.dll
+crate-type = ["cdylib", "rlib"]  # cdylib produces bridge.dll; rlib needed for tests
 
 [dependencies]
 ashfall-core = { path = "../ashfall-core" }

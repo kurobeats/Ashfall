@@ -171,9 +171,13 @@ PRs within a phase often parallelizable unless noted.
 
 **Implemented:**
 - DllMain entry point + Wine DLL override loading via `WINEDLLOVERRIDES`
+- NVSE/FOSE plugin exports: `NVSEPlugin_Query`/`NVSEPlugin_Load`, `PluginInfo` struct (260 bytes, `#[repr(C)]`)
 - TCP server (accepts single client, pipe protocol: `PIPE_OP_COMMAND`/`PIPE_OP_RETURN`)
-- 5 opcodes: GetPos, SetPos, GetAngle, SetAngle (all hook stubs)
-- 40+ hook stubs covering: position, angle, Havok physics, combat DR/DT, NPC AI, factions, doors/terminals, quest/dialogue, FNV reputation/hardcore, NVSE event sinks, console hooks, opcode interception
+- 17 command opcodes: full getter/setter dispatch from vaultmp spec
+- 40+ hook stubs covering: position, angle, Havok physics, combat DR/DT, NPC AI, factions, doors/terminals, quest/dialogue, FNV reputation/hardcore
+- EventSink infrastructure: 5 event types with `TESHitEvent`/`TESActivateEvent`/`TESEquipEvent`/`TESCellChangeEvent`/`TESDeathEvent` structs, callback registry
+- Console command interception framework: `/kick`, `/players`, etc.
+- 33 bridge tests (pipe protocol 8, command dispatch 7, events 7, plugin info 7, unit 4)
 
 ---
 
@@ -217,15 +221,15 @@ PRs within a phase often parallelizable unless noted.
   - Custom opcode range: above `0x1400`
   - `CommandReturnType` bitmask: `kRetnType_Default=0`, `kRetnType_String=1<<15`, `kParams_OneOptional`/`kParams_OneRequired`
   - Multiplayer commands needed: `AshfallSyncPos`, `AshfallGetPlayerName`, `AshfallIsMultiplayer`
-- [ ] **EventSink subclasses** — implement `BSTEventSink<T>` virtual class
+- [x] **EventSink subclasses** — structs + registry ✅ IMPLEMENTED. 5 event types with `#[repr(C)]` structs, callback dispatch. Actual `EventDispatcher<T>::AddEventSink` registration needs VTable offset.
   - Events: `TESHitEvent`, `TESActivateEvent`, `TESEquipEvent`, `TESCellChangeEvent`, `TESDeathEvent`
   - Registration via `EventDispatcher<T>::AddEventSink(BSTEventSink<T>*)`
   - Must run on main game thread during plugin init — NVSE dispatchers not thread-safe
-- [ ] **Script opcode interception** — `ScriptRunner::Execute` hook
+- [x] **Script opcode interception** — framework ✅ IMPLEMENTED. `intercept_opcode()` stub. `ScriptRunner::Execute` vtable patch needs game binary.
   - Pattern: patch `ScriptRunner::Execute` vtable, check opcode, block/allow
   - NVSE `OpcodeHandler` table: array indexed by opcode low-byte, `bool (*)(ScriptRunner*, void*)`
   - Target opcodes: `PlaceAtMe`, `AddItem`, `SetStage`, `SetAV`, `EquipItem` → validate server-side, relay through pipe
-- [ ] **Console command hooks** — `ConsoleManager::ExecuteCommand` vtable patch
+- [x] **Console command hooks** — framework ✅ IMPLEMENTED. `register_command()`/`try_handle()`. Actual `ConsoleManager::ExecuteCommand` vtable patch needs game binary.
   - Intercept commands: `/kick`, `/ban`, `/msg`, `/players`
   - Parse command string, encode as pipe message to native client
 
@@ -301,7 +305,7 @@ PRs within a phase often parallelizable unless noted.
 | Phase 7: Client | 68–80 | ~1,770 | ✅ DONE. UDP networking, connection flow, object cache, handlers, 30Hz poll loop |
 | Phase 8: Master Server | 81–87 | 420 | ✅ DONE. Announce/query/cull, server heartbeat, client query, 6 integration tests |
 | Phase 9: Security + Testing | 88–97 | ~1,610 | ✅ DONE. AntiCheat validator, 48 tests (AC, combat, stress, world_sync) |
-| Phase 10: Proton Bridge | 98–107 | ~2,650 | ⚠️ DEFERRED. TCP server + hook stubs done. VTable patches need Gamebryo RE. |
+| Phase 10: Proton Bridge | 98–107 | ~2,650 | ⚠️ Partial. NVSE + event sinks + 17 opcodes + console hooks + 33 tests done. VTable patches deferred. |
 | **Total** | **~102** | **~16,680** | |
 
 P3+P4 can run in parallel (both depend on P2). P6+P7 can run in parallel after P5+P7 foundation ready. P10 can start after P7 IPC module (PR79).

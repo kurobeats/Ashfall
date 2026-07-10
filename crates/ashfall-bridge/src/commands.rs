@@ -37,12 +37,6 @@ fn read_u32(data: &[u8], offset: usize) -> Option<u32> {
     Some(u32::from_le_bytes([data[offset], data[offset+1], data[offset+2], data[offset+3]]))
 }
 
-/// Read a f32 from little-endian bytes at an offset within a slice.
-fn read_f32(data: &[u8], offset: usize) -> Option<f32> {
-    if data.len() < offset + 4 { return None; }
-    Some(f32::from_le_bytes([data[offset], data[offset+1], data[offset+2], data[offset+3]]))
-}
-
 /// Execute a command by opcode. Returns raw result bytes for pipe protocol.
 pub fn execute(func: u32, params: &[u8]) -> Vec<u8> {
     use opcodes::*;

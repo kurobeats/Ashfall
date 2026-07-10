@@ -37,6 +37,8 @@
 //! when reverse-engineered from Fallout3.exe / FalloutNV.exe + FOSE/NVSE.
 
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::collections::HashMap;
+use std::sync::{LazyLock, Mutex};
 
 static HOOKS_INSTALLED: AtomicBool = AtomicBool::new(false);
 
@@ -384,9 +386,6 @@ pub fn get_name(ref_id: u32) -> String {
 // ponytail: in-memory registries for testing. Real implementation
 // replaces these with NVSE CommandTable + BSTEventSink subclass.
 
-use std::collections::HashMap;
-use std::sync::Mutex;
-
 /// PluginInfo struct matching NVSE/FOSE plugin signature.
 /// Size: 4 + 256 = 260 bytes.
 #[repr(C)]
@@ -416,8 +415,6 @@ impl PluginInfo {
 
 /// Event sink callback type: invoked by the engine when events fire.
 pub type EventSinkCallback = extern "C" fn(event_type: u32, arg0: u32, arg1: u32, arg2: u32);
-
-use std::sync::LazyLock;
 
 static EVENT_SINKS: LazyLock<Mutex<HashMap<u32, Vec<EventSinkCallback>>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
@@ -455,7 +452,7 @@ pub fn dispatch_event(event_type: u32, arg0: u32, arg1: u32, arg2: u32) -> usize
 
 /// Check if any sinks are registered for an event type.
 pub fn has_event_sinks(event_type: u32) -> bool {
-    EVENT_SINKS.lock().unwrap().contains_key(&event_type)
+    EVENT_SINKS.lock().unwrap().get(&event_type).map(|v| !v.is_empty()).unwrap_or(false)
 }
 
 /// Hook a console command — intercept before engine processes it.
