@@ -3,7 +3,7 @@
 **Rust multiplayer mod for Fallout 3 / Fallout: New Vegas.** Server-authoritative dedicated server with WASM scripting, UDP networking, SQLite persistence, and an egui client browser. Started as a recreation of [vaultmp-extended](https://github.com/massdivide/vaultmp-extended), got bigger, fast.
 
 [![Status](https://img.shields.io/badge/phases-1%E2%80%939%20complete-brightgreen)](#status)
-[![Tests](https://img.shields.io/badge/tests-169%20passed-brightgreen)](https://github.com/YOUR_ORG/ashfall/actions)
+[![Tests](https://img.shields.io/badge/tests-202%20passed-brightgreen)](https://github.com/YOUR_ORG/ashfall/actions)
 [![License](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
 [![Work in Progress](https://img.shields.io/badge/status-work%20in%20progress-orange)](#whats-left)
 
@@ -34,7 +34,7 @@ Client connects to `127.0.0.1:1770`. Stub mode sends canned data — enough to v
 
 ## Status
 
-**Phases 1–9 complete. 169 tests, 0 failures.**
+**Phases 1–9 complete. Phase 10 partial (NVSE integration + 33 bridge tests). 202 tests, 0 failures.**
 
 | Phase | What's built |
 |-------|-------------|
