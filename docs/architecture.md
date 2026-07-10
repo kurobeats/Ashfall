@@ -89,10 +89,11 @@ ashfall/
 │   │       ├── script/                 # wasmtime scripting bridge
 │   │       │   ├── mod.rs
 │   │       │   ├── engine.rs           # WASM engine init, module loading
-│   │       │   ├── host.rs             # Host functions exposed to WASM (~160 APIs)
-│   │       │   ├── callbacks.rs        # 31 callback invocations into WASM
+│   │       │   ├── host.rs             # Host functions exposed to WASM (51 APIs)
+│   │       │   ├── callbacks.rs        # 35 callback stubs into WASM
 │   │       │   └── timer.rs            # Script timer management
 │   │       └── master.rs               # Master server registration + heartbeat
+│   │       ├── anti_cheat.rs             # Position/item/damage/sequence validators
 │   │
 │   ├── ashfall-client/                 # Client binary
 │   │   ├── Cargo.toml
@@ -111,17 +112,6 @@ ashfall/
 │   │       │   ├── player.rs           # Player spawn, context, controls
 │   │       │   ├── chat.rs             # Incoming chat messages
 │   │       │   └── gui.rs              # Window create/update handlers
-│   │       ├── ai/                     # NPC AI system
-│   │       │   ├── mod.rs
-│   │       │   ├── packages.rs         # AI package state machine
-│   │       │   └── factions.rs         # Faction hostility matrix
-│   │       ├── combat/                 # Combat system
-│   │       │   ├── mod.rs
-│   │       │   └── resolver.rs         # Server-authoritative damage calculation
-│   │       ├── quest/                  # Quest state manager
-│   │       │   └── mod.rs              # Quest stage + dialogue flag storage
-│   │       ├── physics/                # Physics validation
-│   │       │   └── mod.rs              # Velocity/position/scale bounds checker
 │   │       ├── world/                  # Client-side object cache
 │   │       │   ├── mod.rs
 │   │       │   ├── registry.rs         # Light client-side object map
@@ -129,14 +119,14 @@ ashfall/
 │   │       │   └── state.rs            # Derived render state
 │   │       ├── ipc/                    # Bridge to game engine process
 │   │       │   ├── mod.rs
-│   │       │   ├── pipe.rs             # Unix domain socket / pipe transport
+│   │       │   ├── transport.rs         # TCP/Unix/Stub transport layer
 │   │       │   ├── commands.rs         # Command encoding for game engine
-│   │       │   └── results.rs          # Result decoding from game engine
 │   │       └── ui/                     # egui-based GUI
 │   │           ├── mod.rs
 │   │           ├── app.rs              # egui app: server browser, connect, chat
 │   │           ├── server_browser.rs   # Master server query, server list
-│   │           └── widgets.rs          # Window, Button, Text, Edit, etc. — server-authored GUI
+│   │           └── widgets.rs          # Window, Button, Text, Edit, etc — server-authored GUI
+│   │       └── chat.rs                  # Chat input/output overlay
 │   │
 │   ├── ashfall-master/                 # Master server binary
 │   │   ├── Cargo.toml
@@ -178,6 +168,7 @@ members = [
     "crates/ashfall-client",
     "crates/ashfall-master",
     "crates/ashfall-script",
+    "crates/ashfall-bridge",
 ]
 resolver = "2"
 
@@ -835,7 +826,7 @@ pub struct ScriptEngine {
     timers: Vec<Timer>,
 }
 
-/// 31 script callbacks
+/// 35 script callbacks (31 original + OnHit, OnEquip, OnQuestStage, OnDialogueChoice)
 impl ScriptEngine {
     pub fn call_on_create(&mut self, object_id: NetworkID) { /* invoke all instances */ }
     pub fn call_on_destroy(&mut self, object_id: NetworkID) { /* ... */ }
@@ -870,7 +861,7 @@ impl ScriptEngine {
 }
 ```
 
-**Host functions** (~160) exposed to WASM: `CreateObject`, `DestroyObject`, `GetPos`, `SetPos`, `GetCell`, `SetCell`, `AddItem`, `RemoveItem`, `EquipItem`, `CreateWindow`, `SetWindowText`, `ChatMessage`, `Kick`, `SetGameWeather`, `SetGameTime`, `CreateTimer`, `KillTimer`, etc.
+**Host functions** (51) exposed to WASM: `CreateObject`, `DestroyObject`, `GetPos`, `SetPos`, `GetCell`, `SetCell`, `AddItem`, `RemoveItem`, `EquipItem`, `CreateWindow`, `SetWindowText`, `ChatMessage`, `Kick`, `SetGameWeather`, `SetGameTime`, `CreateTimer`, `KillTimer`, etc.
 
 WASM modules use `ashfall-script` SDK crate which provides typed wrappers around host imports.
 
@@ -1255,6 +1246,41 @@ CREATE TABLE IF NOT EXISTS ac_references (
     baseID INTEGER,
     cellID INTEGER
 );
+
+-- Phase 4 expansion tables (quests, FNV, factions)
+
+CREATE TABLE IF NOT EXISTS quest_stages (
+    quest_id INTEGER,
+    stage INTEGER,
+    PRIMARY KEY (quest_id)
+);
+
+CREATE TABLE IF NOT EXISTS dialogue_flags (
+    flag_id INTEGER PRIMARY KEY,
+    value INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS karma (
+    value INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS reputation (
+    faction_id INTEGER,
+    value INTEGER,
+    PRIMARY KEY (faction_id)
+);
+
+CREATE TABLE IF NOT EXISTS hardcore_stats (
+    hunger REAL,
+    thirst REAL,
+    sleep REAL
+);
+
+CREATE TABLE IF NOT EXISTS factions (
+    faction_id INTEGER PRIMARY KEY,
+    name TEXT,
+    hostility INTEGER
+);
 ```
 
 Database layer uses typed query structs:
@@ -1336,8 +1362,8 @@ pub struct MasterServer {
 
 ### Phase 5: Scripting
 1. wasmtime engine setup
-2. Host function stubs (all ~160)
-3. Callback dispatch
+2. Host function stubs (51)
+3. Callback dispatch (35 callbacks)
 4. Example freeroam script
 
 ### Phase 6: GUI (Server-Authoritative)
@@ -1357,11 +1383,24 @@ pub struct MasterServer {
 2. Server list culling
 3. Client master query integration in server browser
 
-### Phase 9: Polish
-1. File transfer (mod files over TCP)
-2. Delta compression
-3. Bandwidth monitoring
-4. Stress testing
+### Phase 9: Security + Testing
+1. Anti-cheat validators (position, velocity, item count, damage, sequence, FormID)
+2. Movement tests (Vault 101, Megaton, Freeside, Strip)
+3. Combat tests (raiders, mutants, NCR, Legion)
+4. Quest tests (Wasteland Survival Guide, They Went That-A-Way, Ring-a-Ding-Ding)
+5. Cell transition tests (metros, Strip gates)
+6. Stress tests (10–20 players in Megaton/Freeside)
+
+### Phase 10: Proton Bridge ⚠️ DEFERRED
+1. Gamebryo VTable hooks (reverse engineering dependent)
+2. Full command dispatcher (~120 opcodes)
+3. NVSE/FOSE plugin registration
+4. Event sinks (OnHit, OnActivate, OnEquip, OnCellChange, OnDeath)
+5. Console command hooks
+6. Proton integration test
+7. CI cross-compile workflow
+
+**Phase 10 deferred.** TCP server + command stubs + hook stubs exist. Real VTable patches require Gamebryo reverse engineering — post-MVP.
 
 ---
 
@@ -1385,7 +1424,7 @@ pub struct MasterServer {
 ## 14. Risk Areas
 
 1. **UDP reliability layer**: Custom ACK/reassembly is non-trivial. Mitigation: start simple, test with packet loss simulation.
-2. **wasmtime host functions**: ~160 API functions require careful FFI design. Mitigation: code-gen from a specification.
+2. **wasmtime host functions**: 51 API functions require careful FFI design. Mitigation: code-gen from a specification.
 3. **ObjectRegistry contention**: DashMap reads are lock-free, but write contention around cell changes could be an issue. Mitigation: batch cell changes.
 4. **IPC game engine bridge**: Depends on bridge.dll running inside Proton. Mitigation: stub mode for development — client runs standalone without game engine. TCP loopback tested and works in Proton 9+.
 5. **Packet ordering**: postcard + UDP means no built-in ordering. Mitigation: reliability layer handles sequence numbers and reordering.
