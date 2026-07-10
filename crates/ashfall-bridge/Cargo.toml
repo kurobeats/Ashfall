@@ -1,0 +1,20 @@
+[package]
+name = "ashfall-bridge"
+version = "0.1.0"
+edition = "2021"
+
+# Cross-compiled for Proton/Wine: cargo build --target x86_64-pc-windows-gnu
+# Requires: apt install mingw-w64 (Debian/Ubuntu) or equivalent
+
+[lib]
+crate-type = ["cdylib"]  # produces bridge.dll
+
+[dependencies]
+ashfall-core = { path = "../ashfall-core" }
+# Minimal deps — no tokio inside Wine process; use raw Win32 + std::net
+serde = { workspace = true }
+postcard = { workspace = true }
+
+# Windows API (available via std on windows-gnu target)
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-sys = { version = "0.52", features = ["Win32_System_Threading", "Win32_Networking_WinSock", "Win32_System_Diagnostics_Debug"] }
