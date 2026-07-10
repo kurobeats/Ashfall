@@ -189,19 +189,19 @@ PRs within a phase often parallelizable unless noted.
 
 ## Summary
 
-| Phase | PRs | Est LOC | Depends On | Key Additions |
-|-------|-----|---------|------------|---------------|
-| Phase 1: Core Protocol | 1–17h | 2,170 | — | ✅ DONE. Physics, combat, quest, AI, FNV packets + FormID |
-| Phase 2: Server Foundation | 18–29 | ~2,030 | PR17h | ✅ DONE. NPC AI manager, combat resolver, physics validator, quest manager |
-| Phase 3: World Sync | 30–39 | ~1,690 | PR29 | ✅ DONE. Physics, combat, projectile, NPC AI, door/terminal handlers |
-| Phase 4: Persistence | 40–47 | ~800 | PR29 | ✅ DONE. Quest stages, dialogue flags, karma, reputation, hardcore, faction tables |
-| Phase 5: Scripting | 48–59 | ~2,420 | PR47 | ✅ DONE. 50+ host fns, WASM engine, timers, SDK crate |
-| Phase 6: GUI | 60–67 | ~1,120 | PR59 | ✅ DONE. eframe app, server browser, chat overlay, widgets, IPC wired | ✅ |
-| Phase 7: Client | 68–80 | ~1,770 | PR67 | ✅ DONE. UDP networking, connection flow, client registry, handlers, background poll | ✅ |
-| Phase 8: Master Server | 81–87 | 420 | PR80 | (no changes) | ✅ DONE. |
-| Phase 9: Security + Testing | 88–97 | ~1,610 | PR87 | AntiCheat module, 48 new tests (anti_cheat, combat, stress, world_sync) | ✅ DONE. |
-| Phase 10: Proton Bridge | 98–107 | ~2,650 | PR79, PR80 | Hook stubs complete. VTable patches deferred. | ⚠️ Deferred |
-| **Total** | **~102** | **~16,680** | | |
+| Phase | PRs | Est LOC | Key Additions |
+|-------|-----|---------|---------------|
+| Phase 1: Core Protocol | 1–17h | 2,170 | ✅ DONE. 140+ packets, FormID, physics, combat, quest, AI, FNV, bridge hooks |
+| Phase 2: Server Foundation | 18–29 | ~2,030 | ✅ DONE. Config, UDP + reliability, sessions, registry, dispatch, combat resolver, AI, physics |
+| Phase 3: World Sync | 30–39 | ~1,690 | ✅ DONE. Cell grid, position/angle/actor/item sync, combat, projectile, NPC AI, cell snapshot |
+| Phase 4: Persistence | 40–47 | ~800 | ✅ DONE. 17 SQLite tables, CRUD, startup load, quest/karma/reputation/hardcore/factions |
+| Phase 5: Scripting | 48–59 | ~1,500 | ✅ DONE. wasmtime v22, 35 callbacks, 51 host fns, timers, example script, 14 tests |
+| Phase 6: GUI | 60–67 | ~1,120 | ✅ DONE. eframe/egui app, server browser, chat overlay, widget manager |
+| Phase 7: Client | 68–80 | ~1,770 | ✅ DONE. UDP networking, connection flow, object cache, handlers, 30Hz poll loop |
+| Phase 8: Master Server | 81–87 | 420 | ✅ DONE. Announce/query/cull, server heartbeat, client query, 6 integration tests |
+| Phase 9: Security + Testing | 88–97 | ~1,610 | ✅ DONE. AntiCheat validator, 48 tests (AC, combat, stress, world_sync) |
+| Phase 10: Proton Bridge | 98–107 | ~2,650 | ⚠️ DEFERRED. TCP server + hook stubs done. VTable patches need Gamebryo RE. |
+| **Total** | **~102** | **~16,680** | |
 
 P3+P4 can run in parallel (both depend on P2). P6+P7 can run in parallel after P5+P7 foundation ready. P10 can start after P7 IPC module (PR79).
 
@@ -211,17 +211,15 @@ P3+P4 can run in parallel (both depend on P2). P6+P7 can run in parallel after P
 
 | Risk | Mitigation |
 |------|------------|
-| Custom UDP reliability layer is bug-prone | Start with toy ACK; add loss-simulation tests early (PR88) |
-| ~160 WASM host functions is large surface | Code-gen from YAML spec file; phase PR50–55 break into groups |
-| ObjectRegistry transmute in `get<T>()` is unsafe | Lock down with integration tests; consider `AnyMap` alternative if crashes |
-| Client IPC depends on game engine that doesn't exist yet | Stub mode (PR79) allows full client testing without engine |
-| postcard varint may exceed 1200-byte limit for large packets | PR17 wire test verifies max size for every variant |
-| Phase ordering: GUI (P6) needs client crate (P7) for egui rendering | P6 handlers are server-side; P7 client crate created before P6 egui rendering PRs |
-| Proton bridge.dll injection fails on some Wine versions | `WINEDLLOVERRIDES` tested on Proton 9+ / Wine 9+; VTable hooking same on Wine as Windows |
-| Cross-compilation of bridge.dll requires MinGW toolchain | CI provides prebuilt DLL; local dev uses stub mode (no MinGW required) |
+| Custom UDP reliability layer is bug-prone | Start with toy ACK; add loss-simulation tests in post-MVP |
+| 51 WASM host functions is large surface | Stub all first; fill in by category as needed |
+| Client IPC depends on game engine that doesn't exist yet | Stub mode allows full client testing without engine |
+| postcard varint may exceed 1200-byte limit for large packets | Wire format tests verify max size for every variant |
+| Proton bridge.dll injection fails on some Wine versions | WINEDLLOVERRIDES tested on Proton 9+ / Wine 9+ |
+| Cross-compilation of bridge.dll requires MinGW toolchain | CI provides prebuilt DLL; local dev uses stub mode |
 | Havok physics VTable hooking untested on Proton/Wine | Start with velocity relay only; add rigid body hooks after basic position sync works |
 | Fallout damage formula replication may diverge from game | Integration test against known weapon/actor combos; expose DR/DT as configurable |
-| FNV reputation/karma sync not backwards compatible with FO3 | Protocol fields are optional; FO3 clients ignore FNV-specific packets; game type detected at bridge init |
-| CellSnapshot >1200 bytes for large cells | Split into multi-packet batches in Phase 9; MAX_CELL_SNAPSHOT_OBJECTS constant as safety cap |
-| NVSE CommandTable registration requires exact offset matching | Detect NVSE version at bridge init; fallback to basic DLL injection without NVSE features |
+| FNV reputation/karma sync not backwards compatible with FO3 | Protocol fields are optional; FO3 clients ignore FNV packets |
+| CellSnapshot >1200 bytes for large cells | Split into multi-packet batches post-MVP; MAX_CELL_SNAPSHOT_OBJECTS safety cap |
+| NVSE CommandTable registration requires exact offset matching | Detect NVSE version at bridge init; fallback to basic DLL injection |
 | Server-authoritative NPC AI latency may cause visible lag | AI package state changes are infrequent; use dead reckoning on client between updates |
