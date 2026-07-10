@@ -446,7 +446,7 @@ ashfall/
 
 ## Status
 
-**Phases 1-7 complete. 84 tests, 0 failures.**
+**Phases 1-7 complete. 97 tests, 0 failures.**
 
 | Phase | Status | Key features |
 |-------|--------|-------------|
@@ -459,7 +459,7 @@ ashfall/
 | 7: Client | ✅ | UDP networking, connection flow, client registry, handlers, background poll loop |
 | 8: Master | ❌ | Server browser registry (next) |
 | 9: Security | ❌ | Anti-cheat, stress tests |
-| 10: Bridge | ⚠️ | TCP server + hook stubs done (94 tests). VTable patches pending. |
+| 10: Bridge | ⚠️ | TCP server + hook stubs done (97 tests). VTable patches pending. |
 
 Next: Phase 8 (Master — server browser registry).
 
