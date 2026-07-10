@@ -16,19 +16,18 @@ PRs within a phase often parallelizable unless noted.
 
 ## Phase 1: Core Protocol ✅ DONE
 
-| PR | Branch | Task | Est LOC | Status |
-|----|--------|------|---------|--------|
-| 1-6 | (merged) | Workspace, types, constants, NetworkID, math, channel/header | 290 | ✅ |
-| 7-16 | (merged) | All Packet variants: system, object, item, container, actor, player, window, master | 820 | ✅ |
-| 17 | (merged) | Wire format round-trip tests (71 tests) | 400 | ✅ |
-| 17a | `phase1-pr17a-physics` | Physics packets: UpdateVelocity | 50 | ✅ |
-| 17b | `phase1-pr17b-combat` | Combat packets: ActorHit, ActorDamaged, ActorDeathExt, Projectile, Explosion | 100 | ✅ |
-| 17c | `phase1-pr17c-quest` | Quest+dialogue packets: QuestStage, DialogueFlag, DialogueChoice | 80 | ✅ |
-| 17d | `phase1-pr17d-ai-world` | NPC AI + world state: ActorCombatTarget, ActorAIPackage, ActorFaction, DoorState, TerminalState | 80 | ✅ |
-| 17e | `phase1-pr17e-scale-globals` | Scale field on ObjectNew/ItemNew/ActorNew/PlayerNew, FO3/FNV globals: KarmaUpdate, ReputationUpdate, HardcoreStats | 70 | ✅ |
-| 17f | `phase1-pr17f-formid` | FormID type + FormIDSync + CellSnapshot packet | 100 | ✅ |
-| 17g | `phase1-pr17g-bridge-hooks` | Bridge hooks expanded: 40+ stubs for physics, combat, AI, quest, FNV, NVSE | 150 | ✅ |
-| 17h | `phase1-pr17h-channel-routing` | Channel routing for new packets + is_unreliable() helper + anti-cheat constants | 30 | ✅ |
+**Implemented:**
+- Workspace + 6 crates, ObjectKind bitmask hierarchy, GameObject trait
+- Constants: version, CRC32 checksums (FO3 + FNV + FOSE + NVSE), size limits, ports, anti-cheat bounds
+- NetworkID newtype, VaultVector math (coordinate/angle validation, distance)
+- PacketHeader + Channel enum with is_unreliable() routing
+- 140+ Packet variants: system, object, item, container, actor, player, window, master
+- Extended packets: physics (UpdateVelocity), combat (ActorHit, ActorDamaged, ActorDeathExt, ProjectileNew/Remove, ExplosionNew), NPC AI (ActorCombatTarget, ActorAIPackage, ActorFaction), world state (DoorState, TerminalState), quest/dialogue (QuestStage, DialogueFlag, DialogueChoice), FO3 globals (KarmaUpdate), FNV globals (ReputationUpdate, HardcoreStats), cell snapshot (CellSnapshot + FormIDSync)
+- Scale field added to ObjectNew, ItemNew, ActorNew, PlayerNew
+- FormID type with mod_index/object_id helpers
+- Game type field on MasterAnnounce (fo3/fnv)
+- Bridge hooks: 40+ stubs (physics, combat DR/DT, AI, faction, door/terminal, quest/dialogue, FNV reputation/hardcore, NVSE event sinks, console hooks, opcode interception)
+- 71 wire format round-trip tests, all variants under 1200 bytes
 
 **Phase 1 total: ~2,170 LOC** ✅
 
