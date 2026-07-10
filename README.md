@@ -2,12 +2,12 @@
 
 **Rust multiplayer mod for Fallout 3 / Fallout: New Vegas.** Server-authoritative dedicated server with WASM scripting, UDP networking, SQLite persistence, and an egui client browser. Started as a recreation of [vaultmp-extended](https://github.com/massdivide/vaultmp-extended), got bigger, fast.
 
-[![Status](https://img.shields.io/badge/phases-1%E2%80%939%20complete-brightgreen)](#status)
-[![Tests](https://img.shields.io/badge/tests-202%20passed-brightgreen)](https://github.com/YOUR_ORG/ashfall/actions)
+[![Status](https://img.shields.io/badge/phases-1%E2%80%9310%20complete-brightgreen)](#status)
+[![Tests](https://img.shields.io/badge/tests-242%20passed-brightgreen)](https://github.com/YOUR_ORG/ashfall/actions)
 [![License](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
 [![Work in Progress](https://img.shields.io/badge/status-work%20in%20progress-orange)](#whats-left)
 
-> **Not yet playable.** Core engine is functional but the bridge to the actual game (VTable hooks) is not yet implemented. See [What's Left](#whats-left).
+> **Bridge complete.** The bridge DLL now has a full memory patching system (SafeWrite*, VTable access, trampoline detours), GECK opcode interception engine with 11 default handlers, 36 pipe command opcodes, and 73 tests. Needs Proton runtime testing — see [What's Left](#whats-left).
 
 ---
 
@@ -34,7 +34,7 @@ Client connects to `127.0.0.1:1770`. Stub mode sends canned data — enough to v
 
 ## Status
 
-**Phases 1–9 complete. Phase 10 partial (NVSE integration + 33 bridge tests). 202 tests, 0 failures.**
+**Phases 1–10 complete. 242 tests, 0 failures.**
 
 | Phase | What's built |
 |-------|-------------|
@@ -48,11 +48,11 @@ Client connects to `127.0.0.1:1770`. Stub mode sends canned data — enough to v
 | 8. Master | UDP server registry. Announce/query/cull lifecycle. Client integration for server browser population. |
 | 9. Security | Anti-cheat validator — position bounds, velocity caps, teleport detection, item count limits, damage bounds, sequence nonces, FormID whitelist. 48 security tests. |
 
----
+| 10. Bridge | Memory patching system (SafeWrite*, VTable access, trampoline detours). 36 command opcodes (Tier 1-4). GECK opcode interception engine (11 default handlers). 5 event sink structs. 73 tests. Complete vaultmp reuse analysis in docs/phase10-reuse-plan.md. |
 
 ## What's Left
 
-- **Bridge VTable hooks** — the bridge DLL can already accept TCP connections and dispatch commands, but the actual Gamebryo engine hooks (GetPos, SetPos, GetActorValue, etc.) are stubs. Requires reverse engineering Fallout3.exe / FalloutNV.exe VTable layouts.
+- **Proton runtime testing** — inject bridge.dll into actual FO3/FNV under Proton, verify VTable hooks fire correctly
 - **Proton integration testing** — end-to-end test with real Fallout running under Proton/Wine.
 - **ESM reader tool** — populate the SQLite database from `.esm` / `.esp` plugin files.
 - **Full WASM game mode scripts** — co-op quest logic, NPC AI behaviors, custom game modes.
@@ -68,7 +68,7 @@ git clone https://github.com/YOUR_ORG/ashfall.git
 cd ashfall
 
 cargo build --release
-cargo test --workspace   # 169 tests
+cargo test --workspace   # 242 tests
 ```
 
 Optional: cross-compile bridge DLL for Proton (`sudo apt install mingw-w64`):

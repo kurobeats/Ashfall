@@ -83,6 +83,10 @@ fn test_event_sink_unknown_type() {
 
 #[test]
 fn test_event_sink_multiple_types() {
+    hooks::unregister_event_sink(EVENT_ON_HIT, test_callback_hit);
+    hooks::unregister_event_sink(EVENT_ON_HIT, test_callback_death);
+    hooks::unregister_event_sink(EVENT_ON_DEATH, test_callback_death);
+
     hooks::register_event_sink(EVENT_ON_HIT, test_callback_hit);
     hooks::register_event_sink(EVENT_ON_DEATH, test_callback_death);
 
