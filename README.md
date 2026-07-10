@@ -446,7 +446,7 @@ ashfall/
 
 ## Status
 
-**Phases 1-5 complete. 98 tests, 0 failures.**
+**Phases 1-7 complete. 84 tests, 0 failures.**
 
 | Phase | Status | Key features |
 |-------|--------|-------------|
@@ -455,13 +455,13 @@ ashfall/
 | 3: World Sync | ✅ | Cell grid, position/angle/actor/item sync, combat resolution, physics validation |
 | 4: Persistence | ✅ | SQLite 17 tables, CRUD, startup load, faction/quest persistence, 10 DB tests |
 | 5: Scripting | ✅ | wasmtime engine, module loading, 35 callback stubs, TimerManager, ~50 host function stubs |
-| 6: GUI | ❌ | Server-authoritative egui widgets (next) |
-| 7: Client | ❌ | UDP networking, handlers, egui app |
-| 8: Master | ❌ | Server browser registry |
+| 6: GUI | ✅ | eframe app, server browser, chat overlay, widget stubs, IPC integration |
+| 7: Client | ✅ | UDP networking, connection flow, client registry, handlers, background poll loop |
+| 8: Master | ❌ | Server browser registry (next) |
 | 9: Security | ❌ | Anti-cheat, stress tests |
-| 10: Bridge | ⚠️ | TCP server + hook stubs done. VTable patches pending. |
+| 10: Bridge | ⚠️ | TCP server + hook stubs done (94 tests). VTable patches pending. |
 
-Next: Phase 6 (GUI — server-authoritative egui widgets).
+Next: Phase 8 (Master — server browser registry).
 
 ---
 
