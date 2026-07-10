@@ -446,7 +446,22 @@ ashfall/
 
 ## Status
 
-**Phase 1 in progress.** Workspace compiles (all 6 crates). `ashfall-core` complete with types, constants, math, `NetworkID`, full 120-variant `Packet` enum. IPC module with TCP/Unix/Stub transport. Bridge crate skeleton for Proton. Next: wire format round-trip tests (PR 17).
+**Phases 1-5 complete. 98 tests, 0 failures.**
+
+| Phase | Status | Key features |
+|-------|--------|-------------|
+| 1: Core Protocol | ✅ | FormID, 140+ packet variants (physics, combat, quest, AI, FNV), 71 wire tests |
+| 2: Server Foundation | ✅ | Config, UDP networking + reliability, session state machine, object registry, dispatch |
+| 3: World Sync | ✅ | Cell grid, position/angle/actor/item sync, combat resolution, physics validation |
+| 4: Persistence | ✅ | SQLite 17 tables, CRUD, startup load, faction/quest persistence, 10 DB tests |
+| 5: Scripting | ✅ | wasmtime engine, module loading, 35 callback stubs, TimerManager, ~50 host function stubs |
+| 6: GUI | ❌ | Server-authoritative egui widgets (next) |
+| 7: Client | ❌ | UDP networking, handlers, egui app |
+| 8: Master | ❌ | Server browser registry |
+| 9: Security | ❌ | Anti-cheat, stress tests |
+| 10: Bridge | ⚠️ | TCP server + hook stubs done. VTable patches pending. |
+
+Next: Phase 6 (GUI — server-authoritative egui widgets).
 
 ---
 

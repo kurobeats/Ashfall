@@ -1,7 +1,9 @@
 //! Unified Packet enum — all game protocol messages.
 //!
 //! Each variant corresponds to a `PF_MAKE` packet in the original C++.
+//! Extended for server-authoritative combat, physics, quests, and FNV support.
 
+use crate::form_id::FormIDSync;
 use crate::id::NetworkID;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -14,6 +16,46 @@ pub use header::PacketHeader;
 
 /// Maximum safe payload size (postcard-encoded) to fit in a single UDP datagram.
 pub const MAX_PACKET_SIZE: usize = 1200;
+
+/// Maximum size for a cell snapshot to avoid splitting.
+pub const MAX_CELL_SNAPSHOT_OBJECTS: usize = 256;
+
+// ── limb indices (match Fallout body part data) ──
+pub const LIMB_TORSO: u8 = 0;
+pub const LIMB_HEAD: u8 = 1;
+pub const LIMB_LEFT_ARM: u8 = 2;
+pub const LIMB_RIGHT_ARM: u8 = 3;
+pub const LIMB_LEFT_LEG: u8 = 4;
+pub const LIMB_RIGHT_LEG: u8 = 5;
+
+// ── death flags ──
+pub const DEATH_FLAG_EXPLOSIVE: u8 = 0x01;
+pub const DEATH_FLAG_ENERGY: u8 = 0x02;
+pub const DEATH_FLAG_DISMEMBER: u8 = 0x04;
+pub const DEATH_FLAG_HEADSHOT: u8 = 0x08;
+
+// ── hit flags ──
+pub const HIT_FLAG_CRITICAL: u8 = 0x01;
+pub const HIT_FLAG_SNEAK: u8 = 0x02;
+pub const HIT_FLAG_VATS: u8 = 0x04;
+
+// ── AI package types ──
+pub const AI_PACKAGE_NONE: u32 = 0;
+pub const AI_PACKAGE_WANDER: u32 = 1;
+pub const AI_PACKAGE_TRAVEL: u32 = 2;
+pub const AI_PACKAGE_COMBAT: u32 = 3;
+pub const AI_PACKAGE_GUARD: u32 = 4;
+pub const AI_PACKAGE_SLEEP: u32 = 5;
+pub const AI_PACKAGE_EAT: u32 = 6;
+pub const AI_PACKAGE_FLEE: u32 = 7;
+pub const AI_PACKAGE_USE_ITEM: u32 = 8;
+pub const AI_PACKAGE_DIALOGUE: u32 = 9;
+
+// ── cell snapshot flags ──
+pub const CELL_FLAG_INITIALLY_DISABLED: u32 = 0x01;
+pub const CELL_FLAG_DELETED: u32 = 0x02;
+pub const CELL_FLAG_PERSISTENT: u32 = 0x04;
+pub const CELL_FLAG_QUEST_ITEM: u32 = 0x08;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum Packet {
@@ -53,6 +95,7 @@ pub enum Packet {
         game_pos: [f32; 3],
         net_pos: [f32; 3],
         angle: [f32; 3],
+        scale: f32,
         cell: u32,
         enabled: bool,
         lock: u32,
@@ -62,12 +105,17 @@ pub enum Packet {
     ObjectRemove { id: NetworkID, silent: bool },
     UpdatePos { id: NetworkID, pos: [f32; 3] },
     UpdateAngle { id: NetworkID, angle: [f32; 2] },
+    UpdateScale { id: NetworkID, scale: f32 },
     UpdateCell { id: NetworkID, cell: u32, pos: [f32; 3] },
     UpdateName { id: NetworkID, name: String },
     UpdateLock { id: NetworkID, lock: u32 },
     UpdateOwner { id: NetworkID, owner: u32 },
     UpdateActivate { id: NetworkID, actor: NetworkID },
     UpdateSound { id: NetworkID, sound: u32 },
+
+    // ===== Physics (unreliable, broadcast) =====
+    /// Server → Clients: object velocity + grounded state.
+    UpdateVelocity { id: NetworkID, vel: [f32; 3], on_ground: bool },
 
     // ===== Item =====
     ItemNew {
@@ -80,6 +128,7 @@ pub enum Packet {
         equipped: bool,
         silent: bool,
         stick: bool,
+        scale: f32,
     },
     UpdateItemCount { id: NetworkID, count: u32, silent: bool },
     UpdateItemCondition { id: NetworkID, condition: f32, health: u32 },
@@ -108,6 +157,7 @@ pub enum Packet {
         dead: bool,
         death_limbs: u16,
         death_cause: i8,
+        scale: f32,
     },
     UpdateActorState {
         id: NetworkID,
@@ -126,18 +176,103 @@ pub enum Packet {
     UpdateFireWeapon { id: NetworkID, weapon: u32 },
     UpdateActorIdle { id: NetworkID, idle: u32, name: String },
 
+    // ===== Combat =====
+    /// Bridge → Server: actor hit event. Server validates + calculates damage.
+    ActorHit {
+        target: NetworkID,
+        attacker: NetworkID,
+        limb: u8,
+        /// Raw base damage before DR/DT (server applies DR/DT).
+        base_damage: f32,
+        flags: u8,
+        weapon_id: u32,
+        /// Projectile FormID if ranged.
+        projectile: u32,
+    },
+    /// Server → Clients: final damage applied after DR/DT validation.
+    ActorDamaged {
+        target: NetworkID,
+        attacker: NetworkID,
+        limb: u8,
+        final_damage: f32,
+        flags: u8,
+    },
+    /// Server → Clients: extended death data.
+    ActorDeathExt {
+        id: NetworkID,
+        killer: NetworkID,
+        weapon_id: u32,
+        limbs: u16,
+        cause: i8,
+        death_flags: u8,
+    },
+    /// Bridge → Server / Server → Clients: projectile spawned.
+    ProjectileNew {
+        id: NetworkID,
+        base_id: u32,
+        pos: [f32; 3],
+        vel: [f32; 3],
+        owner: NetworkID,
+    },
+    /// Server → Clients: projectile expired / impacted.
+    ProjectileRemove { id: NetworkID, impact_pos: [f32; 3] },
+    /// Bridge → Server / Server → Clients: explosion event.
+    ExplosionNew {
+        base_id: u32,
+        pos: [f32; 3],
+        radius: f32,
+        owner: NetworkID,
+    },
+
+    // ===== NPC AI =====
+    /// Server → Clients: NPC combat target changed.
+    ActorCombatTarget { id: NetworkID, target: NetworkID },
+    /// Server → Clients: NPC AI package changed.
+    ActorAIPackage { id: NetworkID, package_id: u32, flags: u8 },
+    /// Server → Clients: NPC faction data.
+    ActorFaction { id: NetworkID, faction_id: u32, rank: i8 },
+
     // ===== Player =====
     PlayerNew {
         id: NetworkID,
         ref_id: u32,
         base_id: u32,
         controls: HashMap<u8, (u8, bool)>,
+        scale: f32,
     },
     UpdateControl { id: NetworkID, control: u8, key: u8 },
     UpdateInterior { id: NetworkID, cell: String, spawn: bool },
     UpdateExterior { id: NetworkID, world: u32, x: i32, y: i32, spawn: bool },
     UpdateContext { id: NetworkID, cells: [u32; 9], spawn: bool },
     UpdateConsole { id: NetworkID, enabled: bool },
+
+    // ===== World Objects =====
+    /// Server → Clients: door open/close state.
+    DoorState { id: NetworkID, open: bool, ref_id: u32 },
+    /// Server → Clients: terminal locked/unlocked state.
+    TerminalState { id: NetworkID, locked: bool, ref_id: u32 },
+
+    // ===== Quest & Dialogue =====
+    /// Server → Client: quest stage update.
+    QuestStage { quest_id: u32, stage: u16 },
+    /// Server ↔ Client: dialogue flag value.
+    DialogueFlag { flag_id: u32, value: bool },
+    /// Client → Server: player made a dialogue choice.
+    DialogueChoice { flag_id: u32, choice: u32 },
+
+    // ===== FO3 Globals =====
+    /// Server → Client: karma change broadcast.
+    KarmaUpdate { value: i32 },
+
+    // ===== FNV Globals (optional — ignored by FO3) =====
+    /// Server → Client: reputation with a faction.
+    ReputationUpdate { faction: u32, value: i32 },
+    /// Server → Client: hardcore stat updates.
+    HardcoreStats { hunger: f32, thirst: f32, sleep: f32 },
+
+    // ===== Cell Snapshot =====
+    /// Server → Client on cell entry: full FormID-based dump.
+    CellSnapshot { cell: u32, objects: Vec<FormIDSync> },
 
     // ===== Window / GUI =====
     WindowNew {
@@ -225,6 +360,8 @@ pub enum Packet {
         max_players: u32,
         rules: HashMap<String, String>,
         mod_files: Vec<String>,
+        /// Game type identifier: "fo3" or "fnv".
+        game_type: String,
     },
     MasterUpdate {
         name: String,

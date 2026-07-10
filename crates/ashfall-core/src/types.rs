@@ -63,6 +63,7 @@ pub trait GameObject: Any + Send + Sync {
     fn kind(&self) -> ObjectKind;
     fn kind_mask(&self) -> u32;
     fn as_any(&self) -> &dyn Any;
+    fn as_any_mut(&mut self) -> &mut dyn Any;
 }
 
 // Convenience downcast.

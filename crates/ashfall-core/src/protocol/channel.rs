@@ -17,16 +17,32 @@ impl Channel {
     pub fn from_packet(packet: &super::Packet) -> Self {
         use super::Packet::*;
         match packet {
-            // System channel
+            // ── System channel ──
             GameStart | GameLoad | GameEnd { .. } | GameAuth { .. }
             | GameMod { .. } | GameMessage { .. } | GameWeather { .. }
-            | GameGlobal { .. } | GameBase { .. } | GameDeleted { .. } => Channel::System,
+            | GameGlobal { .. } | GameBase { .. } | GameDeleted { .. }
+            // Quest + dialogue (reliable, ordered)
+            | QuestStage { .. } | DialogueFlag { .. } | DialogueChoice { .. }
+            // World globals (reliable)
+            | KarmaUpdate { .. } | ReputationUpdate { .. } | HardcoreStats { .. }
+            => Channel::System,
 
-            // Chat channel
+            // ── Chat channel ──
             GameChat { .. } => Channel::Chat,
 
-            // Everything else → Game channel
+            // ── Game channel (everything else) ──
             _ => Channel::Game,
         }
+    }
+
+    /// Whether a packet should use unreliable (UDP fire-and-forget) delivery.
+    /// Position, velocity, and animation updates tolerate loss.
+    pub fn is_unreliable(packet: &super::Packet) -> bool {
+        use super::Packet::*;
+        matches!(
+            packet,
+            UpdatePos { .. } | UpdateAngle { .. } | UpdateVelocity { .. }
+            | ProjectileRemove { .. }
+        )
     }
 }

@@ -5,5 +5,5 @@ edition = "2021"
 
 [dependencies]
 serde = { workspace = true }
-postcard = { workspace = true }
+postcard = { workspace = true, features = ["use-std"] }
 bytes = { workspace = true }
