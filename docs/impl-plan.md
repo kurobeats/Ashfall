@@ -140,19 +140,18 @@ PRs within a phase often parallelizable unless noted.
 
 ---
 
-## Phase 8: Master Server
+## Phase 8: Master Server ✅ DONE
 
-| PR | Branch | Task | Est LOC | Files | Acceptance |
-|----|--------|------|---------|-------|------------|
-| 81 | `ashfall-phase8-pr81-master-crate` | ashfall-master crate skeleton | 30 | `crates/ashfall-master/Cargo.toml`, `src/main.rs` | `cargo build` |
-| 82 | `ashfall-phase8-pr82-server-list` | ServerEntry + HashMap registry | 40 | `crates/ashfall-master/src/server_list.rs` | Insert/update/get_all |
-| 83 | `ashfall-phase8-pr83-announce-handler` | MasterAnnounce handler | 50 | `crates/ashfall-master/src/announce.rs` | Deserialize announce; upsert server entry |
-| 84 | `ashfall-phase8-pr84-query-handler` | MasterQuery handler | 40 | `crates/ashfall-master/src/query.rs` | Serialize all entries; send response |
-| 85 | `ashfall-phase8-pr85-cull-loop` | Stale entry culling + main loop | 50 | `crates/ashfall-master/src/cull.rs` | Every 60s remove entries >120s stale |
-| 86 | `ashfall-phase8-pr86-server-announce` | Dedicated server master announce heartbeat | 60 | `crates/ashfall-server/src/master.rs` | Every 60s send MasterAnnounce to master addr |
-| 87 | `ashfall-phase8-pr87-master-integration-test` | Integration test: master + server + client query | 150 | `tests/master_integration.rs` | Server announces→master lists→client queries→sees server |
+**Implemented:**
+- `crates/ashfall-master/src/main.rs` — UDP listener, MasterAnnounce/MasterQuery handler, cull stale entries
+- `crates/ashfall-master/src/server_list.rs` — HashMap registry with 120s cull
+- `crates/ashfall-server/src/master.rs` — MasterAnnouncer with 60s heartbeat, shared UdpSocket
+- Wired into `DedicatedServer::tick()` — auto-announces player count to master
+- `crates/ashfall-client/src/ui/server_browser.rs` — Refresh button, server list display, Join button
+- Client sends MasterQuery via background thread, collects responses with 2s timeout
+- 6 integration tests (encode/decode, announce, update, query, FNV, cull)
 
-**Phase 8 total: ~420 LOC** (depends on PR80)
+**Phase 8 total: ~420 LOC** ✅
 
 ---
 
@@ -198,9 +197,9 @@ PRs within a phase often parallelizable unless noted.
 | Phase 3: World Sync | 30–39 | ~1,690 | PR29 | ✅ DONE. Physics, combat, projectile, NPC AI, door/terminal handlers |
 | Phase 4: Persistence | 40–47 | ~800 | PR29 | ✅ DONE. Quest stages, dialogue flags, karma, reputation, hardcore, faction tables |
 | Phase 5: Scripting | 48–59 | ~2,420 | PR47 | ✅ DONE. 50+ host fns, WASM engine, timers, SDK crate |
-| Phase 6: GUI | 60–67 | ~1,120 | PR59 | eframe app, server browser, chat overlay, widgets, IPC wired | ✅ |
-| Phase 7: Client | 68–80 | ~1,770 | PR67 | UDP networking, connection flow, client registry, handlers, background poll | ✅ |
-| Phase 8: Master Server | 81–87 | 420 | PR80 | (no changes) |
+| Phase 6: GUI | 60–67 | ~1,120 | PR59 | ✅ DONE. eframe app, server browser, chat overlay, widgets, IPC wired | ✅ |
+| Phase 7: Client | 68–80 | ~1,770 | PR67 | ✅ DONE. UDP networking, connection flow, client registry, handlers, background poll | ✅ |
+| Phase 8: Master Server | 81–87 | 420 | PR80 | (no changes) | ✅ |
 | Phase 9: Security + Testing | 88–97 | ~1,610 | PR87 | Anti-cheat, movement+combat+quest+cell tests, stress tests |
 | Phase 10: Proton Bridge | 98–107 | ~2,650 | PR79, PR80 | Physics/combat/AI/dialogue/quest/FNV hooks, NVSE integration, event sinks |
 | **Total** | **~102** | **~16,680** | | |

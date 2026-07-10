@@ -5,6 +5,7 @@ use ashfall_core::protocol::Packet;
 use crate::config::ServerConfig;
 use crate::db::Database;
 use crate::dispatch::Dispatcher;
+use crate::master::MasterAnnouncer;
 use crate::network::NetworkManager;
 use crate::quest::QuestManager;
 use crate::script::engine::{ScriptEngine, ScriptState};
@@ -25,6 +26,7 @@ pub struct DedicatedServer {
     pub dispatcher: Dispatcher,
     pub network: NetworkManager,
     pub script_engine: ScriptEngine,
+    pub master_announcer: MasterAnnouncer,
     pub sessions: DashMap<SocketAddr, Session>,
     next_guid: AtomicU64,
 }
@@ -58,12 +60,23 @@ impl DedicatedServer {
         script_engine.instantiate_all(state)?;
         tracing::info!("Script engine initialized with {} modules", script_engine.module_count());
 
+        // Master server announcer
+        let master_announcer = MasterAnnouncer::new(
+            config.master_addr(),
+            network.socket(),
+            "Ashfall Server".into(),
+            "Wasteland".into(),
+            config.server.game_type.clone(),
+            config.server.connections as u32,
+        );
+
         Ok(DedicatedServer {
             config,
             db,
             dispatcher,
             network,
             script_engine,
+            master_announcer,
             sessions: DashMap::new(),
             next_guid: AtomicU64::new(1),
         })
@@ -109,6 +122,10 @@ impl DedicatedServer {
     async fn tick(&mut self) {
         // Fire script timers
         self.script_engine.tick_timers();
+
+        // Master server heartbeat (every 60s)
+        let player_count = self.sessions.iter().filter(|e| e.value().is_ingame()).count() as u32;
+        self.master_announcer.heartbeat(player_count).await;
 
         // Cull stale sessions (>30s inactive)
         self.sessions.retain(|addr, session| {
