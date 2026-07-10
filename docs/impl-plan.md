@@ -34,43 +34,44 @@ PRs within a phase often parallelizable unless noted.
 
 ---
 
-## Phase 2: Server Foundation
+## Phase 2: Server Foundation ✅ DONE
 
-| PR | Branch | Task | Est LOC | Files | Acceptance |
-|----|--------|------|---------|-------|------------|
-| 18 | `ashfall-phase2-pr18-server-crate` | ashfall-server crate skeleton + Cargo.toml | 30 | `crates/ashfall-server/Cargo.toml`, `src/main.rs` | `cargo build` works; depends on ashfall-core |
-| 19 | `ashfall-phase2-pr19-config` | Server config parsing (ini-style) | 80 | `crates/ashfall-server/src/config.rs` | Parse port, host, announce addr, script path, db path |
-| 20 | `ashfall-phase2-pr20-udp-socket` | UDP socket bind + send/recv helpers | 80 | `crates/ashfall-server/src/network.rs` | Bind to configured port; tokio UdpSocket |
-| 21 | `ashfall-phase2-pr21-session` | Session struct: guid, addr, player_id, state enum | 60 | `crates/ashfall-server/src/session.rs` | State machine: Connecting→Auth→Loading→InGame→Disconnecting |
-| 22 | `ashfall-phase2-pr22-object-registry` | ObjectRegistry: DashMap insert/get/remove/is_deleted | 120 | `crates/ashfall-server/src/world/registry.rs` | Concurrent insert+get+remove; type_counts; deleted tombstone |
-| 23 | `ashfall-phase2-pr23-object-structs` | Server-side Object/Item/Container/Actor/Player structs | 150 | `crates/ashfall-server/src/world/objects.rs` | All data structs match arch doc; Clone+Debug |
-| 24 | `ashfall-phase2-pr24-dispatch` | Packet dispatch: match packet → handler function | 100 | `crates/ashfall-server/src/dispatch.rs` | Match all Packet variants; route to handler stubs |
-| 25 | `ashfall-phase2-pr25-auth-handler` | Auth handler: validate, call script callback stub, create session | 80 | `crates/ashfall-server/src/handlers/auth.rs` | Name/pwd validated; GameAuth→GameLoad flow |
-| 26 | `ashfall-phase2-pr26-connection-flow` | Full connect→auth→load→ingame lifecycle | 200 | `crates/ashfall-server/src/handlers/game.rs`, `src/handlers/player.rs` | Server sends weather/globals/time/deleted; creates player; sends PlayerNew to existing |
-| 27 | `ashfall-phase2-pr27-main-loop` | Main server loop: tick + recv select | 100 | `crates/ashfall-server/src/dedicated.rs` | 30Hz tick; UDP recv; dispatch; session cull |
-| 28 | `ashfall-phase2-pr28-cli` | CLI entry: parse args, load config, start server | 60 | `crates/ashfall-server/src/main.rs` | `--config` flag; `--port` override; graceful shutdown on SIGINT |
-| 29 | `ashfall-phase2-pr29-server-integration-test` | Integration test: start server, connect mock client, auth flow | 200 | `crates/ashfall-server/tests/auth_flow.rs` | Mock client sends GameAuth, receives GameLoad; timeout-based |
+**Implemented:**
+- Config parsing (ini + TOML) with CLI overrides
+- UDP socket + custom reliability layer (3 ordered + 1 unordered channel)
+- Session state machine (Connecting → Auth → Loading → InGame → Disconnecting)
+- ObjectRegistry: concurrent DashMap, cell_refs, type_counts, deleted tombstones
+- Full object hierarchy: Reference → Object, Item, Container, Actor, Player
+- Packet dispatch routing all 140+ variants to handlers
+- Auth handler: GameAuth → GameLoad flow with session creation
+- Connection flow: weather/globals/deleted → PlayerNew → GameStart
+- Main loop: 30Hz tick + UDP recv select + session cull
+- CLI with --config, --port, --game-type flags, graceful SIGINT shutdown
+- Combat, AI, quest, physics sub-systems with full validation
 
-**Phase 2 total: ~1,260 LOC** (depends on PR17)
+**Phase 2 total: ~1,260 LOC** ✅
 
 ---
 
-## Phase 3: World Sync
+## Phase 3: World Sync ✅ DONE
 
-| PR | Branch | Task | Est LOC | Files | Acceptance |
-|----|--------|------|---------|-------|------------|
-| 30 | `ashfall-phase3-pr30-cell-system` | Cell struct, cell neighbors, cell context (9-grid) | 100 | `crates/ashfall-server/src/world/cell.rs` | neighbors() returns 8; context update diff correct |
-| 31 | `ashfall-phase3-pr31-cell-registry` | cell_refs DashMap, get_by_cell, get_by_kind | 70 | `crates/ashfall-server/src/world/registry.rs` (extend) | O(1) cell→objects; insert auto-registers cell |
-| 32 | `ashfall-phase3-pr32-object-handler` | Handle ObjectNew, ObjectRemove, UpdatePos, UpdateAngle | 120 | `crates/ashfall-server/src/handlers/object.rs` | Auth state updated; fanout to cell context players |
-| 33 | `ashfall-phase3-pr33-cell-sync` | UpdateCell + UpdateName + UpdateLock + UpdateOwner handlers | 80 | `crates/ashfall-server/src/handlers/object.rs` (extend) | Cell change → recompute enter/leave; send diff to affected players |
-| 34 | `ashfall-phase3-pr34-actor-handler` | ActorNew, UpdateActorState, UpdateActorValue, UpdateActorDead | 150 | `crates/ashfall-server/src/handlers/actor.rs` | Values validated; state broadcasts to cell; death callback stub |
-| 35 | `ashfall-phase3-pr35-actor-race-sex` | UpdateActorRace, UpdateActorSex handlers | 60 | `crates/ashfall-server/src/handlers/actor.rs` (extend) | Race/age/sex changes broadcast |
-| 36 | `ashfall-phase3-pr36-item-handler` | ItemNew, UpdateItemCount, UpdateItemCondition, UpdateItemEquipped | 100 | `crates/ashfall-server/src/handlers/item.rs` | Container linkage validated; silent flag respected |
-| 37 | `ashfall-phase3-pr37-container-handler` | ContainerNew, ItemListNew handlers | 70 | `crates/ashfall-server/src/handlers/object.rs` (extend or new `container.rs`) | ItemList items validated against registry |
-| 38 | `ashfall-phase3-pr38-weather-globals` | Weather + Globals handlers | 60 | `crates/ashfall-server/src/world/weather.rs`, `src/world/globals.rs` | Set/get weather; global map read/write; broadcast on change |
-| 39 | `ashfall-phase3-pr39-sync-integration-test` | World sync integration test | 200 | `crates/ashfall-server/tests/world_sync.rs` | Create objects, move, verify position broadcasts to cell neighbors |
+**Implemented:**
+- CellGrid: 9-cell neighbor computation, interior/exterior cell encoding
+- CellContext: enter/leave diff, visibility management
+- Cell registry: O(1) cell→objects lookup, get_by_cells batch query
+- Object handlers: UpdatePos/UpdateAngle/UpdateCell/UpdateName with validation
+- Physics handler: UpdateVelocity with bounds checking
+- Actor handlers: state/value/race/sex/dead/fire weapon sync
+- Item handlers: count/condition/equipped with container linkage
+- Container handlers: create, ItemList management
+- Player handlers: controls, cell context with enter/leave ObjectNew/ObjectRemove
+- Weather + globals: set/get with broadcast on change
+- Combat resolution: Fallout damage formula, projectile/explosion relay
+- NPC AI sync: combat target, AI package, faction broadcast
+- Quest/Dialogue: stage updates, flag changes, choice relay
+- Cell snapshot: FormID-based full cell dump on entry
 
-**Phase 3 total: ~1,010 LOC** (depends on PR29)
+**Phase 3 total: ~1,010 LOC** ✅
 
 ---
 
