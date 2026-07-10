@@ -167,23 +167,124 @@ PRs within a phase often parallelizable unless noted.
 
 ## Phase 10: Proton Bridge ⚠️ DEFERRED
 
+**Background:** Bridge DLL injects into Fallout3.exe/FalloutNV.exe under Proton/Wine, hooks Gamebryo engine via VTable patching, exposes TCP server on 127.0.0.1:1771 for the native Linux client.
+
 **Implemented:**
-- `crates/ashfall-bridge/src/lib.rs` — DllMain entry point
-- `crates/ashfall-bridge/src/network.rs` — TCP server on 127.0.0.1:1771
-- `crates/ashfall-bridge/src/commands.rs` — 5 opcodes (GetPos/SetPos/GetAngle/SetAngle)
-- `crates/ashfall-bridge/src/hooks/mod.rs` — 40+ hook stubs for all categories
+- DllMain entry point + Wine DLL override loading via `WINEDLLOVERRIDES`
+- TCP server (accepts single client, pipe protocol: `PIPE_OP_COMMAND`/`PIPE_OP_RETURN`)
+- 5 opcodes: GetPos, SetPos, GetAngle, SetAngle (all hook stubs)
+- 40+ hook stubs covering: position, angle, Havok physics, combat DR/DT, NPC AI, factions, doors/terminals, quest/dialogue, FNV reputation/hardcore, NVSE event sinks, console hooks, opcode interception
 
-**Deferred (requires Gamebryo RE):**
-- VTable offset discovery for Fallout 3 1.7 / FNV 1.4
-- Actual VTable patching inside Wine/Proton process
-- NVSE CommandTable registration
-- Event sink callbacks (OnHit, OnActivate, OnDeath)
-- Console command interception
-- Havok bhkRigidBody hooking
+---
 
-**Known offsets documented in hooks/mod.rs.** See `https://github.com/ianpatt/fose/blob/master/common/GameAPI.cpp`
+### Missing Items — Gamebryo Reverse Engineering Required
 
-**Phase 10 total: stubs complete; VTable patches deferred to post-MVP**
+#### Engine Structure RE
+- [ ] **TESObjectREFR VTable** — verify offsets against actual FO3 1.7 / FNV 1.4 binaries
+  - Known from FOSE: `GetPos = VTable+0x30`, `SetPos = VTable+0x34`
+  - Need: `GetAngle`, `SetAngle`, `GetBaseForm`, `SetPosition`, `GetScale`
+  - Source: `https://github.com/ianpatt/fose/blob/master/common/GameAPI.cpp`
+- [ ] **Actor structure** — actor value storage, race/sex fields
+  - Known: `GetActorValue = VTable+0x68`
+  - Need: `SetActorValue`, `GetActorBaseValue`, `SetActorBaseValue`
+  - Actor value indices: health=0x14, AP=0x15, DR=0x29, DT=0x2A (FNV)
+- [ ] **PlayerCharacter** — controls array, camera state, console state
+  - Known: `GetControl = VTable+0x90`
+  - Need: `SetControl`, `GetConsoleEnabled`, pipboy/combat/POV flags
+- [ ] **TESForm base class** — FormID field, mod index, form type discriminator
+- [ ] **TESCell / TESWorldSpace** — cell loading triggers, cell buffer, interior/exterior distinction
+
+#### Havok Physics Integration
+- [ ] **bhkRigidBody VTable** — completely unexplored
+  - Need: `getLinearVelocity()`, `setLinearVelocity()`, `isOnGround()`
+  - Need: ground contact detection, collision layer flags
+  - Risk: Havok state machine may not be thread-safe from DLL
+- [ ] **bhkWorld** — physics step timing, collision event callbacks
+
+#### AI Process Manager
+- [ ] **HighProcess VTable** — combat target resolution, package execution
+  - Need: `GetCombatTarget()`, `GetCurrentAIPackage()`
+  - Need: faction hostility lookup (`GetFactionRank`, `IsHostile`)
+- [ ] **TESPackage** — package type enum, flags, schedule priority
+
+#### NVSE/FOSE Plugin Integration
+- [ ] **PluginInfo registration** — implement `NVSEPlugin_Query`/`NVSEPlugin_Load` exports
+  - Bridge currently uses Wine DLL override only, not NVSE-aware loading
+  - NVSE PluginInfo struct: `{ infoVersion: u32, name: char[256], version: u32 }`
+  - CRC checksums for detection: `FOSE_VER0122 = 0x0004E1B5`, `NVSE_VER061 = 0x00074D22`
+- [ ] **CommandTable registration** — register GECK script commands
+  - `CommandTable` global: array of `CommandInfo { opcode: u16, name: char*, params: CommandReturnType, execute: fn* }`
+  - Custom opcode range: above `0x1400`
+  - `CommandReturnType` bitmask: `kRetnType_Default=0`, `kRetnType_String=1<<15`, `kParams_OneOptional`/`kParams_OneRequired`
+  - Multiplayer commands needed: `AshfallSyncPos`, `AshfallGetPlayerName`, `AshfallIsMultiplayer`
+- [ ] **EventSink subclasses** — implement `BSTEventSink<T>` virtual class
+  - Events: `TESHitEvent`, `TESActivateEvent`, `TESEquipEvent`, `TESCellChangeEvent`, `TESDeathEvent`
+  - Registration via `EventDispatcher<T>::AddEventSink(BSTEventSink<T>*)`
+  - Must run on main game thread during plugin init — NVSE dispatchers not thread-safe
+- [ ] **Script opcode interception** — `ScriptRunner::Execute` hook
+  - Pattern: patch `ScriptRunner::Execute` vtable, check opcode, block/allow
+  - NVSE `OpcodeHandler` table: array indexed by opcode low-byte, `bool (*)(ScriptRunner*, void*)`
+  - Target opcodes: `PlaceAtMe`, `AddItem`, `SetStage`, `SetAV`, `EquipItem` → validate server-side, relay through pipe
+- [ ] **Console command hooks** — `ConsoleManager::ExecuteCommand` vtable patch
+  - Intercept commands: `/kick`, `/ban`, `/msg`, `/players`
+  - Parse command string, encode as pipe message to native client
+
+#### Memory Offsets (Unverified)
+- [ ] **Player memory layout** — position, angle, velocity, health, AP, ammo, weapon, inventory
+- [ ] **NPC memory layout** — AI package, combat target, faction, dialogue state, inventory
+- [ ] **World object memory** — door open/close, terminal locked, container inventory
+- [ ] **Quest/dialogue memory** — quest stage array, dialogue flag bitfield
+
+#### Proton-Specific Concerns
+- [ ] **VTable layout in Wine** — verify Wine mirrors Windows VTable exactly (likely correct, unverified)
+- [ ] **thread safety** — game engine runs on single thread; bridge TCP server on separate thread
+- [ ] **pipe vs TCP** — original vaultmp uses Windows named pipes; TCP loopback tested and works in Proton 9+
+
+#### Engine Quirks (from vaultmp experience)
+- [ ] **Quest NPCs** — essential flag, scripted packages, alias system. Must sync quest stages, not NPC state. Quest NPCs become non-functional if multiple players interact simultaneously.
+- [ ] **Scripted sequences** — `PlayGroup()` animations run locally, no hook for completion notification. Disable in MP or replace with custom animation sync.
+- [ ] **Havok ragdolls** — non-deterministic. Each client gets different corpse positions. Only fix: replace ragdoll death with synced animation + freeze.
+- [ ] **Time scale** — `SetGameSetting fTimeScale` global. All clients must use same timescale. Global variables (`GameHour`, `GameDay`) need periodic sync.
+- [ ] **VATS** — freezes time per-client. Disable VATS in MP or replace with real-time alternative.
+- [ ] **Dialog MenuMode** — pause breaks sync. Skip dialog camera or run dialog on server only.
+- [ ] **Leveled lists** — evaluated per-client, different spawns per client. Must seed RNG from server or have server pick results and send FormIDs to clients.
+- [ ] **FormID mapping** — clients have different load orders → different FormIDs. Need load order validation + rejection of mismatched clients, or mod index normalization.
+- [ ] **Interior instancing** — private interiors per player avoid sync, but quest interiors must be shared. Cell transition for multiple players in different cells viewing each other has LOD/cell loading architecture limitation.
+- [ ] **Save/load** — never worked in any FO3/FNV MP mod. Single-player save format incompatible with server state.
+
+#### Testing
+- [ ] **VTable patch verification** — inject test DLL into actual FO3/FNV, verify hook fires
+- [ ] **Proton integration test** — mock bridge responds to TCP commands; client polls position → sends to server
+- [ ] **CRC validation** — confirm `FALLOUT3_EN_VER17 = 0x00E59528` and `FNV_EN_VER14 = 0x0206FEC7` against actual binaries
+- [ ] **xNVSE API stability** — verify current xNVSE release plugin API for networking use
+- [ ] **Performance ceiling** — benchmark how many synced NPCs before bandwidth/CPU saturation
+
+#### What Works Without Engine Patches
+- ✅ Player position/rotation sync (high-frequency UDP, interpolation)
+- ✅ Chat system
+- ✅ Basic damage sync (shoot NPC, send damage event)
+- ✅ Inventory sync (server is authority on item counts)
+- ✅ Cell discovery notification
+
+#### What Breaks Without Engine Patches
+- ❌ Quest progression across multiple players (alias system, stage triggers)
+- ❌ Dialog with NPCs (MenuMode freeze)
+- ❌ Havok physics determinism (ragdolls, explosions, movable statics)
+- ❌ VATS (time freeze)
+- ❌ Scripted events (`PlayGroup`, `SayTo`, package-driven AI)
+- ❌ Random encounter consistency
+- ❌ Save/load in multiplayer
+- ❌ Mod compatibility when load orders differ
+
+#### Known Impossible Without Engine-Level Patches
+- ❌ Deterministic physics across clients
+- ❌ Full quest co-op (requires quest alias replication, stage sync with conditions)
+- ❌ Dialog sync without removing MenuMode pause
+- ❌ Seamless cell transitions for multiple players in different cells viewing each other
+
+---
+
+**Phase 10: Stubs complete (40+ hooks, TCP server, command dispatcher). VTable patching + NVSE integration deferred to post-MVP.**
 
 ---
 
