@@ -4,7 +4,7 @@
 
 [![Status](https://img.shields.io/badge/phases-1%E2%80%939%20complete-brightgreen)](#status)
 [![Tests](https://img.shields.io/badge/tests-169%20passed-brightgreen)](https://github.com/YOUR_ORG/ashfall/actions)
-[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![License](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
 [![Work in Progress](https://img.shields.io/badge/status-work%20in%20progress-orange)](#whats-left)
 
 > **Not yet playable.** Core engine is functional but the bridge to the actual game (VTable hooks) is not yet implemented. See [What's Left](#whats-left).
@@ -154,4 +154,4 @@ For details: [Implementation Plan](./docs/impl-plan.md). Stuck? Open a discussio
 
 ## License
 
-MIT — matches original vaultmp-extended.
+GPL-3.0 — matches original vaultmp-extended.
