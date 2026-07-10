@@ -17,3 +17,6 @@ anyhow = { workspace = true }
 thiserror = { workspace = true }
 bytes = { workspace = true }
 parking_lot = { workspace = true }
+clap = { version = "4", features = ["derive"] }
+shellexpand = "3"
+toml = "0.8"

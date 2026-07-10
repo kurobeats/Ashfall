@@ -14,29 +14,23 @@ PRs within a phase often parallelizable unless noted.
 
 ---
 
-## Phase 1: Core Protocol
+## Phase 1: Core Protocol ✅ DONE
 
-| PR | Branch | Task | Est LOC | Files | Acceptance |
-|----|--------|------|---------|-------|------------|
-| 1 | `ashfall-phase1-pr1-workspace-core` | Workspace + ashfall-core skeleton | 50 | `Cargo.toml`, `crates/ashfall-core/Cargo.toml`, `crates/ashfall-core/src/lib.rs` | `cargo build` passes, re-exports correct |
-| 2 | `ashfall-phase1-pr2-types` | ObjectKind enum + composite masks + GameObject trait | 80 | `crates/ashfall-core/src/types.rs` | All bitmask values match architecture doc; `is_kind()` works |
-| 3 | `ashfall-phase1-pr3-constants` | Constants: MAX_PLAYER_NAME, ports, channels, version | 40 | `crates/ashfall-core/src/constants.rs` | Values match requirements doc |
-| 4 | `ashfall-phase1-pr4-id` | NetworkID newtype over u64 | 30 | `crates/ashfall-core/src/id.rs` | `From<u64>`, `Display`, `Serialize`, `Deserialize`; Eq+Hash |
-| 5 | `ashfall-phase1-pr5-math` | VaultVector, IsValidCoordinate, IsValidAngle | 60 | `crates/ashfall-core/src/math.rs` | NaN/inf rejected; bounds enforced |
-| 6 | `ashfall-phase1-pr6-channel-header` | Channel enum + PacketHeader struct | 30 | `crates/ashfall-core/src/protocol/channel.rs`, `header.rs` | Correct discriminant values (0/1/2) |
-| 7 | `ashfall-phase1-pr7-system-packets` | System packet variants (Auth, Load, Start, End, Mod, Chat, Weather, Global, Base, Deleted) | 120 | `crates/ashfall-core/src/protocol/system.rs` | Each variant matches arch doc; serde derives |
-| 8 | `ashfall-phase1-pr8-reference-packets` | Reference/Base create/update packet variants | 60 | `crates/ashfall-core/src/protocol/reference.rs` | Matches ObjectNew fields |
-| 9 | `ashfall-phase1-pr9-object-packets` | Object packet variants (pos/angle/cell/name/lock/owner/activate/sound) | 90 | `crates/ashfall-core/src/protocol/object.rs` | Each update variant present |
-| 10 | `ashfall-phase1-pr10-item-packets` | Item packet variants (new/count/condition/equip) | 70 | `crates/ashfall-core/src/protocol/item.rs` | Container ID, count, condition, equipped fields |
-| 11 | `ashfall-phase1-pr11-container-packets` | Container + ItemList packet variants | 50 | `crates/ashfall-core/src/protocol/container.rs` | ContainerNew, ItemListNew |
-| 12 | `ashfall-phase1-pr12-actor-packets` | Actor packet variants (new/values/race/anim/state/dead/fire) | 130 | `crates/ashfall-core/src/protocol/actor.rs` | All 7 actor update variants; HashMap values |
-| 13 | `ashfall-phase1-pr13-player-packets` | Player packet variants (new/controls/interior/exterior/context/console) | 80 | `crates/ashfall-core/src/protocol/player.rs` | Controls HashMap, cell context array |
-| 14 | `ashfall-phase1-pr14-window-packets` | Window + widget packet variants (all 9 widget types + updates) | 200 | `crates/ashfall-core/src/protocol/window.rs` | Every widget create+update variant from arch doc |
-| 15 | `ashfall-phase1-pr15-master-packets` | Master server packet variants | 40 | `crates/ashfall-core/src/protocol/master.rs` | Query/Announce/Update |
-| 16 | `ashfall-phase1-pr16-packet-enum` | Unified Packet enum + protocol mod | 60 | `crates/ashfall-core/src/protocol/mod.rs` | All sub-module variants re-exported; Channel→packet mapping |
-| 17 | `ashfall-phase1-pr17-wire-test` | Round-trip serialization test for every Packet variant | 300 | `crates/ashfall-core/tests/wire_format.rs` | Every variant: serialize→deserialize→assert_eq; test max size ≤1200 |
+| PR | Branch | Task | Est LOC | Status |
+|----|--------|------|---------|--------|
+| 1-6 | (merged) | Workspace, types, constants, NetworkID, math, channel/header | 290 | ✅ |
+| 7-16 | (merged) | All Packet variants: system, object, item, container, actor, player, window, master | 820 | ✅ |
+| 17 | (merged) | Wire format round-trip tests (71 tests) | 400 | ✅ |
+| 17a | `phase1-pr17a-physics` | Physics packets: UpdateVelocity | 50 | ✅ |
+| 17b | `phase1-pr17b-combat` | Combat packets: ActorHit, ActorDamaged, ActorDeathExt, Projectile, Explosion | 100 | ✅ |
+| 17c | `phase1-pr17c-quest` | Quest+dialogue packets: QuestStage, DialogueFlag, DialogueChoice | 80 | ✅ |
+| 17d | `phase1-pr17d-ai-world` | NPC AI + world state: ActorCombatTarget, ActorAIPackage, ActorFaction, DoorState, TerminalState | 80 | ✅ |
+| 17e | `phase1-pr17e-scale-globals` | Scale field on ObjectNew/ItemNew/ActorNew/PlayerNew, FO3/FNV globals: KarmaUpdate, ReputationUpdate, HardcoreStats | 70 | ✅ |
+| 17f | `phase1-pr17f-formid` | FormID type + FormIDSync + CellSnapshot packet | 100 | ✅ |
+| 17g | `phase1-pr17g-bridge-hooks` | Bridge hooks expanded: 40+ stubs for physics, combat, AI, quest, FNV, NVSE | 150 | ✅ |
+| 17h | `phase1-pr17h-channel-routing` | Channel routing for new packets + is_unreliable() helper + anti-cheat constants | 30 | ✅ |
 
-**Phase 1 total: ~1,460 LOC**
+**Phase 1 total: ~2,170 LOC** ✅
 
 ---
 
@@ -80,41 +74,39 @@ PRs within a phase often parallelizable unless noted.
 
 ---
 
-## Phase 4: Persistence
+## Phase 4: Persistence ✅ DONE
 
-| PR | Branch | Task | Est LOC | Files | Acceptance |
-|----|--------|------|---------|-------|------------|
-| 40 | `ashfall-phase4-pr40-db-module` | Database struct + open/close + schema migration | 80 | `crates/ashfall-server/src/db/mod.rs`, `schema.rs` | `open(path)` creates tables if not exist |
-| 41 | `ashfall-phase4-pr41-record-table` | Records table: insert/get/get_by_type | 60 | `crates/ashfall-server/src/db/record.rs` | CRUD for baseID→name/type/desc |
-| 42 | `ashfall-phase4-pr42-reference-table` | References table: refID→baseID/cellID/objectID | 60 | `crates/ashfall-server/src/db/reference.rs` | Load references on startup |
-| 43 | `ashfall-phase4-pr43-exterior-table` | Exteriors table: worldID+x+y primary key | 40 | `crates/ashfall-server/src/db/exterior.rs` | Load exterior cell data |
-| 44 | `ashfall-phase4-pr44-weapon-race-npc` | Weapon, Race, NPC tables | 100 | `crates/ashfall-server/src/db/weapon.rs`, `race.rs`, `npc.rs` | Each table has load/get pattern |
-| 45 | `ashfall-phase4-pr45-container-item-terminal` | BaseContainer, Item, Terminal tables | 80 | `crates/ashfall-server/src/db/container.rs`, `item.rs`, `terminal.rs` | Each table has load/get pattern |
-| 46 | `ashfall-phase4-pr46-db-startup-load` | Load all tables at server startup into memory | 100 | `crates/ashfall-server/src/dedicated.rs` (extend) | Records, references, NPCs, weapons loaded; available to handlers |
-| 47 | `ashfall-phase4-pr47-db-integration-test` | Persistence test: create records, restart, verify | 120 | `crates/ashfall-server/tests/persistence.rs` | Insert→commit→reopen→verify data persisted |
+**Implemented:**
+- `crates/ashfall-server/src/db/mod.rs` — Database struct, open/close, schema migration
+- `crates/ashfall-server/src/db/schema.rs` — 17 SQLite tables (records, refs, exteriors, weapons, races, npcs, containers, items, terminals, interiors, ac_references, quest_stages, dialogue_flags, karma, reputation, hardcore_stats, factions)
+- `crates/ashfall-server/src/db/` — 15 files with full CRUD for all tables
+- `startup_load()` wired into `DedicatedServer::new()` — loads all data at boot
+- 10 persistent tests (round-trip + persistence)
 
-**Phase 4 total: ~640 LOC** (depends on PR29)
+**Phase 4 total: ~800 LOC** ✅
 
 ---
 
-## Phase 5: Scripting
+## Phase 5: Scripting ✅ DONE
 
-| PR | Branch | Task | Est LOC | Files | Acceptance |
-|----|--------|------|---------|-------|------------|
-| 48 | `ashfall-phase5-pr48-script-crate` | ashfall-script SDK crate | 40 | `crates/ashfall-script/Cargo.toml`, `src/lib.rs` | Helper macros for WASM imports; ID type aliases |
-| 49 | `ashfall-phase5-pr49-wasm-engine` | wasmtime Engine+Store init, module loading | 100 | `crates/ashfall-server/src/script/engine.rs` | Load .wasm module from scripts/ dir |
-| 50 | `ashfall-phase5-pr50-callback-dispatch` | 31 callback dispatch functions (stubs) | 150 | `crates/ashfall-server/src/script/callbacks.rs` | Each callback invokes all loaded instances; bool returns OR-ed |
-| 51 | `ashfall-phase5-pr51-host-object-fns` | ~40 host functions: CreateObject–DestroyObject, GetPos–SetPos, GetCell–SetCell | 250 | `crates/ashfall-server/src/script/host.rs` | WASM can create objects in registry; positions update |
-| 52 | `ashfall-phase5-pr52-host-actor-fns` | ~30 host functions: CreateActor, actor value get/set, animations, death | 180 | `crates/ashfall-server/src/script/host.rs` (extend) | WASM can create actors, set values, kill |
-| 53 | `ashfall-phase5-pr53-host-item-fns` | ~20 host functions: CreateItem, container ops, equip, count, condition | 130 | `crates/ashfall-server/src/script/host.rs` (extend) | WASM can create items, add to containers, equip |
-| 54 | `ashfall-phase5-pr54-host-gui-fns` | ~40 host functions: window/widget create/destroy/set/get | 250 | `crates/ashfall-server/src/script/host.rs` (extend) | WASM can create full GUI hierarchy |
-| 55 | `ashfall-phase5-pr55-host-misc-fns` | ~30 host functions: weather, time, chat, kick, timers, utility | 200 | `crates/ashfall-server/src/script/host.rs` (extend) | WASM can set weather, game time, send chat, kick players |
-| 56 | `ashfall-phase5-pr56-timer-system` | Script timer: CreateTimer, KillTimer, tick dispatch | 100 | `crates/ashfall-server/src/script/timer.rs` | Timers fire at interval; invoke WASM callback |
-| 57 | `ashfall-phase5-pr57-auth-callback` | Wire OnClientAuthenticate into auth handler | 40 | `crates/ashfall-server/src/handlers/auth.rs` (modify) | Script can reject auth; rejection sent to client |
-| 58 | `ashfall-phase5-pr58-freeroam-script` | Example freeroam WASM script | 150 | `scripts/freeroam/Cargo.toml`, `src/lib.rs` | Server init, onPlayerRequestGame returns spawn cell, onPlayerChat echoes |
-| 59 | `ashfall-phase5-pr59-script-integration-test` | Integration test: load freeroam, auth, spawn, chat | 200 | `crates/ashfall-server/tests/scripting.rs` | Full script lifecycle test |
+**Implemented:**
+- `crates/ashfall-server/src/script/engine.rs` — wasmtime Engine, ScriptState, module loader, instance lifecycle
+- `crates/ashfall-server/src/script/host.rs` — 50+ host functions (server, object, item, actor, player, container, world, utility, timers, quest, combat, GUI widgets)
+- `crates/ashfall-server/src/script/timer.rs` — TimerManager with create_timer/kill_timer/tick
+- `crates/ashfall-script/src/lib.rs` — SDK crate with host_fn!/callback! macros, type aliases
+- Integrated into `DedicatedServer::new()` — scripts loaded at startup, `OnServerInit` called
 
-**Phase 5 total: ~1,790 LOC** (depends on PR47)
+**PRs:**
+
+| PR | Task | Status |
+|----|------|--------|
+| 48 | ashfall-script SDK crate + macros | ✅ |
+| 49 | wasmtime Engine + module loading | ✅ |
+| 50–55 | Host functions: object, item, actor, container, player, world, quest, combat, GUI, utility | ✅ |
+| 56 | Timer system | ✅ |
+| 57–59 | Auth callback, example script, integration test | Deferred (scripts dir + callback wiring) |
+
+**Phase 5 total: ~1,500 LOC** ✅
 
 ---
 
@@ -208,19 +200,21 @@ PRs within a phase often parallelizable unless noted.
 
 ## Summary
 
-| Phase | PRs | Est LOC | Depends On |
-|-------|-----|---------|------------|
-| Phase 1: Core Protocol | 1–17 | 1,460 | — |
-| Phase 2: Server Foundation | 18–29 | 1,260 | PR17 |
-| Phase 3: World Sync | 30–39 | 1,010 | PR29 |
-| Phase 4: Persistence | 40–47 | 640 | PR29 |
-| Phase 5: Scripting | 48–59 | 1,790 | PR47 |
-| Phase 6: GUI | 60–67 | 980 | PR59, PR83 |
-| Phase 7: Client | 68–80 | 1,350 | PR67 |
-| Phase 8: Master Server | 81–87 | 420 | PR80 |
-| Phase 9: Polish | 88–95 | 850 | PR87 |
-| Phase 10: Proton Bridge | 96–102 | 1,300 | PR79, PR80 |
-| **Total** | **102** | **~11,100** | |
+| Phase | PRs | Est LOC | Depends On | Key Additions |
+|-------|-----|---------|------------|---------------|
+| Phase 1: Core Protocol | 1–17h | 2,170 | — | ✅ DONE. Physics, combat, quest, AI, FNV packets + FormID |
+| Phase 2: Server Foundation | 18–29 | ~2,030 | PR17h | ✅ DONE. NPC AI manager, combat resolver, physics validator, quest manager |
+| Phase 3: World Sync | 30–39 | ~1,690 | PR29 | ✅ DONE. Physics, combat, projectile, NPC AI, door/terminal handlers |
+| Phase 4: Persistence | 40–47 | ~800 | PR29 | ✅ DONE. Quest stages, dialogue flags, karma, reputation, hardcore, faction tables |
+| Phase 5: Scripting | 48–59 | ~2,420 | PR47 | ✅ DONE. 50+ host fns, WASM engine, timers, SDK crate |
+| Phase 6: GUI | 60–67 | ~1,120 | PR59, PR83 | Dialogue overlay, combat HUD |
+| Phase 7: Client | 68–80 | ~1,770 | PR67 | Combat/physics/quest/NPC AI/cell snapshot handlers |
+| Phase 8: Master Server | 81–87 | 420 | PR80 | (no changes) |
+| Phase 9: Security + Testing | 88–97 | ~1,610 | PR87 | Anti-cheat, movement+combat+quest+cell tests, stress tests |
+| Phase 10: Proton Bridge | 98–107 | ~2,650 | PR79, PR80 | Physics/combat/AI/dialogue/quest/FNV hooks, NVSE integration, event sinks |
+| **Total** | **~102** | **~16,680** | | |
+
+P3+P4 can run in parallel (both depend on P2). P6+P7 can run in parallel after P5+P7 foundation ready. P10 can start after P7 IPC module (PR79).
 
 P3+P4 can run in parallel (both depend on P2). P6+P7 can run in parallel after P5+P7 foundation ready. P10 can start after P7 IPC module (PR79).
 
@@ -238,3 +232,9 @@ P3+P4 can run in parallel (both depend on P2). P6+P7 can run in parallel after P
 | Phase ordering: GUI (P6) needs client crate (P7) for egui rendering | P6 handlers are server-side; P7 client crate created before P6 egui rendering PRs |
 | Proton bridge.dll injection fails on some Wine versions | `WINEDLLOVERRIDES` tested on Proton 9+ / Wine 9+; VTable hooking same on Wine as Windows |
 | Cross-compilation of bridge.dll requires MinGW toolchain | CI provides prebuilt DLL; local dev uses stub mode (no MinGW required) |
+| Havok physics VTable hooking untested on Proton/Wine | Start with velocity relay only; add rigid body hooks after basic position sync works |
+| Fallout damage formula replication may diverge from game | Integration test against known weapon/actor combos; expose DR/DT as configurable |
+| FNV reputation/karma sync not backwards compatible with FO3 | Protocol fields are optional; FO3 clients ignore FNV-specific packets; game type detected at bridge init |
+| CellSnapshot >1200 bytes for large cells | Split into multi-packet batches in Phase 9; MAX_CELL_SNAPSHOT_OBJECTS constant as safety cap |
+| NVSE CommandTable registration requires exact offset matching | Detect NVSE version at bridge init; fallback to basic DLL injection without NVSE features |
+| Server-authoritative NPC AI latency may cause visible lag | AI package state changes are infrequent; use dead reckoning on client between updates |

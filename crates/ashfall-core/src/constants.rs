@@ -7,7 +7,9 @@ pub const CLIENT_VERSION: &str = "0.1a snapshot \"Gary 2.10\"";
 
 /// CRC32 checksums for binary/data validation.
 pub const FALLOUT3_EN_VER17: u32 = 0x00E59528;
+pub const FNV_EN_VER14: u32 = 0x0206FEC7;
 pub const FOSE_VER0122: u32 = 0x0004E1B5;
+pub const NVSE_VER061: u32 = 0x00074D22;
 pub const VAULTMP_DLL: u32 = 0x000368FD;
 pub const VAULTMP_F3: u32 = 0x1C877592;
 pub const XLIVE_PATCH: u32 = 0x0000D57E;
@@ -36,3 +38,14 @@ pub const RAKNET_FILE_SERVER: u16 = 1550;
 
 /// Max connections per server.
 pub const RAKNET_STANDARD_CONNECTIONS: usize = 4;
+
+/// Game type constants for MasterAnnounce.
+pub const GAME_TYPE_FO3: &str = "fo3";
+pub const GAME_TYPE_FNV: &str = "fnv";
+
+/// Anti-cheat bounds.
+pub const MAX_SPEED: f32 = 5000.0; // units/sec — anything faster is a speed hack
+pub const MAX_TELEPORT_DISTANCE: f32 = 10000.0; // max single-frame position delta
+pub const MAX_ITEM_STACK: u32 = 65535; // max items in a single stack
+pub const MIN_SCALE: f32 = 0.1;
+pub const MAX_SCALE: f32 = 10.0;
