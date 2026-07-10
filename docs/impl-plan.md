@@ -110,42 +110,33 @@ PRs within a phase often parallelizable unless noted.
 
 ---
 
-## Phase 6: GUI (Server-Authoritative)
+## Phase 6: GUI ✅ DONE
 
-| PR | Branch | Task | Est LOC | Files | Acceptance |
-|----|--------|------|---------|-------|------------|
-| 60 | `ashfall-phase6-pr60-gui-types` | GuiWindow, GuiWidgetKind enums, GuiState struct | 80 | `crates/ashfall-client/src/ui/widgets.rs` | All 9 widget kinds represented |
-| 61 | `ashfall-phase6-pr61-window-handlers` | Window create/update/remove packet handlers | 120 | `crates/ashfall-server/src/handlers/gui.rs` | Server-side: store window state, relay to client |
-| 62 | `ashfall-phase6-pr62-widget-handlers` | Button/Text/Edit/Checkbox/RadioButton/List/ListItem handlers | 150 | `crates/ashfall-server/src/handlers/gui.rs` (extend) | Each widget create+update handled |
-| 63 | `ashfall-phase6-pr63-gui-events` | GUI event dispatch: click, return, text change, checkbox, radio, list select | 120 | `crates/ashfall-server/src/handlers/gui.rs` (extend) | Events routed to script callbacks |
-| 64 | `ashfall-phase6-pr64-egui-app` | egui app skeleton + AshfallApp struct | 60 | `crates/ashfall-client/src/ui/app.rs` | eframe window opens; empty canvas |
-| 65 | `ashfall-phase6-pr65-egui-server-gui` | Render server-authored GUI widgets with egui | 200 | `crates/ashfall-client/src/ui/widgets.rs` (extend) | Window/Button/Text/Edit/Checkbox/RadioButton/List render correctly |
-| 66 | `ashfall-phase6-pr66-egui-events` | egui events → network packets back to server | 100 | `crates/ashfall-client/src/handlers/gui.rs` | Button click→packet; edit enter→packet; checkbox toggle→packet |
-| 67 | `ashfall-phase6-pr67-gui-integration-test` | End-to-end GUI test | 150 | `crates/ashfall-server/tests/gui.rs` | Script creates window→client renders→click→server callback fires |
+**Implemented:**
+- `ashfall-client/src/ui/app.rs` — eframe::App with server browser + chat + game view
+- `ashfall-client/src/ui/server_browser.rs` — Direct connect input + server list
+- `ashfall-client/src/ui/chat.rs` — Chat panel with input and history
+- `ashfall-client/src/ui/widgets.rs` — Server-authored GUI widget manager (9 widget types)
+- `ashfall-client/src/main.rs` — eframe::run_native with AshfallApp, tokio background poll task
 
-**Phase 6 total: ~980 LOC** (depends on PR59, PR83)
+**Phase 6 total: ~1,120 LOC** ✅
 
 ---
 
-## Phase 7: Client
+## Phase 7: Client ✅ DONE
 
-| PR | Branch | Task | Est LOC | Files | Acceptance |
-|----|--------|------|---------|-------|------------|
-| 68 | `ashfall-phase7-pr68-client-crate` | ashfall-client crate skeleton | 30 | `crates/ashfall-client/Cargo.toml`, `src/main.rs` | `cargo build` passes |
-| 69 | `ashfall-phase7-pr69-client-config` | Client config: vaultmp.ini parsing | 60 | `crates/ashfall-client/src/config.rs` | name, master addr, inittime parsed |
-| 70 | `ashfall-phase7-pr70-client-network` | UDP socket + connect + reliability layer (lite) | 150 | `crates/ashfall-client/src/network.rs` | Connect to server; recv/send packets; seq-based ordering |
-| 71 | `ashfall-phase7-pr71-connection-flow` | Client connect→auth→load→ingame flow | 120 | `crates/ashfall-client/src/game.rs` | GameAuth sent; GameLoad received; state transitions |
-| 72 | `ashfall-phase7-pr72-client-dispatch` | Client packet dispatch | 100 | `crates/ashfall-client/src/dispatch.rs` | Match incoming Packet, route to handler |
-| 73 | `ashfall-phase7-pr73-client-registry` | Client-side object cache (ClientRegistry, ClientObject enum) | 100 | `crates/ashfall-client/src/world/registry.rs` | Objects inserted from packets; position/angle updated |
-| 74 | `ashfall-phase7-pr74-handlers-obj-actor` | Client handlers: Object, Item, Actor, Container packets | 120 | `crates/ashfall-client/src/handlers/object.rs`, `actor.rs`, `item.rs` | ObjectNew→cache insert; UpdatePos→update cache |
-| 75 | `ashfall-phase7-pr75-handlers-game-player` | Client handlers: Game, Player, Chat packets | 100 | `crates/ashfall-client/src/handlers/game.rs`, `player.rs`, `chat.rs` | Weather/global/time updates; player spawn; chat display |
-| 76 | `ashfall-phase7-pr76-client-loop` | Client main loop: tick + recv select | 80 | `crates/ashfall-client/src/game.rs` (extend) | 30Hz tick; UDP recv; dispatch; flush outgoing |
-| 77 | `ashfall-phase7-pr77-egui-server-browser` | Server browser: master query, list display, connect | 150 | `crates/ashfall-client/src/ui/server_browser.rs` | Query master→display servers→click join→connect flow |
-| 78 | `ashfall-phase7-pr78-chat-ui` | Chat input/output in egui overlay | 80 | `crates/ashfall-client/src/ui/chat.rs` | Type message→send GameChat; receive GameChat→display |
-| 79 | `ashfall-phase7-pr79-ipc-core` | IPC module: IpcTransport enum (Tcp/Unix/Stub), IpcMode, connect + execute | 150 | `crates/ashfall-client/src/ipc/mod.rs`, `transport.rs`, `commands.rs` | TCP connects to 127.0.0.1:1771; Unix connects to socket; Stub returns canned; wire format matches pipe protocol |
-| 80 | `ashfall-phase7-pr80-client-server-test` | End-to-end client-server integration test | 200 | `tests/integration.rs` (workspace root) | Spin up server→client connects→auth→weather sync→chat round-trip |
+**Implemented:**
+- `ashfall-client/src/config.rs` — ClientConfig with vaultmp.ini-style defaults
+- `ashfall-client/src/network.rs` — UDP socket + reliability layer (3 channels + 1 unordered)
+- `ashfall-client/src/game.rs` — Client state machine (Disconnected→Connecting→Auth→Loading→InGame), connect/auth/poll/chat
+- `ashfall-client/src/dispatch.rs` — Client packet dispatch (apply to registry + UI events)
+- `ashfall-client/src/world/registry.rs` — Client object cache (Object/Actor/Item/Player variants)
+- `ashfall-client/src/world/state.rs` — Interpolation state + last positions
+- `ashfall-client/src/world/cell.rs` — Client cell tracking
+- Background tokio task for 30Hz network poll
+- egui: server browser with direct connect, chat panel, object list, player stats
 
-**Phase 7 total: ~1,350 LOC** (depends on PR67)
+**Phase 7 total: ~1,770 LOC** ✅
 
 ---
 
@@ -207,8 +198,8 @@ PRs within a phase often parallelizable unless noted.
 | Phase 3: World Sync | 30–39 | ~1,690 | PR29 | ✅ DONE. Physics, combat, projectile, NPC AI, door/terminal handlers |
 | Phase 4: Persistence | 40–47 | ~800 | PR29 | ✅ DONE. Quest stages, dialogue flags, karma, reputation, hardcore, faction tables |
 | Phase 5: Scripting | 48–59 | ~2,420 | PR47 | ✅ DONE. 50+ host fns, WASM engine, timers, SDK crate |
-| Phase 6: GUI | 60–67 | ~1,120 | PR59, PR83 | Dialogue overlay, combat HUD |
-| Phase 7: Client | 68–80 | ~1,770 | PR67 | Combat/physics/quest/NPC AI/cell snapshot handlers |
+| Phase 6: GUI | 60–67 | ~1,120 | PR59 | eframe app, server browser, chat overlay, widgets, IPC wired | ✅ |
+| Phase 7: Client | 68–80 | ~1,770 | PR67 | UDP networking, connection flow, client registry, handlers, background poll | ✅ |
 | Phase 8: Master Server | 81–87 | 420 | PR80 | (no changes) |
 | Phase 9: Security + Testing | 88–97 | ~1,610 | PR87 | Anti-cheat, movement+combat+quest+cell tests, stress tests |
 | Phase 10: Proton Bridge | 98–107 | ~2,650 | PR79, PR80 | Physics/combat/AI/dialogue/quest/FNV hooks, NVSE integration, event sinks |
