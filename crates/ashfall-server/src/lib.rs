@@ -9,6 +9,7 @@ pub mod db;
 pub mod dedicated;
 pub mod dispatch;
 pub mod handlers;
+pub mod master;
 pub mod network;
 pub mod physics;
 pub mod quest;

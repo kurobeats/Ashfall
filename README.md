@@ -446,7 +446,7 @@ ashfall/
 
 ## Status
 
-**Phases 1-7 complete. 97 tests, 0 failures.**
+**Phases 1-8 complete. 103 tests, 0 failures.**
 
 | Phase | Status | Key features |
 |-------|--------|-------------|
@@ -457,11 +457,11 @@ ashfall/
 | 5: Scripting | ✅ | wasmtime engine, module loading, 35 callback stubs, TimerManager, ~50 host function stubs |
 | 6: GUI | ✅ | eframe app, server browser, chat overlay, widget stubs, IPC integration |
 | 7: Client | ✅ | UDP networking, connection flow, client registry, handlers, background poll loop |
-| 8: Master | ❌ | Server browser registry (next) |
+| 8: Master | ✅ | Server browser registry, announce/query/cull, client query UI, 6 tests |
 | 9: Security | ❌ | Anti-cheat, stress tests |
-| 10: Bridge | ⚠️ | TCP server + hook stubs done (97 tests). VTable patches pending. |
+| 10: Bridge | ⚠️ | TCP server + hook stubs done. VTable patches pending. |
 
-Next: Phase 8 (Master — server browser registry).
+Next: Phase 9 (Security — anti-cheat, stress tests).
 
 ---
 
