@@ -11,12 +11,41 @@ use crate::RUNNING;
 use crate::commands;
 
 /// Pipe protocol opcodes (match original vaultmp.hpp).
-const PIPE_SYS_WAKEUP: u8    = 0x01;
-const PIPE_OP_COMMAND: u8    = 0x02;
-const PIPE_OP_RETURN: u8     = 0x03;
-const PIPE_OP_RETURN_BIG: u8 = 0x04; // reserved for large responses
-const PIPE_OP_RETURN_RAW: u8 = 0x05; // reserved for raw binary
-const PIPE_ERROR_CLOSE: u8   = 0x06;
+pub const PIPE_SYS_WAKEUP: u8    = 0x01;
+pub const PIPE_OP_COMMAND: u8    = 0x02;
+pub const PIPE_OP_RETURN: u8     = 0x03;
+pub const PIPE_OP_RETURN_BIG: u8 = 0x04; // reserved for large responses
+pub const PIPE_OP_RETURN_RAW: u8 = 0x05; // reserved for raw binary
+pub const PIPE_ERROR_CLOSE: u8   = 0x06;
+
+/// Encode a pipe command: [PIPE_OP_COMMAND][key:4B LE][func:4B LE][param_count:1B][params...]
+pub fn encode_pipe_command(key: u32, func: u32, params: &[u8]) -> Vec<u8> {
+    let mut buf = Vec::with_capacity(1 + 4 + 4 + 1 + params.len());
+    buf.push(PIPE_OP_COMMAND);
+    buf.extend_from_slice(&key.to_le_bytes());
+    buf.extend_from_slice(&func.to_le_bytes());
+    buf.push(params.len() as u8);
+    buf.extend_from_slice(params);
+    buf
+}
+
+/// Encode a pipe return: [PIPE_OP_RETURN][key:4B LE][result...]
+pub fn encode_pipe_return(key: u32, result: &[u8]) -> Vec<u8> {
+    let mut buf = Vec::with_capacity(1 + 4 + result.len());
+    buf.push(PIPE_OP_RETURN);
+    buf.extend_from_slice(&key.to_le_bytes());
+    buf.extend_from_slice(result);
+    buf
+}
+
+/// Decode pipe return: returns (opcode, key, result_bytes) or None if malformed.
+pub fn decode_pipe_return(data: &[u8]) -> Option<(u8, u32, Vec<u8>)> {
+    if data.len() < 6 { return None; }
+    let opcode = data[0];
+    let key = u32::from_le_bytes([data[1], data[2], data[3], data[4]]);
+    let result = data[5..].to_vec();
+    Some((opcode, key, result))
+}
 
 const PIPE_LENGTH: usize = 2048;
 
