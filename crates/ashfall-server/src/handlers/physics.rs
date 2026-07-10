@@ -2,7 +2,7 @@
 
 use ashfall_core::id::NetworkID;
 use ashfall_core::protocol::Packet;
-use crate::physics::PhysicsValidator;
+use crate::anti_cheat::AntiCheat;
 use crate::session::Session;
 use crate::world::objects::Object;
 use crate::world::registry::ObjectRegistry;
@@ -16,8 +16,8 @@ pub fn handle_update_velocity(
     vel: [f32; 3],
     on_ground: bool,
 ) -> Option<Packet> {
-    if !PhysicsValidator::validate_velocity(vel) {
-        tracing::warn!("Physics: velocity rejected from {} ({vel:?})", session.player_name);
+    if !AntiCheat::validate_velocity(vel) {
+        tracing::warn!("AntiCheat: velocity rejected from {} ({vel:?})", session.player_name);
         return None;
     }
 

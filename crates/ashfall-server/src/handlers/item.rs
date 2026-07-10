@@ -2,6 +2,7 @@
 
 use ashfall_core::id::NetworkID;
 use ashfall_core::protocol::Packet;
+use crate::anti_cheat::AntiCheat;
 use crate::world::inventory::Inventory;
 use crate::world::objects::{Container, Item};
 use crate::world::registry::ObjectRegistry;
@@ -33,6 +34,10 @@ pub fn handle_item_new(registry: &Arc<ObjectRegistry>, packet: &Packet) -> Optio
 
 /// Handle UpdateItemCount.
 pub fn handle_item_count(registry: &Arc<ObjectRegistry>, id: NetworkID, count: u32, silent: bool) -> Option<Packet> {
+    if !AntiCheat::validate_item_count(count) {
+        tracing::warn!("AntiCheat: item count rejected — {count}");
+        return None;
+    }
     if let Some(arc) = registry.get(id) {
         let mut guard = arc.write();
         if let Some(item) = guard.as_any_mut().downcast_mut::<Item>() {

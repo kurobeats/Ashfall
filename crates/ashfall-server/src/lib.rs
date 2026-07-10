@@ -3,6 +3,7 @@
 //! All server modules live here. `main.rs` re-imports from this crate.
 
 pub mod ai;
+pub mod anti_cheat;
 pub mod combat;
 pub mod config;
 pub mod db;

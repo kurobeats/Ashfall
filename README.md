@@ -446,7 +446,7 @@ ashfall/
 
 ## Status
 
-**Phases 1-8 complete. 103 tests, 0 failures.**
+**Phases 1-9 complete. Phase 10 deferred (VTable hooks). 169 tests, 0 failures.**
 
 | Phase | Status | Key features |
 |-------|--------|-------------|
@@ -458,10 +458,10 @@ ashfall/
 | 6: GUI | ✅ | eframe app, server browser, chat overlay, widget stubs, IPC integration |
 | 7: Client | ✅ | UDP networking, connection flow, client registry, handlers, background poll loop |
 | 8: Master | ✅ | Server browser registry, announce/query/cull, client query UI, 6 tests |
-| 9: Security | ❌ | Anti-cheat, stress tests |
-| 10: Bridge | ⚠️ | TCP server + hook stubs done. VTable patches pending. |
+| 9: Security | ✅ | AntiCheat validator (position/velocity/item/damage/sequence/FormID), 25 AC + 14 combat + 5 stress + 4 sync tests |
+| 10: Bridge | ⚠️ Deferred | TCP server + hook stubs complete. VTable patches require Gamebryo RE. |
 
-Next: Phase 9 (Security — anti-cheat, stress tests).
+Next: Bridge VTable hooks (Phase 10) deferred to post-MVP.
 
 ---
 
