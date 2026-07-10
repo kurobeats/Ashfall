@@ -28,6 +28,14 @@ ashfall/
 │   │           ├── window.rs           # Window + widget create/update
 │   │           └── master.rs           # Master server announce/query/update
 │   │
+│   ├── ashfall-bridge/                 # Cross-compiled DLL for Proton/Wine
+│   │   ├── Cargo.toml
+│   │   └── src/
+│   │       ├── lib.rs                  # DllMain entry point
+│   │       ├── network.rs              # TCP server on 127.0.0.1:1771
+│   │       ├── commands.rs             # Command dispatcher (opcodes)
+│   │       └── hooks/mod.rs            # Gamebryo engine hook stubs
+│   │
 │   ├── ashfall-server/                 # Dedicated server binary
 │   │   ├── Cargo.toml
 │   │   └── src/
@@ -47,6 +55,17 @@ ashfall/
 │   │       │   ├── player.rs           # Player spawn, cell context, controls
 │   │       │   ├── chat.rs             # Chat message handling
 │   │       │   └── gui.rs              # Window event handling
+│   │       ├── ai/                     # NPC AI system
+│   │       │   ├── mod.rs
+│   │       │   ├── packages.rs         # AI package state machine
+│   │       │   └── factions.rs         # Faction hostility matrix
+│   │       ├── combat/                 # Combat system
+│   │       │   ├── mod.rs
+│   │       │   └── resolver.rs         # Server-authoritative damage calculation
+│   │       ├── quest/                  # Quest state manager
+│   │       │   └── mod.rs              # Quest stage + dialogue flag storage
+│   │       ├── physics/                # Physics validation
+│   │       │   └── mod.rs              # Velocity/position/scale bounds checker
 │   │       ├── world/                  # In-memory game state
 │   │       │   ├── mod.rs
 │   │       │   ├── registry.rs         # ObjectRegistry: NetworkID → Arc<dyn GameObject>
@@ -92,6 +111,17 @@ ashfall/
 │   │       │   ├── player.rs           # Player spawn, context, controls
 │   │       │   ├── chat.rs             # Incoming chat messages
 │   │       │   └── gui.rs              # Window create/update handlers
+│   │       ├── ai/                     # NPC AI system
+│   │       │   ├── mod.rs
+│   │       │   ├── packages.rs         # AI package state machine
+│   │       │   └── factions.rs         # Faction hostility matrix
+│   │       ├── combat/                 # Combat system
+│   │       │   ├── mod.rs
+│   │       │   └── resolver.rs         # Server-authoritative damage calculation
+│   │       ├── quest/                  # Quest state manager
+│   │       │   └── mod.rs              # Quest stage + dialogue flag storage
+│   │       ├── physics/                # Physics validation
+│   │       │   └── mod.rs              # Velocity/position/scale bounds checker
 │   │       ├── world/                  # Client-side object cache
 │   │       │   ├── mod.rs
 │   │       │   ├── registry.rs         # Light client-side object map
