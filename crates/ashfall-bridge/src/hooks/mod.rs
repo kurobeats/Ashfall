@@ -343,6 +343,30 @@ pub fn set_hardcore_stats(_hunger: f32, _thirst: f32, _sleep: f32) {
 // Misc
 // ═══════════════════════════════════════════════════════════════
 
+// ═══════════════════════════════════════════════════════════════
+// Misc getters (stubs)
+// ═══════════════════════════════════════════════════════════════
+
+pub fn get_cell(ref_id: u32) -> u32 {
+    let _ = ref_id;
+    0
+}
+
+pub fn get_activate(ref_id: u32) -> u32 {
+    let _ = ref_id;
+    0
+}
+
+pub fn get_enabled(ref_id: u32) -> bool {
+    let _ = ref_id;
+    true
+}
+
+pub fn get_lock(ref_id: u32) -> u32 {
+    let _ = ref_id;
+    0
+}
+
 pub fn get_base(ref_id: u32) -> u32 {
     let _ = ref_id;
     0
@@ -350,32 +374,109 @@ pub fn get_base(ref_id: u32) -> u32 {
 
 pub fn get_name(ref_id: u32) -> String {
     let _ = ref_id;
-    String::new()
+    "unnamed".to_string()
 }
 
 // ═══════════════════════════════════════════════════════════════
 // NVSE/FOSE Integration
 // ═══════════════════════════════════════════════════════════════
+//
+// ponytail: in-memory registries for testing. Real implementation
+// replaces these with NVSE CommandTable + BSTEventSink subclass.
+
+use std::collections::HashMap;
+use std::sync::Mutex;
+
+/// PluginInfo struct matching NVSE/FOSE plugin signature.
+/// Size: 4 + 256 = 260 bytes.
+#[repr(C)]
+pub struct PluginInfo {
+    pub info_version: u32,
+    pub name: [u8; 256],
+}
+
+impl PluginInfo {
+    pub fn new(name: &str) -> Self {
+        let mut info = PluginInfo {
+            info_version: 1,
+            name: [0u8; 256],
+        };
+        let bytes = name.as_bytes();
+        let len = bytes.len().min(255);
+        info.name[..len].copy_from_slice(&bytes[..len]);
+        info.name[len] = 0;
+        info
+    }
+
+    pub fn name_str(&self) -> &str {
+        let end = self.name.iter().position(|&b| b == 0).unwrap_or(256);
+        std::str::from_utf8(&self.name[..end]).unwrap_or("")
+    }
+}
 
 /// Event sink callback type: invoked by the engine when events fire.
 pub type EventSinkCallback = extern "C" fn(event_type: u32, arg0: u32, arg1: u32, arg2: u32);
 
+use std::sync::LazyLock;
+
+static EVENT_SINKS: LazyLock<Mutex<HashMap<u32, Vec<EventSinkCallback>>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+static CONSOLE_COMMANDS: LazyLock<Mutex<HashMap<String, bool>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
 /// Register an event sink with the NVSE/FOSE event dispatcher.
 pub fn register_event_sink(event_type: u32, callback: EventSinkCallback) {
-    // TODO: RegisterEventSink via NVSE CommandTable
-    let _ = (event_type, callback);
+    let mut sinks = EVENT_SINKS.lock().unwrap();
+    sinks.entry(event_type).or_default().push(callback);
 }
 
 /// Unregister an event sink.
 pub fn unregister_event_sink(event_type: u32, callback: EventSinkCallback) {
-    let _ = (event_type, callback);
+    let mut sinks = EVENT_SINKS.lock().unwrap();
+    if let Some(list) = sinks.get_mut(&event_type) {
+        list.retain(|&cb| cb as usize != callback as usize);
+    }
+}
+
+/// Dispatch an event to all registered sinks. Returns count of callbacks fired.
+pub fn dispatch_event(event_type: u32, arg0: u32, arg1: u32, arg2: u32) -> usize {
+    let sinks = EVENT_SINKS.lock().unwrap();
+    if let Some(list) = sinks.get(&event_type) {
+        let callbacks: Vec<_> = list.clone();
+        drop(sinks);
+        for cb in &callbacks {
+            cb(event_type, arg0, arg1, arg2);
+        }
+        callbacks.len()
+    } else {
+        0
+    }
+}
+
+/// Check if any sinks are registered for an event type.
+pub fn has_event_sinks(event_type: u32) -> bool {
+    EVENT_SINKS.lock().unwrap().contains_key(&event_type)
 }
 
 /// Hook a console command — intercept before engine processes it.
 pub fn hook_console_command(command: &str) -> bool {
-    // TODO: ConsoleManager::HookCommand
-    let _ = command;
-    false
+    let cmds = CONSOLE_COMMANDS.lock().unwrap();
+    cmds.contains_key(command)
+}
+
+/// Register a console command handler.
+pub fn register_console_command(command: &str) {
+    CONSOLE_COMMANDS.lock().unwrap().insert(command.to_string(), true);
+}
+
+/// Unregister a console command.
+pub fn unregister_console_command(command: &str) {
+    CONSOLE_COMMANDS.lock().unwrap().remove(command);
+}
+
+/// Check if a console command is registered.
+pub fn has_console_command(command: &str) -> bool {
+    CONSOLE_COMMANDS.lock().unwrap().contains_key(command)
 }
 
 /// Intercept a script opcode — validate before execution.
