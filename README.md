@@ -1,6 +1,6 @@
 # Ashfall
 
-**Rust multiplayer mod for Fallout 3 / Fallout: New Vegas.** Server-authoritative dedicated server with WASM scripting, UDP networking, SQLite persistence, and an egui client browser. Recreation of [vaultmp-extended](https://github.com/massdivide/vaultmp-extended).
+**Rust multiplayer mod for Fallout 3 / Fallout: New Vegas.** Server-authoritative dedicated server with WASM scripting, UDP networking, SQLite persistence, and an egui client browser. Started as a recreation of [vaultmp-extended](https://github.com/massdivide/vaultmp-extended), got bigger, fast.
 
 [![Status](https://img.shields.io/badge/phases-1%E2%80%939%20complete-brightgreen)](#status)
 [![Tests](https://img.shields.io/badge/tests-169%20passed-brightgreen)](https://github.com/YOUR_ORG/ashfall/actions)
