@@ -90,21 +90,14 @@ PRs within a phase often parallelizable unless noted.
 ## Phase 5: Scripting ✅ DONE
 
 **Implemented:**
-- `crates/ashfall-server/src/script/engine.rs` — wasmtime Engine, ScriptState, module loader, instance lifecycle
-- `crates/ashfall-server/src/script/host.rs` — 50+ host functions (server, object, item, actor, player, container, world, utility, timers, quest, combat, GUI widgets)
-- `crates/ashfall-server/src/script/timer.rs` — TimerManager with create_timer/kill_timer/tick
-- `crates/ashfall-script/src/lib.rs` — SDK crate with host_fn!/callback! macros, type aliases
-- Integrated into `DedicatedServer::new()` — scripts loaded at startup, `OnServerInit` called
-
-**PRs:**
-
-| PR | Task | Status |
-|----|------|--------|
-| 48 | ashfall-script SDK crate + macros | ✅ |
-| 49 | wasmtime Engine + module loading | ✅ |
-| 50–55 | Host functions: object, item, actor, container, player, world, quest, combat, GUI, utility | ✅ |
-| 56 | Timer system | ✅ |
-| 57–59 | Auth callback, example script, integration test | Deferred (scripts dir + callback wiring) |
+- wasmtime v22 Engine + ScriptState + module loader + instance lifecycle
+- 35 callback stubs (OnHit, OnEquip, OnQuestStage, OnDialogueChoice + 31 original)
+- 51 host function stubs (server, object, item, actor, player, container, world, utility, timers, quest, combat, GUI widgets)
+- TimerManager with create_timer/kill_timer/tick, wired into dedicated loop
+- ashfall-script SDK crate with host_fn!/callback! macros and type aliases
+- Example freeroam WASM game mode (scripts/freeroam/)
+- Auth callback stub, 14 integration tests (engine creation, module loading, callback stubs, timer lifecycle)
+- Integrated into DedicatedServer::new() — scripts loaded at startup
 
 **Phase 5 total: ~1,500 LOC** ✅
 
