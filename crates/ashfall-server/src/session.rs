@@ -28,6 +28,8 @@ pub struct Session {
     pub last_recv: Instant,
     pub bytes_sent: u64,
     pub bytes_recv: u64,
+    /// Anti-replay: last seen reliable sequence number.
+    pub last_seq: Option<u16>,
 }
 
 impl Session {
@@ -44,6 +46,7 @@ impl Session {
             last_recv: Instant::now(),
             bytes_sent: 0,
             bytes_recv: 0,
+            last_seq: None,
         }
     }
 

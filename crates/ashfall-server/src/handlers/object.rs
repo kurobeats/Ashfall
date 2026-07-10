@@ -3,11 +3,17 @@
 use ashfall_core::id::NetworkID;
 use ashfall_core::math::is_valid_angle3;
 use ashfall_core::protocol::Packet;
+use crate::anti_cheat::AntiCheat;
 use crate::physics::PhysicsValidator;
 use crate::session::Session;
 use crate::world::objects::{Container, Object};
 use crate::world::registry::ObjectRegistry;
 use std::sync::Arc;
+use std::time::Duration;
+
+// ponytail: generous delta time for position validation.
+// Real time deltas come from session last_recv.
+const DEFAULT_DELTA: Duration = Duration::from_millis(33);
 
 /// Handle UpdatePos — validate and update position.
 pub fn handle_update_pos(
@@ -16,21 +22,24 @@ pub fn handle_update_pos(
     id: NetworkID,
     pos: [f32; 3],
 ) -> Option<Packet> {
-    if !PhysicsValidator::validate_position(pos) {
-        tracing::warn!("Position rejected: invalid coords from {}", session.player_name);
-        return None;
-    }
-
     if let Some(arc) = registry.get(id) {
-        let mut guard = arc.write();
-        if let Some(obj) = guard.as_any_mut().downcast_mut::<Object>() {
+        let guard = arc.read();
+        if let Some(obj) = guard.as_any().downcast_ref::<Object>() {
             let prev = obj.net_pos;
-            if !PhysicsValidator::validate_delta(prev, pos) {
-                tracing::warn!("Teleport rejected: {prev:?} → {pos:?}");
+            let delta = session.last_recv.elapsed().min(Duration::from_secs(1));
+            drop(guard);
+
+            // Anti-cheat: validate position with speed + teleport check
+            if !AntiCheat::validate_position(pos, Some(prev), delta) {
+                tracing::warn!("AntiCheat: position rejected from {}", session.player_name);
                 return None;
             }
-            obj.net_pos = pos;
-            obj.game_pos = pos;
+
+            let mut guard = arc.write();
+            if let Some(obj) = guard.as_any_mut().downcast_mut::<Object>() {
+                obj.net_pos = pos;
+                obj.game_pos = pos;
+            }
         }
     }
 
@@ -98,7 +107,8 @@ pub fn handle_update_scale(
     id: NetworkID,
     scale: f32,
 ) -> Option<Packet> {
-    if !PhysicsValidator::validate_scale(scale) {
+    if !AntiCheat::validate_scale(scale) {
+        tracing::warn!("AntiCheat: scale rejected — {scale}");
         return None;
     }
     if let Some(arc) = registry.get(id) {

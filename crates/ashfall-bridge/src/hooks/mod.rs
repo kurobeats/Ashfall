@@ -1,5 +1,25 @@
 //! Gamebryo engine hooks — VTable patching for Fallout 3 / New Vegas.
 //!
+//! ═══════════════════════════════════════════════════════════════
+//! VTABLE HOOK DEFERRAL
+//!
+//! All hooks below are functional stubs (return zero/default).
+//! Real implementation requires:
+//! 1. Reverse-engineer Gamebryo VTable offsets for Fallout 3 1.7 & FNV 1.4
+//! 2. Patch TESObjectREFR / Actor / PlayerCharacter vtables via FOSE/NVSE
+//! 3. Register event sinks with NVSE CommandTable for OnHit/OnActivate/OnDeath
+//! 4. Hook Havok bhkRigidBody for velocity/collision state
+//! 5. Hook ConsoleManager for console command interception
+//!
+//! Known offsets (from xSE community):
+//!   TESObjectREFR::GetPos   = VTable+0x30 (FO3 1.7)
+//!   TESObjectREFR::SetPos   = VTable+0x34
+//!   Actor::GetActorValue    = VTable+0x68
+//!   PlayerCharacter::GetControl = VTable+0x90
+//!
+//! Resource: https://github.com/ianpatt/fose/blob/master/common/GameAPI.cpp
+//! ═══════════════════════════════════════════════════════════════
+//!
 //! Hooks intercept engine functions to read/write game state.
 //! Pattern: replace vtable entry → call original → read result.
 //!

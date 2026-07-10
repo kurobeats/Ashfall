@@ -155,36 +155,42 @@ PRs within a phase often parallelizable unless noted.
 
 ---
 
-## Phase 9: Polish
+## Phase 9: Security ✅ DONE
 
-| PR | Branch | Task | Est LOC | Files | Acceptance |
-|----|--------|------|---------|-------|------------|
-| 88 | `ashfall-phase9-pr88-reliability-tune` | ACK retransmit + RTT estimation + ordering fix | 150 | `crates/ashfall-server/src/network.rs`, `crates/ashfall-client/src/network.rs` | Packet loss simulation: 10% loss→reorder→correct |
-| 89 | `ashfall-phase9-pr89-pos-interpolation` | Client-side position interpolation (lerp between last two) | 60 | `crates/ashfall-client/src/world/state.rs` | Remote objects move smoothly between ticks |
-| 90 | `ashfall-phase9-pr90-file-transfer` | Mod file transfer (TCP channel, CRC32 verify) | 200 | `crates/ashfall-server/src/file_transfer.rs` | File list→CRC check→download→verify |
-| 91 | `ashfall-phase9-pr91-bandwidth-monitor` | Per-session byte counters, log stats | 50 | `crates/ashfall-server/src/network.rs` (extend) | `tracing::info!` bytes/sec per session |
-| 92 | `ashfall-phase9-pr92-tracing` | Structured tracing throughout: spans for dispatch, handlers, sync | 80 | All `src/` files | `RUST_LOG=debug` shows request flow; spans named |
-| 93 | `ashfall-phase9-pr93-graceful-shutdown` | SIGINT→drain sessions→notify master→close DB→exit | 60 | `crates/ashfall-server/src/dedicated.rs` (extend) | No data loss; sessions get GameEnd; master delisted |
-| 94 | `ashfall-phase9-pr94-stress-test` | Multi-client stress test harness | 150 | `tests/stress.rs` | 10 clients connect, move, chat for 60s; no crashes, no memory leak |
-| 95 | `ashfall-phase9-pr95-docs-readme` | README + developer guide + API docs | 100 | `README.md`, `docs/developing.md` | Build instructions; arch overview; how to write scripts |
+**Anti-cheat module:**
+- `anti_cheat.rs` — AntiCheat validator: position (speed+teleport), velocity, item count, scale, damage, sequence (anti-replay), FormID spoofing — with 18 unit tests
+- Wired into handlers: object.rs (position, scale), physics.rs (velocity), item.rs (count)
+- Session: `last_seq` field for anti-replay sequence tracking
 
-**Phase 9 total: ~850 LOC** (depends on PR87)
+**Comprehensive tests added:**
+- `tests/anti_cheat.rs` — 25 integration tests (teleport, speed hack, NaN, item count, damage bounds, sequence replay, FormID spoof, scale, velocity)
+- `tests/world_sync.rs` — 4 tests (cell context enter/leave, object create/move, packet serialization)
+- `tests/combat_tests.rs` — 14 tests (damage formula: basic, headshot, limb, DR, DT, crit, full pipeline, limb indices, headshot fatal)
+- `tests/stress.rs` — 5 tests (1000 objects, 256 cells, 20 sessions, concurrent reads, type counts)
+
+**Phase 9 total: 48 new test assertions, 169 total tests** ✅
 
 ---
 
-## Phase 10: Proton Bridge
+## Phase 10: Proton Bridge ⚠️ DEFERRED
 
-| PR | Branch | Task | Est LOC | Files | Acceptance |
-|----|--------|------|---------|-------|------------|
-| 96 | `ashfall-phase10-pr96-bridge-crate` | ashfall-bridge crate skeleton + Cargo.toml (target `x86_64-pc-windows-gnu`) | 30 | `crates/ashfall-bridge/Cargo.toml`, `src/lib.rs` | `cargo build --target x86_64-pc-windows-gnu` produces bridge.dll |
-| 97 | `ashfall-phase10-pr97-bridge-tcp` | TCP server on 127.0.0.1:1771; accept Ashfall client connection | 80 | `crates/ashfall-bridge/src/network.rs` | Listens on loopback; receives/decodes pipe-protocol commands |
-| 98 | `ashfall-phase10-pr98-bridge-hooks` | Gamebryo engine hooks: GetPos, GetAngle, GetActorState, SetPos, SetAngle, etc. | 300 | `crates/ashfall-bridge/src/hooks/` | VTable patches; calls Original→Ashfall; commands modify game state |
-| 99 | `ashfall-phase10-pr99-bridge-commands` | Full command dispatcher: all ~80 API opcodes (matching original Interface/API) | 250 | `crates/ashfall-bridge/src/commands.rs` | Every opcode (GetPos, GetAngle, SetPos, GetActorValue, etc.) handled |
-| 100 | `ashfall-phase10-pr100-client-tcp-ipc` | IPC client connects via TCP to bridge (replaces stub in pr79) | 80 | `crates/ashfall-client/src/ipc/mod.rs` (extend) | TCP connect to 127.0.0.1:1771; send/recv works; stub fallback on failure |
-| 101 | `ashfall-phase10-pr101-proton-integration-test` | End-to-end Proton test: start server + bridge stub + client | 150 | `tests/proton_integration.rs` | Mock bridge responds to TCP commands; client polls position→sends to server |
-| 102 | `ashfall-phase10-pr102-proton-docs` | Proton setup guide + CI cross-compile workflow | 60 | `docs/proton-setup.md`, `.github/workflows/bridge.yml` | Step-by-step for Steam Deck + desktop; CI produces bridge.dll artifact |
+**Implemented:**
+- `crates/ashfall-bridge/src/lib.rs` — DllMain entry point
+- `crates/ashfall-bridge/src/network.rs` — TCP server on 127.0.0.1:1771
+- `crates/ashfall-bridge/src/commands.rs` — 5 opcodes (GetPos/SetPos/GetAngle/SetAngle)
+- `crates/ashfall-bridge/src/hooks/mod.rs` — 40+ hook stubs for all categories
 
-**Phase 10 total: ~950 LOC** (depends on PR79, PR80)
+**Deferred (requires Gamebryo RE):**
+- VTable offset discovery for Fallout 3 1.7 / FNV 1.4
+- Actual VTable patching inside Wine/Proton process
+- NVSE CommandTable registration
+- Event sink callbacks (OnHit, OnActivate, OnDeath)
+- Console command interception
+- Havok bhkRigidBody hooking
+
+**Known offsets documented in hooks/mod.rs.** See `https://github.com/ianpatt/fose/blob/master/common/GameAPI.cpp`
+
+**Phase 10 total: stubs complete; VTable patches deferred to post-MVP**
 
 ---
 
@@ -199,12 +205,10 @@ PRs within a phase often parallelizable unless noted.
 | Phase 5: Scripting | 48–59 | ~2,420 | PR47 | ✅ DONE. 50+ host fns, WASM engine, timers, SDK crate |
 | Phase 6: GUI | 60–67 | ~1,120 | PR59 | ✅ DONE. eframe app, server browser, chat overlay, widgets, IPC wired | ✅ |
 | Phase 7: Client | 68–80 | ~1,770 | PR67 | ✅ DONE. UDP networking, connection flow, client registry, handlers, background poll | ✅ |
-| Phase 8: Master Server | 81–87 | 420 | PR80 | (no changes) | ✅ |
-| Phase 9: Security + Testing | 88–97 | ~1,610 | PR87 | Anti-cheat, movement+combat+quest+cell tests, stress tests |
-| Phase 10: Proton Bridge | 98–107 | ~2,650 | PR79, PR80 | Physics/combat/AI/dialogue/quest/FNV hooks, NVSE integration, event sinks |
+| Phase 8: Master Server | 81–87 | 420 | PR80 | (no changes) | ✅ DONE. |
+| Phase 9: Security + Testing | 88–97 | ~1,610 | PR87 | AntiCheat module, 48 new tests (anti_cheat, combat, stress, world_sync) | ✅ DONE. |
+| Phase 10: Proton Bridge | 98–107 | ~2,650 | PR79, PR80 | Hook stubs complete. VTable patches deferred. | ⚠️ Deferred |
 | **Total** | **~102** | **~16,680** | | |
-
-P3+P4 can run in parallel (both depend on P2). P6+P7 can run in parallel after P5+P7 foundation ready. P10 can start after P7 IPC module (PR79).
 
 P3+P4 can run in parallel (both depend on P2). P6+P7 can run in parallel after P5+P7 foundation ready. P10 can start after P7 IPC module (PR79).
 
