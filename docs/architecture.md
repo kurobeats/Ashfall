@@ -31,10 +31,23 @@ ashfall/
 │   ├── ashfall-bridge/                 # Cross-compiled DLL for Proton/Wine
 │   │   ├── Cargo.toml
 │   │   └── src/
-│   │       ├── lib.rs                  # DllMain entry point
+│   │       ├── lib.rs                  # DllMain + NVSEPlugin_* exports
+│   │       ├── plugin.rs               # NVSE PluginInfo struct + Query/Load
 │   │       ├── network.rs              # TCP server on 127.0.0.1:1771
-│   │       ├── commands.rs             # Command dispatcher (opcodes)
-│   │       └── hooks/mod.rs            # Gamebryo engine hook stubs
+│   │       ├── commands.rs             # Command dispatcher (36 opcodes)
+│   │       ├── events.rs               # EventSink types (hit, activate, equip,
+│   │       │                           #   cell change, death) + callback registry
+│   │       ├── console.rs              # Console command interception framework
+│   │       └── hooks/
+│   │           ├── mod.rs              # Public hook stubs (40+ engine functions)
+│   │           ├── memory.rs           # SafeWrite8/16/32/Buf, WriteRelJump/Call,
+│   │           │                       #   MemoryProtect RAII, Patch struct
+│   │           ├── vtable.rs           # VTable entry lookup, raw field access,
+│   │           │                       #   FormID resolution, concrete hook impls
+│   │           │                       #   (get_pos, get_angle, get_actor_state, etc.)
+│   │           ├── detour.rs           # Trampoline-based function detour
+│   │           └── opcode.rs           # GECK script opcode interception engine
+│   │                                   #   (PlaceAtMe, AddItem, EquipItem, Kill, Lock)
 │   │
 │   ├── ashfall-server/                 # Dedicated server binary
 │   │   ├── Cargo.toml

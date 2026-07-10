@@ -1,15 +1,10 @@
 //! Gamebryo engine hooks — VTable patching for Fallout 3 / New Vegas.
 //!
-//! ═══════════════════════════════════════════════════════════════
-//! VTABLE HOOK DEFERRAL
-//!
-//! All hooks below are functional stubs (return zero/default).
-//! Real implementation requires:
-//! 1. Reverse-engineer Gamebryo VTable offsets for Fallout 3 1.7 & FNV 1.4
-//! 2. Patch TESObjectREFR / Actor / PlayerCharacter vtables via FOSE/NVSE
-//! 3. Register event sinks with NVSE CommandTable for OnHit/OnActivate/OnDeath
-//! 4. Hook Havok bhkRigidBody for velocity/collision state
-//! 5. Hook ConsoleManager for console command interception
+//! Sub-modules:
+//! - `memory`: SafeWrite8/16/32/Buf, WriteRelJump/Call, MemoryProtect, Patch
+//! - `vtable`: VTable entry lookup, field access, concrete hook implementations
+//! - `detour`: Trampoline pattern for function hooking
+//! - `opcode`: OpcodeHandler table, BethesdaDelegator interception
 //!
 //! Known offsets (from xSE community):
 //!   TESObjectREFR::GetPos   = VTable+0x30 (FO3 1.7)
@@ -18,23 +13,11 @@
 //!   PlayerCharacter::GetControl = VTable+0x90
 //!
 //! Resource: https://github.com/ianpatt/fose/blob/master/common/GameAPI.cpp
-//! ═══════════════════════════════════════════════════════════════
-//!
-//! Hooks intercept engine functions to read/write game state.
-//! Pattern: replace vtable entry → call original → read result.
-//!
-//! Categories:
-//! - Position/Angle: TESObjectREFR::GetPos, SetPos, GetAngle, SetAngle
-//! - Havok physics: bhkRigidBody velocity, grounded, collision
-//! - Combat: hit detection, damage resistance/threshold
-//! - AI: combat target, AI package, faction
-//! - Quest/Dialogue: quest stages, dialogue flags, dialogue choices
-//! - World: doors, terminals, projectiles, explosions
-//! - FNV: reputation, hardcore stats (conditional on FNV exe)
-//! - NVSE/FOSE: CommandTable, event sinks, opcode interception
-//!
-//! ponytail: stubs return zero/default. Real VTable offsets filled in
-//! when reverse-engineered from Fallout3.exe / FalloutNV.exe + FOSE/NVSE.
+
+pub mod detour;
+pub mod memory;
+pub mod opcode;
+pub mod vtable;
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::collections::HashMap;
@@ -87,24 +70,28 @@ pub fn uninstall() {
 // ═══════════════════════════════════════════════════════════════
 
 /// Get position of a reference by refID.
+/// Delegates to vtable::get_pos (VTable call or raw field read).
+#[inline]
 pub fn get_pos(ref_id: u32) -> [f32; 3] {
-    let _ = ref_id;
-    // TODO: TESObjectREFR + 0x30 → TESObjectREFR::GetPos()
-    [0.0, 0.0, 0.0]
+    unsafe { vtable::get_pos(ref_id) }
 }
 
+/// Set position via VTable or raw field write.
+#[inline]
 pub fn set_pos(ref_id: u32, pos: [f32; 3]) {
-    let _ = (ref_id, pos);
-    // TODO: TESObjectREFR + 0x34 → TESObjectREFR::SetPos()
+    unsafe { vtable::set_pos(ref_id, pos) }
 }
 
+/// Get angle in degrees (converted from engine radians).
+#[inline]
 pub fn get_angle(ref_id: u32) -> [f32; 3] {
-    let _ = ref_id;
-    [0.0, 0.0, 0.0]
+    unsafe { vtable::get_angle(ref_id) }
 }
 
+/// Set angle (degrees → radians → engine).
+#[inline]
 pub fn set_angle(ref_id: u32, angle: [f32; 3]) {
-    let _ = (ref_id, angle);
+    unsafe { vtable::set_angle(ref_id, angle) }
 }
 
 pub fn get_scale(ref_id: u32) -> f32 {
@@ -191,24 +178,28 @@ pub fn get_weapon_crit_chance(weapon_base_id: u32) -> f32 {
 // Actor State
 // ═══════════════════════════════════════════════════════════════
 
+/// Read actor animation state: (idle, moving, weapon, flags, alerted, sneaking).
+#[inline]
 pub fn get_actor_state(ref_id: u32) -> (u32, u8, u8, u8, bool, bool) {
-    let _ = ref_id;
-    // (idle, moving, weapon, flags, alerted, sneaking)
-    (0, 0, 0, 0, false, false)
+    unsafe { vtable::get_actor_state(ref_id) }
 }
 
+/// Read actor value by index (health=0x14, AP=0x15, DR=0x29, DT=0x2A).
+#[inline]
 pub fn get_actor_value(ref_id: u32, index: u8) -> f32 {
-    let _ = (ref_id, index);
-    0.0
+    unsafe { vtable::get_actor_value(ref_id, index) }
 }
 
+/// Write actor value via VTable.
+#[inline]
 pub fn set_actor_value(ref_id: u32, index: u8, value: f32) {
-    let _ = (ref_id, index, value);
+    unsafe { vtable::set_actor_value(ref_id, index, value) }
 }
 
+/// Read base actor value.
+#[inline]
 pub fn get_actor_base_value(ref_id: u32, index: u8) -> f32 {
-    let _ = (ref_id, index);
-    0.0
+    unsafe { vtable::get_actor_base_value(ref_id, index) }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -349,9 +340,10 @@ pub fn set_hardcore_stats(_hunger: f32, _thirst: f32, _sleep: f32) {
 // Misc getters (stubs)
 // ═══════════════════════════════════════════════════════════════
 
+/// Read cell of a reference. ponytail: returns 0 until RE completes.
+#[inline]
 pub fn get_cell(ref_id: u32) -> u32 {
-    let _ = ref_id;
-    0
+    unsafe { vtable::get_cell(ref_id) }
 }
 
 pub fn get_activate(ref_id: u32) -> u32 {
@@ -369,9 +361,10 @@ pub fn get_lock(ref_id: u32) -> u32 {
     0
 }
 
+/// Get base FormID via VTable chain: GetBaseForm → GetFormID.
+#[inline]
 pub fn get_base(ref_id: u32) -> u32 {
-    let _ = ref_id;
-    0
+    unsafe { vtable::get_base(ref_id) }
 }
 
 pub fn get_name(ref_id: u32) -> String {
@@ -481,4 +474,102 @@ pub fn intercept_opcode(opcode: u16, args: &[u32]) -> bool {
     // TODO: ScriptRunner::InterceptOpcode
     let _ = (opcode, args);
     true // allow by default
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Tier 1-4 Hook Stubs (for extended commands.rs)
+// ponytail: these return zero/default. Real impl in vtable.rs.
+// ═══════════════════════════════════════════════════════════════
+
+/// Check if actor is dead.
+pub fn is_dead(ref_id: u32) -> bool {
+    let _ = ref_id;
+    // TODO: Actor::GetDead()
+    false
+}
+
+/// Get the cell FormID this reference currently occupies.
+pub fn get_parent_cell(ref_id: u32) -> u32 {
+    let _ = ref_id;
+    // TODO: TESObjectREFR::GetParentCell()
+    0
+}
+
+/// Equip an item on an actor.
+pub fn equip_item(ref_id: u32, item_id: u32, equip_slot: u32, prevent_removal: u8) {
+    let _ = (ref_id, item_id, equip_slot, prevent_removal);
+    // TODO: Actor::EquipItem() via GECK opcode
+}
+
+/// Unequip an item from an actor.
+pub fn unequip_item(ref_id: u32, item_id: u32, equip_slot: u32, prevent_removal: u8) {
+    let _ = (ref_id, item_id, equip_slot, prevent_removal);
+    // TODO: Actor::UnequipItem() via GECK opcode
+}
+
+/// Add items to inventory.
+pub fn add_item(ref_id: u32, item_id: u32, count: u32, silent: u8) {
+    let _ = (ref_id, item_id, count, silent);
+    // TODO: Actor::AddItem() via GECK opcode
+}
+
+/// Remove items from inventory.
+pub fn remove_item(ref_id: u32, item_id: u32, count: u32, silent: u8) {
+    let _ = (ref_id, item_id, count, silent);
+    // TODO: Actor::RemoveItem() via GECK opcode
+}
+
+/// Remove all items, optionally transferring to another container.
+pub fn remove_all_items(ref_id: u32, transfer_to: u32) {
+    let _ = (ref_id, transfer_to);
+    // TODO: Actor::RemoveAllItems() via GECK opcode
+}
+
+/// Get reference count for an inventory item form.
+pub fn get_ref_count(ref_id: u32) -> u32 {
+    let _ = ref_id;
+    // TODO: Actor::GetRefCount() via FOSE/NVSE
+    0
+}
+
+/// Kill an actor (direct death, bypasses damage).
+pub fn kill_actor(ref_id: u32, killer_id: u32, limb: i8, cause: i8) {
+    let _ = (ref_id, killer_id, limb, cause);
+    // TODO: Actor::Kill() via GECK opcode
+}
+
+/// Apply damage to an actor value.
+pub fn damage_actor_value(ref_id: u32, index: u8, damage: f32) {
+    let _ = (ref_id, index, damage);
+    // TODO: Actor::DamageActorValue() via GECK opcode
+}
+
+/// Restore an actor value (heal, repair).
+pub fn restore_actor_value(ref_id: u32, index: u8, amount: f32) {
+    let _ = (ref_id, index, amount);
+    // TODO: Actor::RestoreActorValue() via GECK opcode
+}
+
+/// Force-set an actor value (bypasses modifiers, sets base+current).
+pub fn force_actor_value(ref_id: u32, index: u8, value: f32) {
+    let _ = (ref_id, index, value);
+    // TODO: Actor::ForceActorValue() via GECK opcode
+}
+
+/// Play an animation group on an actor.
+pub fn play_group(ref_id: u32, group_id: u32, flags: u32) {
+    let _ = (ref_id, group_id, flags);
+    // TODO: Actor::PlayGroup() via GECK opcode
+}
+
+/// Force weather state globally.
+pub fn force_weather(weather_id: u32) {
+    let _ = weather_id;
+    // TODO: Weather::ForceWeather() via GECK opcode
+}
+
+/// Restrain/unrestrain an actor (prevents movement/combat).
+pub fn set_restrained(ref_id: u32, restrained: u8) {
+    let _ = (ref_id, restrained);
+    // TODO: Actor::SetRestrained() via GECK opcode
 }

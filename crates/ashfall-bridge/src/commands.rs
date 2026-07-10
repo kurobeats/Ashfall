@@ -5,6 +5,7 @@
 
 /// Command opcodes (matching original vaultmp Interface/API opcodes).
 pub mod opcodes {
+    // ── Original 17 (Phase 10 initial) ──
     pub const OP_GET_POS: u32            = 0x0001;
     pub const OP_SET_POS: u32            = 0x0002;
     pub const OP_GET_ANGLE: u32          = 0x0003;
@@ -28,7 +29,33 @@ pub mod opcodes {
     pub const OP_PLAY_SOUND: u32         = 0x0015;
     pub const OP_PLACE_AT_ME: u32        = 0x0016;
     pub const OP_GET_BASE: u32           = 0x0017;
-    // ponytail: ~70 more opcodes available; add as RE progresses
+
+    // ── Tier 1: Position + Actor State Sync ──
+    pub const OP_GET_BASE_ACTOR_VALUE: u32 = 0x0018;
+    pub const OP_GET_DEAD: u32             = 0x0019;
+    pub const OP_SET_CURRENT_HEALTH: u32   = 0x001A;
+    pub const OP_IS_MOVING: u32            = 0x001B;
+    pub const OP_GET_PARENT_CELL: u32      = 0x001C;
+
+    // ── Tier 2: Item / Inventory Sync ──
+    pub const OP_EQUIP_ITEM: u32           = 0x001D;
+    pub const OP_UNEQUIP_ITEM: u32         = 0x001E;
+    pub const OP_ADD_ITEM: u32             = 0x001F;
+    pub const OP_REMOVE_ITEM: u32          = 0x0020;
+    pub const OP_REMOVE_ALL_ITEMS: u32     = 0x0021;
+    pub const OP_GET_REF_COUNT: u32        = 0x0022;
+
+    // ── Tier 3: Combat + Death ──
+    pub const OP_KILL: u32                 = 0x0023;
+    pub const OP_DAMAGE_ACTOR_VALUE: u32   = 0x0024;
+    pub const OP_RESTORE_ACTOR_VALUE: u32  = 0x0025;
+    pub const OP_FORCE_ACTOR_VALUE: u32    = 0x0026;
+
+    // ── Tier 4: AI + World ──
+    pub const OP_GET_COMBAT_TARGET: u32    = 0x0027;
+    pub const OP_PLAY_GROUP: u32           = 0x0028;
+    pub const OP_FORCE_WEATHER: u32        = 0x0029;
+    pub const OP_SET_RESTRAINED: u32       = 0x002A;
 }
 
 /// Read a u32 from little-endian bytes at an offset within a slice.
@@ -247,6 +274,162 @@ pub fn execute(func: u32, params: &[u8]) -> Vec<u8> {
             base.to_le_bytes().to_vec()
         }
 
+        // ═══════════════════════════════════════════════════════
+        // Tier 1: Position + Actor State Sync
+        // ═══════════════════════════════════════════════════════
+
+        OP_GET_BASE_ACTOR_VALUE => {
+            if params.len() < 5 { return vec![]; }
+            let ref_id = u32::from_le_bytes([params[0], params[1], params[2], params[3]]);
+            let index = params[4];
+            let value = crate::hooks::get_actor_base_value(ref_id, index);
+            value.to_le_bytes().to_vec()
+        }
+        OP_GET_DEAD => {
+            let ref_id = match read_u32(params, 0) { Some(v) => v, None => return vec![] };
+            let dead = crate::hooks::is_dead(ref_id);
+            vec![if dead { 1 } else { 0 }]
+        }
+        OP_SET_CURRENT_HEALTH => {
+            if params.len() < 8 { return vec![]; }
+            let ref_id = u32::from_le_bytes([params[0], params[1], params[2], params[3]]);
+            let value = f32::from_le_bytes([params[4], params[5], params[6], params[7]]);
+            crate::hooks::set_actor_value(ref_id, 0x14, value); // AV_HEALTH = 0x14
+            vec![1]
+        }
+        OP_IS_MOVING => {
+            let ref_id = match read_u32(params, 0) { Some(v) => v, None => return vec![] };
+            let (_, moving, _, _, _, _) = crate::hooks::get_actor_state(ref_id);
+            vec![if moving != 0 { 1 } else { 0 }]
+        }
+        OP_GET_PARENT_CELL => {
+            let ref_id = match read_u32(params, 0) { Some(v) => v, None => return vec![] };
+            let cell = crate::hooks::get_parent_cell(ref_id);
+            cell.to_le_bytes().to_vec()
+        }
+
+        // ═══════════════════════════════════════════════════════
+        // Tier 2: Item / Inventory Sync
+        // ═══════════════════════════════════════════════════════
+
+        OP_EQUIP_ITEM => {
+            if params.len() < 13 { return vec![]; }
+            let ref_id = u32::from_le_bytes([params[0], params[1], params[2], params[3]]);
+            let item_id = u32::from_le_bytes([params[4], params[5], params[6], params[7]]);
+            let equip_slot = u32::from_le_bytes([params[8], params[9], params[10], params[11]]);
+            let prevent_removal = params[12];
+            crate::hooks::equip_item(ref_id, item_id, equip_slot, prevent_removal);
+            vec![1]
+        }
+        OP_UNEQUIP_ITEM => {
+            if params.len() < 13 { return vec![]; }
+            let ref_id = u32::from_le_bytes([params[0], params[1], params[2], params[3]]);
+            let item_id = u32::from_le_bytes([params[4], params[5], params[6], params[7]]);
+            let equip_slot = u32::from_le_bytes([params[8], params[9], params[10], params[11]]);
+            let prevent_removal = params[12];
+            crate::hooks::unequip_item(ref_id, item_id, equip_slot, prevent_removal);
+            vec![1]
+        }
+        OP_ADD_ITEM => {
+            if params.len() < 13 { return vec![]; }
+            let ref_id = u32::from_le_bytes([params[0], params[1], params[2], params[3]]);
+            let item_id = u32::from_le_bytes([params[4], params[5], params[6], params[7]]);
+            let count = u32::from_le_bytes([params[8], params[9], params[10], params[11]]);
+            let silent = params[12];
+            crate::hooks::add_item(ref_id, item_id, count, silent);
+            vec![1]
+        }
+        OP_REMOVE_ITEM => {
+            if params.len() < 13 { return vec![]; }
+            let ref_id = u32::from_le_bytes([params[0], params[1], params[2], params[3]]);
+            let item_id = u32::from_le_bytes([params[4], params[5], params[6], params[7]]);
+            let count = u32::from_le_bytes([params[8], params[9], params[10], params[11]]);
+            let silent = params[12];
+            crate::hooks::remove_item(ref_id, item_id, count, silent);
+            vec![1]
+        }
+        OP_REMOVE_ALL_ITEMS => {
+            if params.len() < 8 { return vec![]; }
+            let ref_id = u32::from_le_bytes([params[0], params[1], params[2], params[3]]);
+            let transfer_to = u32::from_le_bytes([params[4], params[5], params[6], params[7]]);
+            crate::hooks::remove_all_items(ref_id, transfer_to);
+            vec![1]
+        }
+        OP_GET_REF_COUNT => {
+            let ref_id = match read_u32(params, 0) { Some(v) => v, None => return vec![] };
+            let count = crate::hooks::get_ref_count(ref_id);
+            count.to_le_bytes().to_vec()
+        }
+
+        // ═══════════════════════════════════════════════════════
+        // Tier 3: Combat + Death
+        // ═══════════════════════════════════════════════════════
+
+        OP_KILL => {
+            if params.len() < 10 { return vec![]; }
+            let ref_id = u32::from_le_bytes([params[0], params[1], params[2], params[3]]);
+            let killer_id = u32::from_le_bytes([params[4], params[5], params[6], params[7]]);
+            let limb = params[8] as i8;
+            let cause = params[9] as i8;
+            crate::hooks::kill_actor(ref_id, killer_id, limb, cause);
+            vec![1]
+        }
+        OP_DAMAGE_ACTOR_VALUE => {
+            if params.len() < 9 { return vec![]; }
+            let ref_id = u32::from_le_bytes([params[0], params[1], params[2], params[3]]);
+            let index = params[4];
+            let damage = f32::from_le_bytes([params[5], params[6], params[7], params[8]]);
+            crate::hooks::damage_actor_value(ref_id, index, damage);
+            vec![1]
+        }
+        OP_RESTORE_ACTOR_VALUE => {
+            if params.len() < 9 { return vec![]; }
+            let ref_id = u32::from_le_bytes([params[0], params[1], params[2], params[3]]);
+            let index = params[4];
+            let amount = f32::from_le_bytes([params[5], params[6], params[7], params[8]]);
+            crate::hooks::restore_actor_value(ref_id, index, amount);
+            vec![1]
+        }
+        OP_FORCE_ACTOR_VALUE => {
+            if params.len() < 9 { return vec![]; }
+            let ref_id = u32::from_le_bytes([params[0], params[1], params[2], params[3]]);
+            let index = params[4];
+            let value = f32::from_le_bytes([params[5], params[6], params[7], params[8]]);
+            crate::hooks::force_actor_value(ref_id, index, value);
+            vec![1]
+        }
+
+        // ═══════════════════════════════════════════════════════
+        // Tier 4: AI + World
+        // ═══════════════════════════════════════════════════════
+
+        OP_GET_COMBAT_TARGET => {
+            let ref_id = match read_u32(params, 0) { Some(v) => v, None => return vec![] };
+            let target = crate::hooks::get_combat_target(ref_id);
+            target.to_le_bytes().to_vec()
+        }
+        OP_PLAY_GROUP => {
+            if params.len() < 12 { return vec![]; }
+            let ref_id = u32::from_le_bytes([params[0], params[1], params[2], params[3]]);
+            let group_id = u32::from_le_bytes([params[4], params[5], params[6], params[7]]);
+            let flags = u32::from_le_bytes([params[8], params[9], params[10], params[11]]);
+            crate::hooks::play_group(ref_id, group_id, flags);
+            vec![1]
+        }
+        OP_FORCE_WEATHER => {
+            if params.len() < 4 { return vec![]; }
+            let weather_id = u32::from_le_bytes([params[0], params[1], params[2], params[3]]);
+            crate::hooks::force_weather(weather_id);
+            vec![1]
+        }
+        OP_SET_RESTRAINED => {
+            if params.len() < 5 { return vec![]; }
+            let ref_id = u32::from_le_bytes([params[0], params[1], params[2], params[3]]);
+            let restrained = params[4];
+            crate::hooks::set_restrained(ref_id, restrained);
+            vec![1]
+        }
+
         // ── Unknown ──
         _ => vec![],
     }
@@ -256,32 +439,30 @@ pub fn execute(func: u32, params: &[u8]) -> Vec<u8> {
 mod tests {
     use super::*;
 
+    // ── RefID constant for tests ──
+    const REF_ID: [u8; 4] = [0x42, 0, 0, 0];
+
     #[test]
-    fn test_opcode_dispatch_all_getters_return_bytes() {
-        // Verify all 17 opcodes return non-empty responses with valid params
-        let ref_id = [0x42u8, 0, 0, 0]; // refID = 0x42
+    fn test_original_17_opcodes_still_work() {
+        // Original getters
+        assert!(!execute(opcodes::OP_GET_POS, &REF_ID).is_empty());
+        assert!(!execute(opcodes::OP_GET_ANGLE, &REF_ID).is_empty());
+        assert!(!execute(opcodes::OP_GET_CELL, &REF_ID).is_empty());
+        assert!(!execute(opcodes::OP_GET_ACTOR_STATE, &REF_ID).is_empty());
+        assert!(!execute(opcodes::OP_GET_NAME, &REF_ID).is_empty());
+        assert!(!execute(opcodes::OP_GET_ENABLED, &REF_ID).is_empty());
+        assert!(!execute(opcodes::OP_GET_LOCK, &REF_ID).is_empty());
+        assert!(!execute(opcodes::OP_GET_BASE, &REF_ID).is_empty());
+        assert!(!execute(opcodes::OP_GET_ACTIVATE, &REF_ID).is_empty());
 
-        // Getters
-        assert!(!execute(opcodes::OP_GET_POS, &ref_id).is_empty());
-        assert!(!execute(opcodes::OP_GET_ANGLE, &ref_id).is_empty());
-        assert!(!execute(opcodes::OP_GET_CELL, &ref_id).is_empty());
-        assert!(!execute(opcodes::OP_GET_ACTOR_STATE, &ref_id).is_empty());
-        assert!(!execute(opcodes::OP_GET_NAME, &ref_id).is_empty());
-        assert!(!execute(opcodes::OP_GET_ENABLED, &ref_id).is_empty());
-        assert!(!execute(opcodes::OP_GET_LOCK, &ref_id).is_empty());
-        assert!(!execute(opcodes::OP_GET_BASE, &ref_id).is_empty());
-        assert!(!execute(opcodes::OP_GET_ACTIVATE, &ref_id).is_empty());
-
-        // Getters with extra param byte
-        let refid_with_index = [0x42u8, 0, 0, 0, 0x14]; // refID + actor value index (health)
+        let refid_with_index = [0x42u8, 0, 0, 0, 0x14];
         assert!(!execute(opcodes::OP_GET_ACTOR_VALUE, &refid_with_index).is_empty());
         assert!(!execute(opcodes::OP_GET_CONTROL, &refid_with_index).is_empty());
     }
 
     #[test]
-    fn test_opcode_dispatch_all_setters_return_success() {
-        let params = [0x42u8, 0, 0, 0, 0, 0, 0x80, 0x3F, 0, 0, 0, 0, 0, 0, 0, 0]; // refID=0x42 + f32=1.0 + extra
-
+    fn test_original_setters_return_success() {
+        let params = [0x42u8, 0, 0, 0, 0, 0, 0x80, 0x3F, 0, 0, 0, 0, 0, 0, 0, 0];
         let setters: &[(u32, &[u8])] = &[
             (opcodes::OP_SET_POS, &params),
             (opcodes::OP_SET_ANGLE, &params),
@@ -296,13 +477,178 @@ mod tests {
             (opcodes::OP_PLAY_SOUND, &params),
             (opcodes::OP_PLACE_AT_ME, &params),
         ];
-
         for (opcode, p) in setters {
             let result = execute(*opcode, p);
             assert!(!result.is_empty(), "opcode {opcode:#06X} returned empty");
             assert_eq!(result[0], 1, "opcode {opcode:#06X} should return success byte 1");
         }
     }
+
+    // ═══════════════════════════════════════════════════════
+    // Tier 1 tests
+    // ═══════════════════════════════════════════════════════
+
+    #[test]
+    fn test_tier1_get_base_actor_value() {
+        let params = [0x42u8, 0, 0, 0, 0x14]; // refID=0x42, index=0x14 (health)
+        let result = execute(opcodes::OP_GET_BASE_ACTOR_VALUE, &params);
+        assert!(!result.is_empty());
+        assert_eq!(result.len(), 4); // f32
+    }
+
+    #[test]
+    fn test_tier1_get_dead() {
+        let result = execute(opcodes::OP_GET_DEAD, &REF_ID);
+        assert!(!result.is_empty());
+        assert!(result[0] == 0 || result[0] == 1);
+    }
+
+    #[test]
+    fn test_tier1_set_current_health() {
+        let mut params = [0u8; 8];
+        params[0] = 0x42; // refID = 0x42
+        let health: f32 = 50.0;
+        params[4..8].copy_from_slice(&health.to_le_bytes());
+        let result = execute(opcodes::OP_SET_CURRENT_HEALTH, &params);
+        assert!(!result.is_empty());
+        assert_eq!(result[0], 1);
+    }
+
+    #[test]
+    fn test_tier1_is_moving() {
+        let result = execute(opcodes::OP_IS_MOVING, &REF_ID);
+        assert!(!result.is_empty());
+        assert!(result[0] == 0 || result[0] == 1);
+    }
+
+    #[test]
+    fn test_tier1_get_parent_cell() {
+        let result = execute(opcodes::OP_GET_PARENT_CELL, &REF_ID);
+        assert!(!result.is_empty());
+        assert_eq!(result.len(), 4); // u32
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // Tier 2 tests
+    // ═══════════════════════════════════════════════════════
+
+    #[test]
+    fn test_tier2_equip_unequip_item() {
+        let mut params = [0u8; 13];
+        params[0] = 0x42; // refID
+        params[4] = 0x01; // itemID
+        params[12] = 0;    // prevent_removal
+        let r1 = execute(opcodes::OP_EQUIP_ITEM, &params);
+        assert_eq!(r1[0], 1);
+        let r2 = execute(opcodes::OP_UNEQUIP_ITEM, &params);
+        assert_eq!(r2[0], 1);
+    }
+
+    #[test]
+    fn test_tier2_add_remove_item() {
+        let mut params = [0u8; 13];
+        params[0] = 0x42; // refID
+        params[4] = 0x01; // itemID
+        params[8] = 0x03; // count = 3
+        params[12] = 1;   // silent
+        let r1 = execute(opcodes::OP_ADD_ITEM, &params);
+        assert_eq!(r1[0], 1);
+        let r2 = execute(opcodes::OP_REMOVE_ITEM, &params);
+        assert_eq!(r2[0], 1);
+    }
+
+    #[test]
+    fn test_tier2_remove_all_items() {
+        let mut params = [0u8; 8];
+        params[0] = 0x42; // refID
+        params[4] = 0x00; // transfer_to = 0
+        let result = execute(opcodes::OP_REMOVE_ALL_ITEMS, &params);
+        assert_eq!(result[0], 1);
+    }
+
+    #[test]
+    fn test_tier2_get_ref_count() {
+        let result = execute(opcodes::OP_GET_REF_COUNT, &REF_ID);
+        assert!(!result.is_empty());
+        assert_eq!(result.len(), 4); // u32
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // Tier 3 tests
+    // ═══════════════════════════════════════════════════════
+
+    #[test]
+    fn test_tier3_kill() {
+        let mut params = [0u8; 10];
+        params[0] = 0x42; // refID
+        params[4] = 0xFF; // killerID
+        params[8] = 1;    // limb = 1 (head)
+        params[9] = 2;    // cause = 2 (gun)
+        let result = execute(opcodes::OP_KILL, &params);
+        assert_eq!(result[0], 1);
+    }
+
+    #[test]
+    fn test_tier3_damage_restore_force_actor_value() {
+        let mut params = [0u8; 9];
+        params[0] = 0x42; // refID
+        params[4] = 0x14; // index = health
+        let damage: f32 = 10.0;
+        params[5..9].copy_from_slice(&damage.to_le_bytes());
+
+        let r1 = execute(opcodes::OP_DAMAGE_ACTOR_VALUE, &params);
+        assert_eq!(r1[0], 1);
+
+        let rest: f32 = 5.0;
+        params[5..9].copy_from_slice(&rest.to_le_bytes());
+        let r2 = execute(opcodes::OP_RESTORE_ACTOR_VALUE, &params);
+        assert_eq!(r2[0], 1);
+
+        let force: f32 = 100.0;
+        params[5..9].copy_from_slice(&force.to_le_bytes());
+        let r3 = execute(opcodes::OP_FORCE_ACTOR_VALUE, &params);
+        assert_eq!(r3[0], 1);
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // Tier 4 tests
+    // ═══════════════════════════════════════════════════════
+
+    #[test]
+    fn test_tier4_get_combat_target() {
+        let result = execute(opcodes::OP_GET_COMBAT_TARGET, &REF_ID);
+        assert!(!result.is_empty());
+        assert_eq!(result.len(), 4); // u32
+    }
+
+    #[test]
+    fn test_tier4_play_group() {
+        let mut params = [0u8; 12];
+        params[0] = 0x42; // refID
+        params[4] = 0x01; // group_id
+        params[8] = 0x01; // flags
+        let result = execute(opcodes::OP_PLAY_GROUP, &params);
+        assert_eq!(result[0], 1);
+    }
+
+    #[test]
+    fn test_tier4_force_weather() {
+        let mut params = [0u8; 4];
+        params[0] = 0x42; // weather_id
+        let result = execute(opcodes::OP_FORCE_WEATHER, &params);
+        assert_eq!(result[0], 1);
+    }
+
+    #[test]
+    fn test_tier4_set_restrained() {
+        let mut params = [0u8; 5];
+        params[0] = 0x42; // refID
+        params[4] = 1;    // restrained = true
+        let result = execute(opcodes::OP_SET_RESTRAINED, &params);
+        assert_eq!(result[0], 1);
+    }
+
+    // ── Edge cases ──
 
     #[test]
     fn test_unknown_opcode_returns_empty() {
@@ -312,10 +658,26 @@ mod tests {
 
     #[test]
     fn test_short_params_return_empty() {
-        // All opcodes should return empty on insufficient params
         assert!(execute(opcodes::OP_GET_POS, &[]).is_empty());
         assert!(execute(opcodes::OP_SET_POS, &[0; 8]).is_empty());
         assert!(execute(opcodes::OP_GET_ACTOR_STATE, &[]).is_empty());
         assert!(execute(opcodes::OP_GET_ACTOR_VALUE, &[0; 3]).is_empty());
+        // New opcodes
+        assert!(execute(opcodes::OP_GET_BASE_ACTOR_VALUE, &[0; 3]).is_empty());
+        assert!(execute(opcodes::OP_SET_CURRENT_HEALTH, &[0; 4]).is_empty());
+        assert!(execute(opcodes::OP_EQUIP_ITEM, &[0; 8]).is_empty());
+        assert!(execute(opcodes::OP_KILL, &[0; 5]).is_empty());
+        assert!(execute(opcodes::OP_DAMAGE_ACTOR_VALUE, &[0; 5]).is_empty());
+        assert!(execute(opcodes::OP_PLAY_GROUP, &[0; 8]).is_empty());
+        assert!(execute(opcodes::OP_FORCE_WEATHER, &[]).is_empty());
+        assert!(execute(opcodes::OP_SET_RESTRAINED, &[0; 3]).is_empty());
+    }
+
+    #[test]
+    fn test_read_u32_bounds() {
+        assert_eq!(read_u32(&[], 0), None);
+        assert_eq!(read_u32(&[0x01, 0x02, 0x03], 0), None);
+        assert_eq!(read_u32(&[0x01, 0x02, 0x03, 0x04], 0), Some(0x0403_0201));
+        assert_eq!(read_u32(&[0xFF, 0x01, 0x02, 0x03, 0x04], 1), Some(0x0403_0201));
     }
 }
