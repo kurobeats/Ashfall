@@ -47,8 +47,7 @@ Client connects to `127.0.0.1:1770`. Stub mode sends canned data — enough to v
 | 7. Client | UDP networking. Connection flow (auth→load→ingame). Client object registry. Handlers for all packet categories. Background 30Hz poll loop. |
 | 8. Master | UDP server registry. Announce/query/cull lifecycle. Client integration for server browser population. |
 | 9. Security | Anti-cheat validator — position bounds, velocity caps, teleport detection, item count limits, damage bounds, sequence nonces, FormID whitelist. 48 security tests. |
-
-| 10. Bridge | Memory patching system (SafeWrite*, VTable access, trampoline detours). 36 command opcodes (Tier 1-4). GECK opcode interception engine (11 default handlers). 5 event sink structs. 73 tests. Complete vaultmp reuse analysis in docs/phase10-reuse-plan.md. |
+| 10. Bridge | Memory patching system (SafeWrite*, VTable access, trampoline detours). 36 command opcodes (Tier 1-4). GECK opcode interception engine (11 default handlers). 5 event sink structs. 73 tests. |
 
 ## What's Left
 
