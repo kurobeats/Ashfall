@@ -1,0 +1,28 @@
+[workspace]
+members = [
+    "crates/ashfall-core",
+    "crates/ashfall-server",
+    "crates/ashfall-client",
+    "crates/ashfall-master",
+    "crates/ashfall-script",
+    "crates/ashfall-bridge",
+]
+resolver = "2"
+
+[workspace.dependencies]
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+postcard = "1"
+rusqlite = { version = "0.31", features = ["bundled"] }
+wasmtime = "22"
+dashmap = "6"
+slotmap = "1"
+egui = "0.28"
+eframe = "0.28"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+anyhow = "1"
+thiserror = "2"
+bytes = "1"
+uuid = { version = "1", features = ["v4"] }
+parking_lot = "0.12"

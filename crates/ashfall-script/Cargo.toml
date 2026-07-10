@@ -1,0 +1,7 @@
+[package]
+name = "ashfall-script"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ashfall-core = { path = "../ashfall-core" }

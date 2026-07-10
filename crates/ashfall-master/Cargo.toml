@@ -1,0 +1,12 @@
+[package]
+name = "ashfall-master"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ashfall-core = { path = "../ashfall-core" }
+tokio = { workspace = true }
+postcard = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+anyhow = { workspace = true }
