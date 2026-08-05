@@ -3,6 +3,9 @@
 > ✅ **STATUS: COMPLETE (2026-08-05).** All 34 items across P0–P4 implemented.
 > Final state: **303 tests, 0 warnings, zero-warning build.** See the
 > per-item ✅ notes below; the implementation-order section is fully checked off.
+>
+> Note: this is a historical record of that plan's completion. The repo has
+> since grown — see README for the current test count (318) and status.
 
 > Date: 2026-07-10
 > Scope: Incremental improvements only. No redesigns, no new architectures.

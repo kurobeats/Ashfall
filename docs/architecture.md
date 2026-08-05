@@ -113,7 +113,7 @@ ashfall/
 │   │       │   ├── mod.rs
 │   │       │   ├── engine.rs           # WASM engine init, module loading
 │   │       │   ├── host.rs             # Host functions exposed to WASM (51 APIs)
-│   │       │   ├── callbacks.rs        # 35 callback stubs into WASM
+│   │       │   ├── callbacks.rs        # 35 callback stubs (permissive defaults)
 │   │       │   └── timer.rs            # Script timer management
 │   │       └── master.rs               # Master server registration + heartbeat
 │   │       ├── anti_cheat.rs             # Position/item/damage/sequence validators
@@ -865,54 +865,38 @@ pub async fn dispatch(server: &DedicatedServer, addr: SocketAddr, packet: Packet
 ### 4.5 Script Engine (wasmtime)
 
 ```rust
-// crates/ashfall-server/src/script/engine.rs
-
-use wasmtime::*;
+// crates/ashfall-server/src/script/engine.rs (Phase 5 Part B — real execution)
 
 pub struct ScriptEngine {
     engine: Engine,
-    store: Store<ScriptState>,
-    instances: Vec<Instance>,           // One per loaded script module
-    host_functions: HostFunctions,
-    timers: Vec<Timer>,
+    modules: Vec<(String, Module)>,
+    instances: Vec<WasmInstance>,        // one (instance, store) per module
+    timers: Option<Arc<Mutex<TimerManager>>>,
+    effects: Option<ScriptEffects>,      // drainable chat/kick queue
+    player_count: Option<Arc<AtomicU32>>, // maintained by the server tick
+    game_time: Option<GameTimeState>,    // shared clock, notify on change
 }
 
-/// 35 script callbacks (31 original + OnHit, OnEquip, OnQuestStage, OnDialogueChoice)
-impl ScriptEngine {
-    pub fn call_on_create(&mut self, object_id: NetworkID) { /* invoke all instances */ }
-    pub fn call_on_destroy(&mut self, object_id: NetworkID) { /* ... */ }
-    pub fn call_on_spawn(&mut self, player_id: NetworkID) { /* ... */ }
-    pub fn call_on_activate(&mut self, ref_id: NetworkID, actor_id: NetworkID) { /* ... */ }
-    pub fn call_on_cell_change(&mut self, object_id: NetworkID, cell: u32) { /* ... */ }
-    pub fn call_on_lock_change(&mut self, object_id: NetworkID, actor_id: NetworkID, lock: u32) { /* ... */ }
-    pub fn call_on_item_count_change(&mut self, item_id: NetworkID, count: u32) { /* ... */ }
-    pub fn call_on_item_condition_change(&mut self, item_id: NetworkID, condition: f32) { /* ... */ }
-    pub fn call_on_item_equipped_change(&mut self, item_id: NetworkID, equipped: bool) { /* ... */ }
-    pub fn call_on_actor_value_change(&mut self, actor_id: NetworkID, index: u8, value: f32) { /* ... */ }
-    pub fn call_on_actor_base_value_change(&mut self, actor_id: NetworkID, index: u8, value: f32) { /* ... */ }
-    pub fn call_on_actor_alert(&mut self, actor_id: NetworkID, alerted: bool) { /* ... */ }
-    pub fn call_on_actor_sneak(&mut self, actor_id: NetworkID, sneaking: bool) { /* ... */ }
-    pub fn call_on_actor_death(&mut self, actor_id: NetworkID, killer_id: NetworkID, limbs: u16, cause: i8) { /* ... */ }
-    pub fn call_on_actor_punch(&mut self, actor_id: NetworkID, power: bool) { /* ... */ }
-    pub fn call_on_actor_fire_weapon(&mut self, actor_id: NetworkID, weapon: u32) { /* ... */ }
-    pub fn call_on_player_disconnect(&mut self, player_id: NetworkID, reason: u8) { /* ... */ }
-    pub fn call_on_player_request_game(&mut self, player_id: NetworkID) -> u32 { /* ... */ }
-    pub fn call_on_player_chat(&mut self, player_id: NetworkID, message: &str) -> bool { /* ... */ }
-    pub fn call_on_window_mode(&mut self, player_id: NetworkID, enabled: bool) { /* ... */ }
-    pub fn call_on_window_click(&mut self, player_id: NetworkID, window_id: NetworkID) { /* ... */ }
-    pub fn call_on_window_return(&mut self, player_id: NetworkID, window_id: NetworkID) { /* ... */ }
-    pub fn call_on_window_text_change(&mut self, player_id: NetworkID, window_id: NetworkID, text: &str) { /* ... */ }
-    pub fn call_on_checkbox_select(&mut self, player_id: NetworkID, checkbox_id: NetworkID, selected: bool) { /* ... */ }
-    pub fn call_on_radio_button_select(&mut self, player_id: NetworkID, radio_id: NetworkID, prev_id: NetworkID) { /* ... */ }
-    pub fn call_on_list_item_select(&mut self, player_id: NetworkID, item_id: NetworkID, selected: bool) { /* ... */ }
-    pub fn call_on_client_authenticate(&mut self, name: &str, pwd: &str) -> bool { /* ... */ }
-    pub fn call_on_game_time_change(&mut self, year: u32, month: u32, day: u32, hour: u32) { /* ... */ }
-    pub fn call_on_server_init(&mut self) { /* ... */ }
-    pub fn call_on_server_exit(&mut self, shutdown: bool) { /* ... */ }
-}
+// Server events dispatched INTO wasm (engine methods):
+//   dispatch_auth(name, pwd) -> bool      — any module vote 0 denies
+//   dispatch_chat(player_id, msg) -> bool — blocks messages
+//   dispatch_spawn_cell(player_id) -> u32 — script-chosen spawn cell
+//   notify_spawn / notify_disconnect / notify_actor_death
+//   notify_quest_stage / notify_game_time
+//   dispatch_timer(id, callback_name)     — routed to exported fn by name
+// Remaining callbacks (on_hit, on_equip, on_activate, GUI, ...) still fall
+// back to permissive defaults in callbacks.rs.
 ```
 
-**Host functions** (51) exposed to WASM: `CreateObject`, `DestroyObject`, `GetPos`, `SetPos`, `GetCell`, `SetCell`, `AddItem`, `RemoveItem`, `EquipItem`, `CreateWindow`, `SetWindowText`, `ChatMessage`, `Kick`, `SetGameWeather`, `SetGameTime`, `CreateTimer`, `KillTimer`, etc.
+**Host functions** (51) exposed to WASM — real: `set_game_weather`,
+`get_game_weather`, `set_game_time`, `get_quest_stage`, `set_quest_stage`,
+`get_dialogue_flag`, `set_dialogue_flag`, `chat_message`, `ui_message`, `kick`,
+`create_timer`, `kill_timer`, `get_current_players`, `get_max_players`,
+`timestamp`, `host_log`, `debug_log`, `create_object`, `destroy_object`,
+`get_pos_x/y/z`, `set_pos`, `create_actor`, `get_actor_value`,
+`set_actor_value`, `kill_actor`, `create_item`. Still stubs: item stack ops,
+GUI window widgets, combat DR/DT, `get_config_int`. ABI: `u64` ids cross as
+`i64`, strings as `(ptr, len)` into linear memory (see scripts/freeroam/src/lib.rs).
 
 WASM modules use `ashfall-script` SDK crate which provides typed wrappers around host imports.
 
@@ -1419,8 +1403,8 @@ pub struct MasterServer {
 
 ### Phase 5: Scripting
 1. wasmtime engine setup
-2. Host function stubs (51)
-3. Callback dispatch (35 callbacks)
+2. Host functions (51) — world/quest/chat/clock/player-count/object-actor CRUD real (Part B)
+3. Callback dispatch (auth, chat, spawn cell, spawn, death, quest stage, time)
 4. Example freeroam script
 
 ### Phase 6: GUI (Server-Authoritative)
