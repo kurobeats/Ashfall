@@ -17,6 +17,7 @@ pub const PIPE_OP_RETURN: u8     = 0x03;
 pub const PIPE_OP_RETURN_BIG: u8 = 0x04; // reserved for large responses
 pub const PIPE_OP_RETURN_RAW: u8 = 0x05; // reserved for raw binary
 pub const PIPE_ERROR_CLOSE: u8   = 0x06;
+pub const PIPE_OP_EVENT: u8      = 0x07; // engine → client event frame
 
 /// Encode a pipe command: [PIPE_OP_COMMAND][key:4B LE][func:4B LE][param_count:1B][params...]
 pub fn encode_pipe_command(key: u32, func: u32, params: &[u8]) -> Vec<u8> {

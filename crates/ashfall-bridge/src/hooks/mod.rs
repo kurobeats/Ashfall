@@ -376,76 +376,52 @@ pub fn get_name(ref_id: u32) -> String {
 // NVSE/FOSE Integration
 // ═══════════════════════════════════════════════════════════════
 //
+// Event sinks live in `crate::events` (BSTEventSink pattern, struct-pointer
+// callbacks). This module bridges engine events into pipe frames for the
+// native client (`encode_event_frame`). Console commands stay here as an
+// in-memory registry for testing; the real implementation hooks the engine's
+// console command table.
+//
 // ponytail: in-memory registries for testing. Real implementation
 // replaces these with NVSE CommandTable + BSTEventSink subclass.
 
-/// PluginInfo struct matching NVSE/FOSE plugin signature.
-/// Size: 4 + 256 = 260 bytes.
-#[repr(C)]
-pub struct PluginInfo {
-    pub info_version: u32,
-    pub name: [u8; 256],
-}
-
-impl PluginInfo {
-    pub fn new(name: &str) -> Self {
-        let mut info = PluginInfo {
-            info_version: 1,
-            name: [0u8; 256],
-        };
-        let bytes = name.as_bytes();
-        let len = bytes.len().min(255);
-        info.name[..len].copy_from_slice(&bytes[..len]);
-        info.name[len] = 0;
-        info
-    }
-
-    pub fn name_str(&self) -> &str {
-        let end = self.name.iter().position(|&b| b == 0).unwrap_or(256);
-        std::str::from_utf8(&self.name[..end]).unwrap_or("")
-    }
-}
-
-/// Event sink callback type: invoked by the engine when events fire.
-pub type EventSinkCallback = extern "C" fn(event_type: u32, arg0: u32, arg1: u32, arg2: u32);
-
-static EVENT_SINKS: LazyLock<Mutex<HashMap<u32, Vec<EventSinkCallback>>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
 static CONSOLE_COMMANDS: LazyLock<Mutex<HashMap<String, bool>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
-/// Register an event sink with the NVSE/FOSE event dispatcher.
-pub fn register_event_sink(event_type: u32, callback: EventSinkCallback) {
-    let mut sinks = EVENT_SINKS.lock().unwrap();
-    sinks.entry(event_type).or_default().push(callback);
-}
+/// Encode an engine event as a pipe frame for the native client:
+/// `[PIPE_OP_EVENT][event_type:4B LE][event struct bytes...]`.
+///
+/// The event struct is interpreted per `event_type` (see `crate::events`).
+/// Returns `None` for unknown event types or a null event pointer.
+pub fn encode_event_frame(event_type: u32, event_data: *const std::ffi::c_void) -> Option<Vec<u8>> {
+    use crate::events::{
+        TESActivateEvent, TESCellChangeEvent, TESDeathEvent, TESEquipEvent, TESHitEvent,
+        EVENT_ON_ACTIVATE, EVENT_ON_CELL_CHANGE, EVENT_ON_DEATH, EVENT_ON_EQUIP, EVENT_ON_HIT,
+    };
 
-/// Unregister an event sink.
-pub fn unregister_event_sink(event_type: u32, callback: EventSinkCallback) {
-    let mut sinks = EVENT_SINKS.lock().unwrap();
-    if let Some(list) = sinks.get_mut(&event_type) {
-        list.retain(|&cb| cb as usize != callback as usize);
+    if event_data.is_null() {
+        return None;
     }
-}
-
-/// Dispatch an event to all registered sinks. Returns count of callbacks fired.
-pub fn dispatch_event(event_type: u32, arg0: u32, arg1: u32, arg2: u32) -> usize {
-    let sinks = EVENT_SINKS.lock().unwrap();
-    if let Some(list) = sinks.get(&event_type) {
-        let callbacks: Vec<_> = list.clone();
-        drop(sinks);
-        for cb in &callbacks {
-            cb(event_type, arg0, arg1, arg2);
+    let payload = unsafe {
+        let bytes = |ptr: *const u8, len: usize| std::slice::from_raw_parts(ptr, len);
+        match event_type {
+            EVENT_ON_HIT => bytes(event_data as *const u8, std::mem::size_of::<TESHitEvent>()),
+            EVENT_ON_ACTIVATE => {
+                bytes(event_data as *const u8, std::mem::size_of::<TESActivateEvent>())
+            }
+            EVENT_ON_EQUIP => bytes(event_data as *const u8, std::mem::size_of::<TESEquipEvent>()),
+            EVENT_ON_CELL_CHANGE => {
+                bytes(event_data as *const u8, std::mem::size_of::<TESCellChangeEvent>())
+            }
+            EVENT_ON_DEATH => bytes(event_data as *const u8, std::mem::size_of::<TESDeathEvent>()),
+            _ => return None,
         }
-        callbacks.len()
-    } else {
-        0
-    }
-}
-
-/// Check if any sinks are registered for an event type.
-pub fn has_event_sinks(event_type: u32) -> bool {
-    EVENT_SINKS.lock().unwrap().get(&event_type).map(|v| !v.is_empty()).unwrap_or(false)
+    };
+    let mut frame = Vec::with_capacity(1 + 4 + payload.len());
+    frame.push(crate::network::PIPE_OP_EVENT);
+    frame.extend_from_slice(&event_type.to_le_bytes());
+    frame.extend_from_slice(payload);
+    Some(frame)
 }
 
 /// Hook a console command — intercept before engine processes it.

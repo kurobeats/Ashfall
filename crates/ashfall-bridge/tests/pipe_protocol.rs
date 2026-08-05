@@ -91,6 +91,7 @@ fn test_pipe_command_all_opcodes() {
         network::PIPE_OP_RETURN_BIG,
         network::PIPE_OP_RETURN_RAW,
         network::PIPE_ERROR_CLOSE,
+        network::PIPE_OP_EVENT,
     ];
     for i in 0..ops.len() {
         for j in i + 1..ops.len() {

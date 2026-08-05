@@ -1,8 +1,14 @@
-//! NVSE EventSink types and registration stubs.
+//! NVSE EventSink types and registration.
 //!
 //! Gamebryo engine dispatches events via `BSTEventSink<T>` virtual classes.
-//! Bridge registers callbacks that fire when engine events occur,
-//! encoding them as pipe commands to the native client.
+//! Bridge registers callbacks that fire when engine events occur, encoding
+//! them as pipe frames to the native client (see `hooks::encode_event_frame`).
+//!
+//! This is the authoritative event registry. `hooks::register_event_sink` was
+//! removed — hooks/mod.rs bridges these events to pipe frames instead.
+
+use std::collections::HashMap;
+use std::sync::{LazyLock, Mutex};
 
 /// TESHitEvent — dispatched when an actor takes damage.
 #[repr(C)]
@@ -55,43 +61,55 @@ pub const EVENT_ON_EQUIP: u32 = 2;
 pub const EVENT_ON_CELL_CHANGE: u32 = 3;
 pub const EVENT_ON_DEATH: u32 = 4;
 
-/// Maximum number of event sinks.
-const MAX_SINKS: usize = 5;
-
 /// Callback type for event handlers.
 /// - `event_type`: one of EVENT_ON_* constants
-/// - `event_data`: pointer to the event struct (cast to appropriate type)
+/// - `event_data`: pointer to the event struct for that type
 pub type EventCallback = extern "C" fn(event_type: u32, event_data: *const std::ffi::c_void);
 
-/// Event sink registry — static array of optional callbacks.
-static mut EVENT_SINKS: Option<[Option<EventCallback>; MAX_SINKS]> = None;
+/// Event sink registry — multiple sinks per event type.
+static EVENT_SINKS: LazyLock<Mutex<HashMap<u32, Vec<EventCallback>>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
 
 /// Register an event callback. Called during plugin init.
-/// Only one callback per event type.
+/// Multiple callbacks may register for the same event type.
 pub fn register_event_sink(event_type: u32, callback: EventCallback) {
-    unsafe {
-        if EVENT_SINKS.is_none() {
-            EVENT_SINKS = Some([None, None, None, None, None]);
-        }
-        if let Some(sinks) = &mut EVENT_SINKS {
-            let idx = event_type as usize;
-            if idx < MAX_SINKS {
-                sinks[idx] = Some(callback);
-            }
-        }
+    EVENT_SINKS
+        .lock()
+        .unwrap()
+        .entry(event_type)
+        .or_default()
+        .push(callback);
+}
+
+/// Unregister an event callback (by function pointer identity).
+pub fn unregister_event_sink(event_type: u32, callback: EventCallback) {
+    let mut sinks = EVENT_SINKS.lock().unwrap();
+    if let Some(list) = sinks.get_mut(&event_type) {
+        list.retain(|&cb| cb as usize != callback as usize);
     }
 }
 
-/// Dispatch an event to the registered sink (called from VTable hooks).
-pub fn dispatch_event(event_type: u32, event_data: *const std::ffi::c_void) {
-    unsafe {
-        if let Some(sinks) = &EVENT_SINKS {
-            let idx = event_type as usize;
-            if idx < MAX_SINKS {
-                if let Some(callback) = sinks[idx] {
-                    callback(event_type, event_data);
-                }
-            }
-        }
+/// Check whether any sinks are registered for an event type.
+pub fn has_event_sinks(event_type: u32) -> bool {
+    EVENT_SINKS
+        .lock()
+        .unwrap()
+        .get(&event_type)
+        .map(|v| !v.is_empty())
+        .unwrap_or(false)
+}
+
+/// Dispatch an event to the registered sinks (called from VTable hooks).
+/// Returns the number of callbacks fired.
+pub fn dispatch_event(event_type: u32, event_data: *const std::ffi::c_void) -> usize {
+    let sinks = EVENT_SINKS.lock().unwrap();
+    let callbacks = match sinks.get(&event_type) {
+        Some(list) if !list.is_empty() => list.clone(),
+        _ => return 0,
+    };
+    drop(sinks);
+    for cb in &callbacks {
+        cb(event_type, event_data);
     }
+    callbacks.len()
 }
