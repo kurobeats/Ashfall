@@ -28,6 +28,14 @@ impl Database {
         }).ok()
     }
 
+    /// Insert or replace an exterior cell.
+    pub fn insert_exterior(&self, e: &Exterior) {
+        let _ = self.conn().execute(
+            "INSERT OR REPLACE INTO exteriors (worldID, x, y) VALUES (?1, ?2, ?3)",
+            rusqlite::params![e.world_id, e.x, e.y],
+        );
+    }
+
     /// Get all exterior cells in a worldspace.
     pub fn get_exteriors_by_world(&self, world_id: u32) -> Vec<Exterior> {
         let mut stmt = match self.conn()

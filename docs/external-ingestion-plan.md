@@ -279,29 +279,33 @@ Encode u16 seq as: if <128 → single byte with high bit set. Else → 0x00 mark
 ## Priority 3 — Database: ESM→DB Direct Import
 
 ### 27. Add `esplugin` dependency — `ashfall-server/Cargo.toml`
-```toml
-esplugin = "4"
-```
+**DONE — deviation:** esplugin (v4/v6) exposes no public record/subrecord iteration
+(all record APIs are `pub(crate)`; it's built for load-order tooling). Instead
+`db/esm_import.rs` implements a minimal native TES4 plugin walker (~24 lines of
+record/group parsing) with bounds checks and synthetic-plugin tests.
 
-### 28. Create `db/esm_import.rs` — ~200 lines
+### 28. Create `db/esm_import.rs` — ~200 lines  ✅ DONE
 `Database::import_plugin(path, GameId)` → iterate ESM records → extract into all 17 tables:
-- `WEAP` → weapons (FULL→name, DATA→damage/crit/type)
-- `NPC_`/`CREA` → npcs (FULL→name, RNAM→race, ACBS→flags, ACDT→stats)
+- `WEAP` → weapons (FULL→name, DATA→damage/crit)
+- `NPC_`/`CREA` → npcs (FULL→name, RNAM→race, ACBS→female, ACDT→health/level)
 - `RACE` → races (FULL→name)
 - `CONT` → base_containers (FULL→name)
-- `MISC`/`ALCH`/`AMMO`/`ARMO`/`BOOK`/`KEYM`/`NOTE`/`SLGM` → base_items
+- `MISC`/`ALCH`/`AMMO`/`ARMO`/`BOOK`/`KEYM`/`NOTE`/`SLGM` → base_items (FULL→name, DATA→weight/value)
 - `TERM` → terminals (FULL→name)
 - `FACT` → factions (FULL→name, DATA→hostility)
-- `QUST` → quest_stages (INDX→stages)
-- `CELL` → interiors + exteriors (EDID/name, XCLC→coords)
-- `REFR`/`ACHR`/`ACRE` → references (NAME→baseID, DATA→XYZ, cell context)
-- Unrecognized → records (generic: baseID, FULL→name, type code)
+- `QUST` → quest_stages (INDX→stages; schema PK widened to (quest_id, stage))
+- `CELL` → interiors + exteriors (FULL→interior name, XCLC→coords)
+- `REFR`/`ACHR`/`ACRE` → references (NAME→baseID, cell from cell-children group label)
+- Unrecognized → records (generic: baseID, FULL→name, DESC→description, type code)
+Also added: `db/interior.rs` CRUD, `get_faction`, `insert_exterior`.
 
-### 29. Add `--import-esm` CLI flag to `ashfall-server`
-Import runs at tool-time (not server startup). CLI subcommand: `ashfall-server --import-esm Fallout3.esm --db fallout3.sqlite3`.
+### 29. Add `--import-esm` CLI flag to `ashfall-server`  ✅ DONE
+`ashfall-server --import-esm Fallout3.esm --import-game fo3 --import-db fallout3.sqlite3`
+(import runs at tool-time, not server startup).
 
 ### 30. Deprecate `tools/esm-reader/`
-Remove empty tool directory. esplugin direct ESM→DB replaces it entirely.
+N/A — no `tools/esm-reader/` directory exists in this repo. Native importer
+replaces the need entirely.
 
 ---
 

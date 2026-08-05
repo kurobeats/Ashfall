@@ -53,10 +53,11 @@ Client connects to `127.0.0.1:1770`. Stub mode sends canned data — enough to v
 
 - **Proton runtime testing** — inject bridge.dll into actual FO3/FNV under Proton, verify VTable hooks fire correctly
 - **Proton integration testing** — end-to-end test with real Fallout running under Proton/Wine.
-- **ESM reader tool** — populate the SQLite database from `.esm` / `.esp` plugin files.
 - **Full WASM game mode scripts** — co-op quest logic, NPC AI behaviors, custom game modes.
-- **Real network testing** — packet loss simulation, latency compensation, bandwidth tuning.
+- **Real network testing** — packet loss simulation, latency compensation, bandwidth tuning (reliability layer now has ACK/NACK, RTO retransmit, send window, rate limiting — see tests/reliability.rs).
 - **Windows native client** — currently Linux-only. Bridge DLL already cross-compiles for Windows.
+
+> ✅ ESM reader tool: **done** — `ashfall-server --import-esm Fallout3.esm --import-game fo3 --import-db data/fallout3.sqlite3` populates all 17 tables from plugin files.
 
 ---
 

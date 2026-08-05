@@ -4,9 +4,11 @@ use rusqlite::Connection;
 use std::path::Path;
 
 pub mod container;
+pub mod esm_import;
 pub mod exterior;
 pub mod faction;
 pub mod global;
+pub mod interior;
 pub mod item;
 pub mod npc;
 pub mod quest;
@@ -16,6 +18,8 @@ pub mod reference;
 pub mod schema;
 pub mod terminal;
 pub mod weapon;
+
+pub use esm_import::{EsmImportStats, GameId};
 
 #[cfg(test)]
 mod tests;

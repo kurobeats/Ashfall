@@ -86,7 +86,7 @@ CREATE TABLE IF NOT EXISTS ac_references (
 CREATE TABLE IF NOT EXISTS quest_stages (
     quest_id INTEGER,
     stage INTEGER,
-    PRIMARY KEY (quest_id)
+    PRIMARY KEY (quest_id, stage)
 );
 
 CREATE TABLE IF NOT EXISTS dialogue_flags (

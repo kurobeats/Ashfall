@@ -16,4 +16,20 @@ impl super::Database {
     pub fn set_faction(&self, faction_id: u32, name: &str, hostility_mask: u32) {
         let _ = self.conn().execute("INSERT OR REPLACE INTO factions VALUES (?1,?2,?3)", params![faction_id, name, hostility_mask]);
     }
+
+    /// Get a single faction by id.
+    pub fn get_faction(&self, faction_id: u32) -> Option<FactionRow> {
+        let mut stmt = self
+            .conn()
+            .prepare("SELECT faction_id, name, hostility_mask FROM factions WHERE faction_id = ?1")
+            .ok()?;
+        stmt.query_row(params![faction_id], |row| {
+            Ok(FactionRow {
+                faction_id: row.get(0)?,
+                name: row.get(1)?,
+                hostility_mask: row.get(2)?,
+            })
+        })
+        .ok()
+    }
 }
