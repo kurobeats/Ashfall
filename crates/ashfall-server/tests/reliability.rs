@@ -205,3 +205,35 @@ fn encode_reliable_frame(seq: u16, payload: &[u8]) -> Vec<u8> {
     buf.extend_from_slice(payload);
     buf
 }
+
+/// Regression: a fresh client's first reliable frame (GameAuth) must
+/// bootstrap the reliable channel. Before the fix, try_recv dropped it
+/// because the session wasn't registered yet — so no client could ever
+/// authenticate after the reliability layer landed.
+#[tokio::test]
+async fn test_first_contact_bootstraps_reliable_channel() {
+    let mut server = NetworkManager::bind("127.0.0.1:0".parse().unwrap()).await.unwrap();
+    let server_addr = server.socket().local_addr().unwrap();
+
+    let client = UdpSocket::bind("127.0.0.1:0").await.unwrap();
+    client.connect(server_addr).await.unwrap();
+    let client_addr = client.local_addr().unwrap();
+    // NOTE: no server.register_session(client_addr) — this is first contact.
+
+    let auth = Packet::GameAuth { name: "Wanderer".into(), password: String::new() };
+    let payload = postcard::to_stdvec(&auth).unwrap();
+    client.send(&encode_reliable_frame(0, &payload)).await.unwrap();
+
+    let mut buf = vec![0u8; 2048];
+    let (len, _) = server.recv_raw(&mut buf).await.unwrap();
+    let pkt = server.try_recv(client_addr, &buf[..len]);
+    assert!(pkt.is_some(), "first-contact reliable frame must be delivered");
+    assert_eq!(pkt.unwrap(), auth);
+
+    // The server can now reply reliably (channel was bootstrapped)
+    server.send_reliable(client_addr, &chat("welcome")).await.unwrap();
+    let n = client.recv(&mut buf).await.unwrap();
+    let (channel, _, payload) = parse_frame(&buf[..n]);
+    assert_eq!(channel & CHANNEL_RELIABLE_FLAG, CHANNEL_RELIABLE_FLAG);
+    assert_eq!(postcard::from_bytes::<Packet>(payload).unwrap(), chat("welcome"));
+}

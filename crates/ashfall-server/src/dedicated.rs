@@ -422,10 +422,9 @@ impl DedicatedServer {
             }
         }
 
-        // Register network session
-        self.network.register_session(addr);
-
-        // Insert session
+        // Insert session (network channel was bootstrapped on first contact
+        // in NetworkManager::try_recv — do NOT re-register here, that would
+        // reset the mid-handshake reliable channel).
         self.sessions.insert(addr, session);
 
         tracing::info!("Player {name} (id={player_id}) connected from {addr}");

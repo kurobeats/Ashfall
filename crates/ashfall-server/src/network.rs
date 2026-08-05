@@ -425,6 +425,13 @@ impl NetworkManager {
         if channel > 2 {
             return None;
         }
+        // First contact (a GameAuth frame): bootstrap the reliable channel so
+        // the server can reply (GameLoad, PlayerNew, GameEnd, ...). Without
+        // this, every fresh client's auth packet was dropped and the
+        // connection flow could never complete.
+        if !self.reliable.contains_key(&addr) {
+            self.register_session(addr);
+        }
         let ch = self.reliable.get_mut(&addr)?;
         let (seq, consumed) = decode_varint_seq(payload)?;
         let packet_data = &payload[consumed..];
