@@ -66,7 +66,7 @@ fn test_reputation_persistence() {
 fn test_hardcore_persistence() {
     let db = super::Database::open_in_memory().unwrap();
     db.set_hardcore_stats(250.0, 300.0, 150.0);
-    let (h, t, s) = db.get_hardcore_stats();
+    let (h, t, _s) = db.get_hardcore_stats();
     assert!((h - 250.0).abs() < 0.01);
     assert!((t - 300.0).abs() < 0.01);
 }

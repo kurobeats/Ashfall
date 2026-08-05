@@ -489,13 +489,6 @@ impl NetworkManager {
 mod tests {
     use super::*;
 
-    fn channel_for(channel: Channel) -> ReliableChannel {
-        let mut ch = ReliableChannel::new();
-        let seq = ch.next_seq();
-        ch.enqueue(channel, seq, b"hello".to_vec());
-        ch
-    }
-
     // ── Send window ──
     #[test]
     fn test_send_window_can_send() {

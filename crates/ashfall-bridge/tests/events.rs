@@ -15,6 +15,14 @@ static mut LAST_EVENT_TYPE: u32 = u32::MAX;
 static mut LAST_HIT_TARGET: u32 = 0;
 static mut LAST_HIT_DAMAGE: f32 = 0.0;
 
+/// Read a mutable static without forming a shared reference
+/// (avoids the `static_mut_refs` lint on read-only assertions).
+macro_rules! stat {
+    ($s:ident) => {
+        unsafe { *std::ptr::addr_of!($s) }
+    };
+}
+
 extern "C" fn hit_sink(event_type: u32, event_data: *const c_void) {
     unsafe {
         CALLBACK_HIT_FIRED += 1;
@@ -68,12 +76,10 @@ fn test_event_sink_dispatch_passes_struct() {
     };
     let count = events::dispatch_event(EVENT_ON_HIT, &ev as *const _ as *const c_void);
     assert_eq!(count, 1);
-    unsafe {
-        assert_eq!(CALLBACK_HIT_FIRED, 1);
-        assert_eq!(LAST_EVENT_TYPE, EVENT_ON_HIT);
-        assert_eq!(LAST_HIT_TARGET, 0x1234);
-        assert_eq!(LAST_HIT_DAMAGE, 25.5);
-    }
+    assert_eq!(stat!(CALLBACK_HIT_FIRED), 1);
+    assert_eq!(stat!(LAST_EVENT_TYPE), EVENT_ON_HIT);
+    assert_eq!(stat!(LAST_HIT_TARGET), 0x1234);
+    assert_eq!(stat!(LAST_HIT_DAMAGE), 25.5);
 
     events::unregister_event_sink(EVENT_ON_HIT, hit_sink);
 }
@@ -90,10 +96,8 @@ fn test_event_sink_multiple_sinks_per_type() {
     let ev = TESHitEvent { target: 1, attacker: 2, damage: 3.0, weapon: 0, projectile: 0, flags: 0 };
     let count = events::dispatch_event(EVENT_ON_HIT, &ev as *const _ as *const c_void);
     assert_eq!(count, 2);
-    unsafe {
-        assert_eq!(CALLBACK_HIT_FIRED, 1);
-        assert_eq!(CALLBACK_DEATH_FIRED, 1);
-    }
+    assert_eq!(stat!(CALLBACK_HIT_FIRED), 1);
+    assert_eq!(stat!(CALLBACK_DEATH_FIRED), 1);
 
     events::unregister_event_sink(EVENT_ON_HIT, hit_sink);
     events::unregister_event_sink(EVENT_ON_HIT, death_sink);
@@ -122,7 +126,7 @@ fn test_event_sink_multiple_types() {
     let ev = TESDeathEvent { actor: 7, killer: 8, limbs: 2, cause: 1 };
     let count = events::dispatch_event(EVENT_ON_DEATH, &ev as *const _ as *const c_void);
     assert_eq!(count, 1);
-    unsafe { assert_eq!(CALLBACK_DEATH_FIRED, 1); }
+    assert_eq!(stat!(CALLBACK_DEATH_FIRED), 1);
 
     events::unregister_event_sink(EVENT_ON_HIT, hit_sink);
     events::unregister_event_sink(EVENT_ON_DEATH, death_sink);

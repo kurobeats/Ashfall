@@ -6,8 +6,7 @@
 //! via RTO/NACK retransmission.
 
 use ashfall_core::protocol::transport::{
-    decode_ctrl_frame, decode_varint_seq, encode_ctrl_ack, CtrlFrame, CHANNEL_CTRL,
-    CHANNEL_RELIABLE_FLAG,
+    decode_ctrl_frame, decode_varint_seq, encode_ctrl_ack, CHANNEL_CTRL, CHANNEL_RELIABLE_FLAG,
 };
 use ashfall_core::protocol::Packet;
 use ashfall_server::network::NetworkManager;

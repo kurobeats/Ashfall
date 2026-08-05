@@ -154,6 +154,6 @@ fn test_nvse_plugin_load_snapshots_interface() {
 
     let stored = ashfall_bridge::plugin::nvse_interface().expect("interface should be snapshotted");
     assert_eq!(stored.interface_version, 1);
-    assert_eq!(stored.safe_write8 as usize, fake_safe_write8 as usize);
-    assert_eq!(stored.write_rel_call as usize, fake_write_rel_call as usize);
+    assert_eq!(stored.safe_write8 as usize, fake_safe_write8 as *const () as usize);
+    assert_eq!(stored.write_rel_call as usize, fake_write_rel_call as *const () as usize);
 }

@@ -524,7 +524,7 @@ mod tests {
         let world = group(0x00002000u32.to_le_bytes(), 1, &exterior_cell);
 
         // Cell-children group (type 6, label = cell formID) → REFR
-        let mut refr_data: Vec<u8> = [0x1234u32.to_le_bytes()].concat(); // NAME = baseID
+        let refr_data: Vec<u8> = [0x1234u32.to_le_bytes()].concat(); // NAME = baseID
         let refr = record(b"REFR", 0x00002001, &[sub(b"NAME", &refr_data), sub(b"DATA", &[0u8; 12])]);
         let cell_children = group(0x00001010u32.to_le_bytes(), 6, &refr);
 

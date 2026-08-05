@@ -3,7 +3,7 @@
 use ashfall_core::id::NetworkID;
 use ashfall_server::world::objects::Object;
 use ashfall_server::world::registry::ObjectRegistry;
-use ashfall_server::session::{Session, SessionState};
+use ashfall_server::session::Session;
 use std::net::SocketAddr;
 use std::sync::Arc;
 

@@ -479,15 +479,6 @@ pub const AV_SLEEP: u8 = 0x2D;
 mod tests {
     use super::*;
 
-    /// Create a fake C++ object: [vtable_ptr][field0: u32][field1: f32][field2: f32][field3: f32]
-    unsafe fn make_fake_obj(vtable_addr: *const usize) -> (Vec<u8>, *mut u8) {
-        let mut buf = vec![0u8; 64];
-        let ptr = buf.as_mut_ptr();
-        // Write vtable pointer at offset 0
-        ptr::write(ptr as *mut *const usize, vtable_addr);
-        (buf, ptr)
-    }
-
     #[test]
     fn test_read_field_u32() {
         let mut buf = vec![0u8; 32];
@@ -662,7 +653,7 @@ mod tests {
         }
         unsafe {
             let mut vtable = vec![0usize; 48]; // covers VTBL_REF_GET_LOCKED on both arches
-            vtable[VTBL_REF_GET_LOCKED] = fake_get_locked as usize;
+            vtable[VTBL_REF_GET_LOCKED] = fake_get_locked as *const () as usize;
             let (_obj, ptr) = fake_object(&vtable, 64);
             assert_eq!(get_lock_from_obj(ptr), 0xDEADBEEF);
         }
@@ -697,11 +688,11 @@ mod tests {
         }
         unsafe {
             let mut base_vtable = vec![0usize; 16];
-            base_vtable[VTBL_FORM_GET_FULL_NAME] = fake_get_full_name as usize;
+            base_vtable[VTBL_FORM_GET_FULL_NAME] = fake_get_full_name as *const () as usize;
             let (_base, base_ptr) = fake_object(&base_vtable, 64);
 
             let mut obj_vtable = vec![0usize; 16];
-            obj_vtable[VTBL_REF_GET_BASE_FORM] = fake_get_base_form as usize;
+            obj_vtable[VTBL_REF_GET_BASE_FORM] = fake_get_base_form as *const () as usize;
             let (mut obj, obj_ptr) = fake_object(&obj_vtable, 128);
             write_field::<usize>(obj.as_mut_ptr(), 0x40, base_ptr as usize);
             let _ = obj_ptr;
@@ -714,7 +705,7 @@ mod tests {
     fn test_get_name_null_base_form() {
         unsafe {
             // VTable chain returns null base form → "unnamed"
-            let mut vtable = vec![0usize; 16];
+            let vtable = vec![0usize; 16];
             let (_obj, ptr) = fake_object(&vtable, 64);
             assert_eq!(get_name_from_obj(ptr), "unnamed");
         }

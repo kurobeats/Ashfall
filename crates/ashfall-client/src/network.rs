@@ -143,8 +143,7 @@ impl ClientNetwork {
 mod tests {
     use super::*;
     use ashfall_core::protocol::transport::{
-        decode_ctrl_frame, decode_varint_seq, encode_ctrl_ack, encode_varint_seq, CtrlFrame,
-        CHANNEL_RELIABLE_FLAG,
+        decode_ctrl_frame, decode_varint_seq, encode_varint_seq, CtrlFrame, CHANNEL_RELIABLE_FLAG,
     };
 
     fn chat(message: &str) -> Packet {
@@ -221,7 +220,7 @@ mod tests {
 
             // Peer sees the ACK first, then the reply
             let mut buf = vec![0u8; 2048];
-            let len = peer.recv(&mut buf).await.unwrap();
+            let _len = peer.recv(&mut buf).await.unwrap();
             assert_eq!(buf[2], CHANNEL_CTRL, "first frame is the ACK");
             let decoded = decode_ctrl_frame(&buf[3..3 + u16::from_le_bytes([buf[0], buf[1]]) as usize])
                 .unwrap();

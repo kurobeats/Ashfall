@@ -2,7 +2,6 @@
 
 use ashfall_core::id::NetworkID;
 use ashfall_core::protocol::Packet;
-use ashfall_core::types::{GameObject, ObjectKind};
 use ashfall_server::world::cell::CellContext;
 use ashfall_server::world::objects::Object;
 use ashfall_server::world::registry::ObjectRegistry;

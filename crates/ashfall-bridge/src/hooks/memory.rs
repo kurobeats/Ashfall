@@ -260,7 +260,6 @@ pub unsafe fn find_pattern(base: usize, size: usize, pattern: &[u8], mask: &str)
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::ptr;
 
     #[test]
     fn test_safe_write8_readback() {
