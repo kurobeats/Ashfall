@@ -199,11 +199,58 @@ pub unsafe fn write_rel_jump(from: usize, to: usize) {
     safe_write32(from + 1, offset as u32);
 }
 
+/// Write a relative JMP and NOP-pad the remainder of the original instruction
+/// sequence (`original_len` bytes total). A 5-byte JMP over a longer instruction
+/// leaves trailing garbage otherwise.
+///
+/// # Panics
+///
+/// Panics if `original_len < 5` (a relative jump needs its full 5 bytes).
+pub unsafe fn write_rel_jump_padded(from: usize, to: usize, original_len: usize) {
+    assert!(original_len >= 5, "write_rel_jump_padded: original_len must be >= 5");
+    write_rel_jump(from, to);
+    for i in 5..original_len {
+        safe_write8(from + i, 0x90); // NOP
+    }
+}
+
 /// Write a relative CALL (E8 [rel32]) at `from` targeting `to`.
 pub unsafe fn write_rel_call(from: usize, to: usize) {
     let offset = (to as isize - from as isize - 5) as i32;
     safe_write8(from, 0xE8);
     safe_write32(from + 1, offset as u32);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Signature scanning (version-independent address resolution)
+// ═══════════════════════════════════════════════════════════════
+
+/// Scan `size` bytes starting at `base` for `pattern`, where `mask[i] == 'x'`
+/// requires an exact byte match and `mask[i] == '?'` is a wildcard.
+/// Returns the absolute address of the first match, or 0 if none.
+///
+/// Used to resolve FO3/FNV engine addresses at runtime instead of relying on
+/// hardcoded version-specific constants.
+pub unsafe fn find_pattern(base: usize, size: usize, pattern: &[u8], mask: &str) -> usize {
+    assert_eq!(
+        pattern.len(),
+        mask.len(),
+        "find_pattern: pattern and mask lengths must match"
+    );
+    if pattern.is_empty() || size < pattern.len() {
+        return 0;
+    }
+    let mask_bytes = mask.as_bytes();
+    let end = base + size - pattern.len();
+    'outer: for addr in (base..end).step_by(1) {
+        for i in 0..pattern.len() {
+            if mask_bytes[i] == b'x' && *(addr as *const u8).add(i) != pattern[i] {
+                continue 'outer;
+            }
+        }
+        return addr;
+    }
+    0
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -251,32 +298,116 @@ mod tests {
         assert_eq!(buf[5], 0);
     }
 
+    /// Place a jump base 3 bytes past an 8-aligned address so the rel32 write
+    /// at base+1 is 4-aligned (real engine patches hit arbitrary addresses;
+    /// tests avoid the debug misaligned-write check that way).
+    fn jump_base(buf: &[u8]) -> usize {
+        let aligned = (buf.as_ptr() as usize + 7) & !7usize;
+        aligned + 3
+    }
+
     #[test]
     fn test_write_rel_jump_offset() {
-        let mut buf = [0u8; 5];
-        let addr = buf.as_mut_ptr() as usize;
+        let buf = vec![0u8; 32];
+        let addr = jump_base(&buf);
         let fake_to = addr + 0x1000;
         unsafe {
             write_rel_jump(addr, fake_to);
         }
-        assert_eq!(buf[0], 0xE9);
-        let written_off = i32::from_le_bytes([buf[1], buf[2], buf[3], buf[4]]);
+        let bytes = unsafe { std::slice::from_raw_parts(addr as *const u8, 5) };
+        assert_eq!(bytes[0], 0xE9);
+        let written_off = i32::from_le_bytes([bytes[1], bytes[2], bytes[3], bytes[4]]);
         let expected = (fake_to as isize - addr as isize - 5) as i32;
         assert_eq!(written_off, expected);
     }
 
     #[test]
     fn test_write_rel_call_offset() {
-        let mut buf = [0u8; 5];
-        let addr = buf.as_mut_ptr() as usize;
+        let buf = vec![0u8; 32];
+        let addr = jump_base(&buf);
         let fake_to = addr + 0x500;
         unsafe {
             write_rel_call(addr, fake_to);
         }
-        assert_eq!(buf[0], 0xE8);
-        let written_off = i32::from_le_bytes([buf[1], buf[2], buf[3], buf[4]]);
+        let bytes = unsafe { std::slice::from_raw_parts(addr as *const u8, 5) };
+        assert_eq!(bytes[0], 0xE8);
+        let written_off = i32::from_le_bytes([bytes[1], bytes[2], bytes[3], bytes[4]]);
         let expected = (fake_to as isize - addr as isize - 5) as i32;
         assert_eq!(written_off, expected);
+    }
+
+    #[test]
+    fn test_write_rel_jump_padded() {
+        // 8-byte instruction sequence: JMP over a 6-byte instruction → NOP-pad 6..8
+        let buf = vec![0u8; 32];
+        let addr = jump_base(&buf);
+        let fake_to = addr + 0x100;
+        unsafe {
+            write_rel_jump_padded(addr, fake_to, 8);
+        }
+        let bytes = unsafe { std::slice::from_raw_parts(addr as *const u8, 8) };
+        assert_eq!(bytes[0], 0xE9);
+        let written_off = i32::from_le_bytes([bytes[1], bytes[2], bytes[3], bytes[4]]);
+        let expected = (fake_to as isize - addr as isize - 5) as i32;
+        assert_eq!(written_off, expected);
+        // Trailing bytes NOP-padded
+        assert_eq!(&bytes[5..8], &[0x90, 0x90, 0x90]);
+    }
+
+    #[test]
+    #[should_panic(expected = "original_len must be >= 5")]
+    fn test_write_rel_jump_padded_short() {
+        let buf = vec![0u8; 16];
+        let addr = jump_base(&buf);
+        unsafe {
+            write_rel_jump_padded(addr, addr + 0x10, 4);
+        }
+    }
+
+    #[test]
+    fn test_find_pattern_exact() {
+        let mut buf = [0u8; 32];
+        buf[8..12].copy_from_slice(&[0xDE, 0xAD, 0xBE, 0xEF]);
+        let base = buf.as_ptr() as usize;
+        unsafe {
+            let hit = find_pattern(base, 32, &[0xDE, 0xAD, 0xBE, 0xEF], "xxxx");
+            assert_eq!(hit, base + 8);
+        }
+    }
+
+    #[test]
+    fn test_find_pattern_wildcard() {
+        let mut buf = [0u8; 32];
+        buf[4] = 0xAA;
+        buf[5] = 0xBB;
+        buf[6] = 0xCC;
+        let base = buf.as_ptr() as usize;
+        unsafe {
+            // Wildcard at position 1 (any byte)
+            let hit = find_pattern(base, 32, &[0xAA, 0x00, 0xCC], "x?x");
+            assert_eq!(hit, base + 4);
+        }
+    }
+
+    #[test]
+    fn test_find_pattern_no_match() {
+        let buf = [0u8; 16];
+        let base = buf.as_ptr() as usize;
+        unsafe {
+            assert_eq!(find_pattern(base, 16, &[0x11, 0x22], "xx"), 0);
+        }
+    }
+
+    #[test]
+    fn test_find_pattern_short_scan_or_empty() {
+        let buf = [0x01u8, 0x02];
+        let base = buf.as_ptr() as usize;
+        unsafe {
+            // Pattern longer than scan region → 0
+            assert_eq!(find_pattern(base, 2, &[0x01, 0x02, 0x03], "xxx"), 0);
+            // Empty pattern → 0
+            assert_eq!(find_pattern(base, 2, &[], ""), 0);
+        }
     }
 
     #[test]

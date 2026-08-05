@@ -207,10 +207,9 @@ pub fn get_actor_base_value(ref_id: u32, index: u8) -> f32 {
 // ═══════════════════════════════════════════════════════════════
 
 /// Get current combat target FormID for an NPC.
+#[inline]
 pub fn get_combat_target(ref_id: u32) -> u32 {
-    let _ = ref_id;
-    // TODO: Actor::GetCombatTarget() → TESObjectREFR*
-    0
+    unsafe { vtable::get_combat_target(ref_id) }
 }
 
 /// Get current AI package ID for an NPC.
@@ -351,14 +350,16 @@ pub fn get_activate(ref_id: u32) -> u32 {
     0
 }
 
+/// Read the enabled state of a reference (VTable/field read, FO3/FNV aware).
+#[inline]
 pub fn get_enabled(ref_id: u32) -> bool {
-    let _ = ref_id;
-    true
+    unsafe { vtable::get_enabled(ref_id) }
 }
 
+/// Get the lock object pointer for a reference (GetLocked vtable call).
+#[inline]
 pub fn get_lock(ref_id: u32) -> u32 {
-    let _ = ref_id;
-    0
+    unsafe { vtable::get_lock(ref_id) }
 }
 
 /// Get base FormID via VTable chain: GetBaseForm → GetFormID.
@@ -367,9 +368,10 @@ pub fn get_base(ref_id: u32) -> u32 {
     unsafe { vtable::get_base(ref_id) }
 }
 
+/// Get display name via the VTable chain GetBaseForm → GetFullName.
+#[inline]
 pub fn get_name(ref_id: u32) -> String {
-    let _ = ref_id;
-    "unnamed".to_string()
+    unsafe { vtable::get_name(ref_id) }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -396,7 +398,8 @@ static CONSOLE_COMMANDS: LazyLock<Mutex<HashMap<String, bool>>> =
 pub fn encode_event_frame(event_type: u32, event_data: *const std::ffi::c_void) -> Option<Vec<u8>> {
     use crate::events::{
         TESActivateEvent, TESCellChangeEvent, TESDeathEvent, TESEquipEvent, TESHitEvent,
-        EVENT_ON_ACTIVATE, EVENT_ON_CELL_CHANGE, EVENT_ON_DEATH, EVENT_ON_EQUIP, EVENT_ON_HIT,
+        TESLoadGameEvent, TESMagicEffectApplyEvent, EVENT_ON_ACTIVATE, EVENT_ON_CELL_CHANGE,
+        EVENT_ON_DEATH, EVENT_ON_EQUIP, EVENT_ON_HIT, EVENT_ON_LOAD_GAME, EVENT_ON_MAGIC_EFFECT,
     };
 
     if event_data.is_null() {
@@ -414,6 +417,12 @@ pub fn encode_event_frame(event_type: u32, event_data: *const std::ffi::c_void) 
                 bytes(event_data as *const u8, std::mem::size_of::<TESCellChangeEvent>())
             }
             EVENT_ON_DEATH => bytes(event_data as *const u8, std::mem::size_of::<TESDeathEvent>()),
+            EVENT_ON_LOAD_GAME => {
+                bytes(event_data as *const u8, std::mem::size_of::<TESLoadGameEvent>())
+            }
+            EVENT_ON_MAGIC_EFFECT => {
+                bytes(event_data as *const u8, std::mem::size_of::<TESMagicEffectApplyEvent>())
+            }
             _ => return None,
         }
     };
@@ -465,10 +474,9 @@ pub fn is_dead(ref_id: u32) -> bool {
 }
 
 /// Get the cell FormID this reference currently occupies.
+#[inline]
 pub fn get_parent_cell(ref_id: u32) -> u32 {
-    let _ = ref_id;
-    // TODO: TESObjectREFR::GetParentCell()
-    0
+    unsafe { vtable::get_parent_cell(ref_id) }
 }
 
 /// Equip an item on an actor.

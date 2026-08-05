@@ -81,14 +81,15 @@ pub fn nvse_interface() -> Option<NVSEInterface> {
 const PLUGIN_INTERFACE_VERSION: u32 = 1;
 
 /// Called by NVSE/FOSE to query plugin info.
-/// Returns true if this plugin supports the requested interface version.
+/// Returns true if the requested interface version is supported (>= 1, so
+/// forward-compatible with xNVSE v6+ interface bumps).
 #[no_mangle]
 pub extern "C" fn NVSEPlugin_Query(
     interface_version: u32,
     info: *mut PluginInfo,
     _message: *mut u8,
 ) -> bool {
-    if interface_version != PLUGIN_INTERFACE_VERSION {
+    if interface_version < PLUGIN_INTERFACE_VERSION {
         return false;
     }
     if !info.is_null() {

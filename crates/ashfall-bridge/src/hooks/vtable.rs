@@ -116,6 +116,7 @@ pub unsafe fn lookup_form_by_id(form_id: u32) -> *mut u8 {
 /// On x86_64: returned in XMM0/XMM1 or via out pointer — implementation depends on game binary.
 /// ponytail: we read raw field offsets as fallback; VTable call for correctness.
 const VTBL_REF_GET_POS: usize = vtable_index(0x30);        // index 12 (x86)
+const VTBL_REF_GET_BASE_FORM: usize = vtable_index(0x10);  // index 4 (x86)
 const VTBL_ACTOR_GET_VALUE: usize = vtable_index(0x68);    // index 26 (x86)
 const VTBL_ACTOR_GET_BASE_VALUE: usize = vtable_index(0x70); // index 28 (x86, estimated)
 const VTBL_ACTOR_ANIM_DATA: usize = vtable_index(0x01E4);   // index 121 (x86, vaultmp.cpp GetActorState)
@@ -305,13 +306,22 @@ pub unsafe fn set_actor_value(ref_id: u32, index: u8, value: f32) {
 }
 
 /// Read cell of a reference.
+/// Path: `TESObjectREFR+0x3C` → `TESObjectCELL*`, then `TESForm::refID` at +0x14.
 pub unsafe fn get_cell(ref_id: u32) -> u32 {
-    let obj = lookup_form_by_id(ref_id);
+    get_cell_from_obj(lookup_form_by_id(ref_id))
+}
+
+/// Read the parent cell FormID from an already-resolved object pointer.
+pub unsafe fn get_cell_from_obj(obj: *mut u8) -> u32 {
     if obj.is_null() {
         return 0;
     }
-    // ponytail: cell field offset unknown. Returns 0 until RE.
-    0
+    let cell_ptr = read_field::<usize>(obj, 0x3C);
+    if cell_ptr == 0 {
+        return 0;
+    }
+    // TESForm::refID is the first u32 of any TESForm-derived object
+    read_field::<u32>(cell_ptr as *mut u8, 0x14)
 }
 
 /// Read base FormID (TESObjectREFR::GetBaseForm → TESForm::GetFormID).
@@ -322,7 +332,6 @@ pub unsafe fn get_base(ref_id: u32) -> u32 {
     }
 
     // VTable GetBaseForm (index 4 on x86) → returns TESForm*
-    const VTBL_REF_GET_BASE_FORM: usize = vtable_index(0x10);
     let base_form: u32 = vcall_0(obj, VTBL_REF_GET_BASE_FORM);
     if base_form == 0 {
         return 0;
@@ -332,6 +341,131 @@ pub unsafe fn get_base(ref_id: u32) -> u32 {
     const VTBL_FORM_GET_FORM_ID: usize = vtable_index(0x04);
     vcall_0(base_form as *mut u8, VTBL_FORM_GET_FORM_ID)
 }
+
+// ═══════════════════════════════════════════════════════════════
+// Enabled / Lock / Name / Parent cell / Combat target
+// ═══════════════════════════════════════════════════════════════
+
+/// Enabled flag offset: `TESObjectREFR+0x50` (FO3) / `+0x54` (FNV), bit 0x02.
+/// Returns `true` when the reference is enabled (flag bit clear).
+pub unsafe fn get_enabled(ref_id: u32) -> bool {
+    get_enabled_from_obj(lookup_form_by_id(ref_id))
+}
+
+/// Read the enabled state from an already-resolved object pointer.
+pub unsafe fn get_enabled_from_obj(obj: *mut u8) -> bool {
+    if obj.is_null() {
+        return true;
+    }
+    let flags_offset: usize = if crate::hooks::is_fnv() { 0x54 } else { 0x50 };
+    let flags = read_field::<u32>(obj, flags_offset);
+    (flags & 0x02) == 0
+}
+
+/// `TESObjectREFR::GetLocked()` vtable call → `TESObjectLOCK*`.
+const VTBL_REF_GET_LOCKED: usize = vtable_index(0xA0);
+
+/// Get the lock object pointer for a reference.
+pub unsafe fn get_lock(ref_id: u32) -> u32 {
+    get_lock_from_obj(lookup_form_by_id(ref_id))
+}
+
+/// Read the lock pointer from an already-resolved object pointer.
+pub unsafe fn get_lock_from_obj(obj: *mut u8) -> u32 {
+    if obj.is_null() {
+        return 0;
+    }
+    vcall_0(obj, VTBL_REF_GET_LOCKED)
+}
+
+/// Parent cell offset: `TESObjectREFR+0x28` (FO3) / `+0x2C` (FNV).
+/// Returns the parent cell FormID (or 0 when the engine hasn't set it).
+pub unsafe fn get_parent_cell(ref_id: u32) -> u32 {
+    get_parent_cell_from_obj(lookup_form_by_id(ref_id))
+}
+
+/// Read the parent cell FormID from an already-resolved object pointer.
+pub unsafe fn get_parent_cell_from_obj(obj: *mut u8) -> u32 {
+    if obj.is_null() {
+        return 0;
+    }
+    let offset: usize = if crate::hooks::is_fnv() { 0x2C } else { 0x28 };
+    read_field::<u32>(obj, offset)
+}
+
+/// Combat target offsets: `Actor+0x4E0` (FO3) / `+0x430` (FNV).
+const OFFSET_COMBAT_TARGET_FO3: usize = 0x4E0;
+const OFFSET_COMBAT_TARGET_FNV: usize = 0x430;
+
+/// Get the current combat target FormID for an actor.
+pub unsafe fn get_combat_target(ref_id: u32) -> u32 {
+    get_combat_target_from_obj(lookup_form_by_id(ref_id))
+}
+
+/// Read the combat target from an already-resolved object pointer.
+pub unsafe fn get_combat_target_from_obj(obj: *mut u8) -> u32 {
+    if obj.is_null() {
+        return 0;
+    }
+    let offset = if crate::hooks::is_fnv() {
+        OFFSET_COMBAT_TARGET_FNV
+    } else {
+        OFFSET_COMBAT_TARGET_FO3
+    };
+    read_field::<u32>(obj, offset)
+}
+
+/// Full-name vtable slot on TESForm: byte offset 0x1C (index 7 on x86).
+const VTBL_FORM_GET_FULL_NAME: usize = vtable_index(0x1C);
+
+/// Get the display name via the VTable chain
+/// `GetBaseForm` → `GetFullName` (returns `const char*`).
+pub unsafe fn get_name(ref_id: u32) -> String {
+    get_name_from_obj(lookup_form_by_id(ref_id))
+}
+
+/// Read the display name from an already-resolved object pointer.
+pub unsafe fn get_name_from_obj(obj: *mut u8) -> String {
+    if obj.is_null() {
+        return "unnamed".into();
+    }
+    // Use vtable_entry + match: partially patched vtables (null slots) during
+    // runtime hooking must degrade to "unnamed", not panic.
+    let base_form: *mut u8 = match vtable_entry::<unsafe extern "system" fn(*mut u8) -> *mut u8>(
+        obj,
+        VTBL_REF_GET_BASE_FORM,
+    ) {
+        Some(f) => f(obj),
+        None => return "unnamed".into(),
+    };
+    if base_form.is_null() {
+        return "unnamed".into();
+    }
+    let name_ptr: *const i8 = match vtable_entry::<unsafe extern "system" fn(*mut u8) -> *const i8>(
+        base_form,
+        VTBL_FORM_GET_FULL_NAME,
+    ) {
+        Some(f) => f(base_form),
+        None => return "unnamed".into(),
+    };
+    if name_ptr.is_null() {
+        return "unnamed".into();
+    }
+    std::ffi::CStr::from_ptr(name_ptr).to_string_lossy().into_owned()
+}
+
+/// Actor value indices (Gamebryo ActorValue enum, shared by FO3/FNV).
+pub const AV_HEALTH: u8 = 0x14;
+pub const AV_ACTION_POINTS: u8 = 0x15;
+pub const AV_CARRY_WEIGHT: u8 = 0x05;
+pub const AV_DAMAGE_RESIST: u8 = 0x29;
+pub const AV_DAMAGE_THRESHOLD: u8 = 0x2A; // FNV only
+pub const AV_SPEED_MULT: u8 = 0x22;
+pub const AV_RADIATION: u8 = 0x20;
+// FNV hardcore stats
+pub const AV_DEHYDRATION: u8 = 0x2B;
+pub const AV_HUNGER: u8 = 0x2C;
+pub const AV_SLEEP: u8 = 0x2D;
 
 // ═══════════════════════════════════════════════════════════════
 // Tests — operate on a local buffer to verify primitives
@@ -461,5 +595,141 @@ mod tests {
             assert_eq!(vtable_index(0x30), 6);
             assert_eq!(vtable_index(0x68), 13);
         }
+    }
+
+    // ── New reference getters (offsets from xSE community / vaultmp) ──
+
+    /// Fake C++ object: [vtable ptr][zeroed fields of `size` bytes].
+    unsafe fn fake_object(vtable: &[usize], size: usize) -> (Vec<u8>, *mut u8) {
+        let mut buf = vec![0u8; size];
+        let ptr = buf.as_mut_ptr();
+        ptr::write(ptr as *mut *const usize, vtable.as_ptr());
+        (buf, ptr)
+    }
+
+    #[test]
+    fn test_getters_null_defaults() {
+        unsafe {
+            assert_eq!(get_cell_from_obj(std::ptr::null_mut()), 0);
+            assert!(get_enabled_from_obj(std::ptr::null_mut())); // enabled by default
+            assert_eq!(get_lock_from_obj(std::ptr::null_mut()), 0);
+            assert_eq!(get_parent_cell_from_obj(std::ptr::null_mut()), 0);
+            assert_eq!(get_combat_target_from_obj(std::ptr::null_mut()), 0);
+            assert_eq!(get_name_from_obj(std::ptr::null_mut()), "unnamed");
+        }
+    }
+
+    #[test]
+    fn test_get_cell_from_obj() {
+        unsafe {
+            // Fake cell object with refID at TESForm offset 0x14
+            let mut cell = vec![0u8; 32];
+            write_field::<u32>(cell.as_mut_ptr(), 0x14, 0xCAFE);
+
+            let mut obj = vec![0u8; 128];
+            write_field::<usize>(obj.as_mut_ptr(), 0x3C, cell.as_ptr() as usize);
+
+            assert_eq!(get_cell_from_obj(obj.as_mut_ptr()), 0xCAFE);
+
+            // Null cell pointer → 0
+            let mut obj2 = vec![0u8; 128];
+            write_field::<usize>(obj2.as_mut_ptr(), 0x3C, 0);
+            assert_eq!(get_cell_from_obj(obj2.as_mut_ptr()), 0);
+        }
+    }
+
+    #[test]
+    fn test_get_enabled_from_obj_fo3_offset() {
+        unsafe {
+            // Default engine state is Unknown → FO3 path (+0x50, bit 0x02)
+            let mut obj = vec![0u8; 128];
+            write_field::<u32>(obj.as_mut_ptr(), 0x50, 0x02); // disabled flag set
+            assert!(!get_enabled_from_obj(obj.as_mut_ptr()));
+
+            write_field::<u32>(obj.as_mut_ptr(), 0x50, 0x00);
+            assert!(get_enabled_from_obj(obj.as_mut_ptr()));
+        }
+    }
+
+    #[test]
+    fn test_get_lock_from_obj() {
+        unsafe extern "C" fn fake_get_locked(_this: *mut u8) -> u32 {
+            0xDEADBEEF
+        }
+        unsafe {
+            let mut vtable = vec![0usize; 48]; // covers VTBL_REF_GET_LOCKED on both arches
+            vtable[VTBL_REF_GET_LOCKED] = fake_get_locked as usize;
+            let (_obj, ptr) = fake_object(&vtable, 64);
+            assert_eq!(get_lock_from_obj(ptr), 0xDEADBEEF);
+        }
+    }
+
+    #[test]
+    fn test_get_parent_cell_from_obj_fo3_offset() {
+        unsafe {
+            let mut obj = vec![0u8; 128];
+            write_field::<u32>(obj.as_mut_ptr(), 0x28, 0x1234); // FO3 path (default engine state)
+            assert_eq!(get_parent_cell_from_obj(obj.as_mut_ptr()), 0x1234);
+        }
+    }
+
+    #[test]
+    fn test_get_combat_target_from_obj_fo3_offset() {
+        unsafe {
+            let mut obj = vec![0u8; 0x600];
+            write_field::<u32>(obj.as_mut_ptr(), 0x4E0, 0x5555); // FO3 path (default engine state)
+            assert_eq!(get_combat_target_from_obj(obj.as_mut_ptr()), 0x5555);
+        }
+    }
+
+    #[test]
+    fn test_get_name_from_obj_vtable_chain() {
+        unsafe extern "C" fn fake_get_base_form(this: *mut u8) -> *mut u8 {
+            // Base form pointer stored by the test at obj+0x40
+            read_field::<usize>(this, 0x40) as *mut u8
+        }
+        unsafe extern "C" fn fake_get_full_name(_this: *mut u8) -> *const i8 {
+            b"Wanderer\0".as_ptr() as *const i8
+        }
+        unsafe {
+            let mut base_vtable = vec![0usize; 16];
+            base_vtable[VTBL_FORM_GET_FULL_NAME] = fake_get_full_name as usize;
+            let (_base, base_ptr) = fake_object(&base_vtable, 64);
+
+            let mut obj_vtable = vec![0usize; 16];
+            obj_vtable[VTBL_REF_GET_BASE_FORM] = fake_get_base_form as usize;
+            let (mut obj, obj_ptr) = fake_object(&obj_vtable, 128);
+            write_field::<usize>(obj.as_mut_ptr(), 0x40, base_ptr as usize);
+            let _ = obj_ptr;
+
+            assert_eq!(get_name_from_obj(obj.as_mut_ptr()), "Wanderer");
+        }
+    }
+
+    #[test]
+    fn test_get_name_null_base_form() {
+        unsafe {
+            // VTable chain returns null base form → "unnamed"
+            let mut vtable = vec![0usize; 16];
+            let (_obj, ptr) = fake_object(&vtable, 64);
+            assert_eq!(get_name_from_obj(ptr), "unnamed");
+        }
+    }
+
+    #[test]
+    fn test_actor_value_constants() {
+        let vals = [
+            AV_HEALTH, AV_ACTION_POINTS, AV_CARRY_WEIGHT, AV_DAMAGE_RESIST,
+            AV_DAMAGE_THRESHOLD, AV_SPEED_MULT, AV_RADIATION,
+            AV_DEHYDRATION, AV_HUNGER, AV_SLEEP,
+        ];
+        for i in 0..vals.len() {
+            for j in i + 1..vals.len() {
+                assert_ne!(vals[i], vals[j], "AV constants must be distinct");
+            }
+        }
+        assert_eq!(AV_HEALTH, 0x14);
+        assert_eq!(AV_DAMAGE_THRESHOLD, 0x2A);
+        assert_eq!(AV_SLEEP, 0x2D);
     }
 }

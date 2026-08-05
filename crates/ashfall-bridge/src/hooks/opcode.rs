@@ -8,8 +8,14 @@
 //! Delegator pattern: blocks local execution of multiplayer-sensitive opcodes
 //! (PlaceAtMe, AddItem, SetStage, SetAV, EquipItem), relaying them via pipe
 //! for server-side validation.
+//!
+//! # Thread safety
+//!
+//! All VTable calls from the bridge must serialize through a single mutex:
+//! Gamebryo's ScriptRunner is not reentrant. The in-memory handler table uses
+//! `std::sync::Mutex`; the real implementation needs a Windows `CRITICAL_SECTION`
+//! (or `parking_lot::Mutex`) so engine threads can block while a handler runs.
 
-use std::collections::HashMap;
 use std::sync::{LazyLock, Mutex};
 
 // ── Handler types ──
@@ -40,40 +46,56 @@ fn block_all(_opcode: u16, _params: &[u32]) -> OpcodeAction {
 
 // ── Handler table ──
 
-static OPCODE_HANDLERS: LazyLock<Mutex<HashMap<u16, OpcodeHandler>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
+/// Direct-indexed handler table: index by `opcode & 0x1FFF`.
+/// Real GECK opcodes used for interception are all < 0x2000, so the mask is
+/// lossless for them (VAULTFUNCTION opcodes never reach `intercept()`).
+/// 8Ki entries × `Option<fn>` (niche: null = None) ≈ 64KiB static — zero
+/// allocation, no hashing, single lock acquisition per lookup.
+const OPCODE_TABLE_SIZE: usize = 0x2000;
+
+static OPCODE_HANDLERS: LazyLock<Mutex<[Option<OpcodeHandler>; OPCODE_TABLE_SIZE]>> =
+    LazyLock::new(|| Mutex::new([None; OPCODE_TABLE_SIZE]));
+
+#[inline]
+fn opcode_index(opcode: u16) -> usize {
+    (opcode & 0x1FFF) as usize
+}
 
 /// Register a handler for a specific opcode.
 pub fn register_handler(opcode: u16, handler: OpcodeHandler) {
     let mut table = OPCODE_HANDLERS.lock().unwrap();
-    table.insert(opcode, handler);
+    table[opcode_index(opcode)] = Some(handler);
 }
 
 /// Unregister a handler.
 pub fn unregister_handler(opcode: u16) {
     let mut table = OPCODE_HANDLERS.lock().unwrap();
-    table.remove(&opcode);
+    table[opcode_index(opcode)] = None;
 }
 
 /// Intercept an opcode execution. Returns the action to take.
 /// Called from the ScriptRunner::Execute VTable patch.
 pub fn intercept(opcode: u16, params: &[u32]) -> OpcodeAction {
     let table = OPCODE_HANDLERS.lock().unwrap();
-    if let Some(handler) = table.get(&opcode) {
-        handler(opcode, params)
-    } else {
-        OpcodeAction::Allow
+    match table[opcode_index(opcode)] {
+        Some(handler) => handler(opcode, params),
+        None => OpcodeAction::Allow,
     }
 }
 
 /// Check if an opcode has a registered handler (without locking twice).
 pub fn has_handler(opcode: u16) -> bool {
-    OPCODE_HANDLERS.lock().unwrap().contains_key(&opcode)
+    OPCODE_HANDLERS.lock().unwrap()[opcode_index(opcode)].is_some()
 }
 
 /// Count registered handlers.
 pub fn handler_count() -> usize {
-    OPCODE_HANDLERS.lock().unwrap().len()
+    OPCODE_HANDLERS
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|h| h.is_some())
+        .count()
 }
 
 // ── Default delegator handlers ──
@@ -136,8 +158,10 @@ pub fn is_vaultfunction(opcode: u16) -> bool {
 }
 
 /// Strip the VAULTFUNCTION mask to get the base index.
+/// Only defined for VAULTFUNCTION opcodes (0xE000..=0xFFFF); the 0x0FFF mask
+/// keeps the low 12 index bits (vaultmp's VAULTFUNCTION table is 0x0000-0x0036).
 pub fn vaultfunction_index(opcode: u16) -> u16 {
-    opcode & !VAULTFUNCTION_MASK
+    opcode & 0x0FFF
 }
 
 #[cfg(test)]
@@ -194,7 +218,19 @@ mod tests {
 
         assert_eq!(vaultfunction_index(0xE001), 0x0001);
         assert_eq!(vaultfunction_index(0xE036), 0x0036);
-        assert_eq!(vaultfunction_index(0x1007), 0x1007); // non-VAULTFUNCTION unchanged
+        // Mask is 0x0FFF: high nibble bits are excluded from the index
+        assert_eq!(vaultfunction_index(0xF0F1), 0x00F1);
+    }
+
+    #[test]
+    fn test_opcode_table_direct_index() {
+        // Registered opcodes collide by design on `opcode & 0x1FFF`:
+        // 0x0001 and 0x2001 would share a slot, but only real GECK opcodes
+        // (< 0x2000) reach intercept(). Verify wrap keeps table in bounds.
+        assert_eq!(OPCODE_TABLE_SIZE, 0x2000);
+        assert!(opcode_index(0x1FFF) < OPCODE_TABLE_SIZE);
+        assert!(opcode_index(0x2000) < OPCODE_TABLE_SIZE); // wraps to 0
+        assert!(opcode_index(0xFFFF) < OPCODE_TABLE_SIZE);
     }
 
     #[test]

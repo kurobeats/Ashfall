@@ -2,7 +2,8 @@
 
 use ashfall_bridge::events::{
     self, TESActivateEvent, TESCellChangeEvent, TESDeathEvent, TESEquipEvent, TESHitEvent,
-    EVENT_ON_ACTIVATE, EVENT_ON_CELL_CHANGE, EVENT_ON_DEATH, EVENT_ON_EQUIP, EVENT_ON_HIT,
+    TESLoadGameEvent, TESMagicEffectApplyEvent, EVENT_ON_ACTIVATE, EVENT_ON_CELL_CHANGE,
+    EVENT_ON_DEATH, EVENT_ON_EQUIP, EVENT_ON_HIT, EVENT_ON_LOAD_GAME, EVENT_ON_MAGIC_EFFECT,
 };
 use ashfall_bridge::hooks;
 use std::ffi::c_void;
@@ -175,6 +176,8 @@ fn test_event_frame_all_types_len() {
     let equ = TESEquipEvent { actor: 0, base_obj: 0, equip_slot: 0, equipped: false };
     let cell = TESCellChangeEvent { reference: 0, old_cell: 0, new_cell: 0 };
     let death = TESDeathEvent { actor: 0, killer: 0, limbs: 0, cause: 0 };
+    let load = TESLoadGameEvent { loaded: true };
+    let magic = TESMagicEffectApplyEvent { caster: 0, target: 0, effect_code: 0, magnitude: 0.0 };
 
     let cases = [
         (EVENT_ON_HIT, &hit as *const _ as *const c_void, std::mem::size_of::<TESHitEvent>()),
@@ -182,6 +185,8 @@ fn test_event_frame_all_types_len() {
         (EVENT_ON_EQUIP, &equ as *const _ as *const c_void, std::mem::size_of::<TESEquipEvent>()),
         (EVENT_ON_CELL_CHANGE, &cell as *const _ as *const c_void, std::mem::size_of::<TESCellChangeEvent>()),
         (EVENT_ON_DEATH, &death as *const _ as *const c_void, std::mem::size_of::<TESDeathEvent>()),
+        (EVENT_ON_LOAD_GAME, &load as *const _ as *const c_void, std::mem::size_of::<TESLoadGameEvent>()),
+        (EVENT_ON_MAGIC_EFFECT, &magic as *const _ as *const c_void, std::mem::size_of::<TESMagicEffectApplyEvent>()),
     ];
     for (event_type, ptr, size) in cases {
         let frame = hooks::encode_event_frame(event_type, ptr).unwrap();

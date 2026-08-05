@@ -54,12 +54,29 @@ pub struct TESDeathEvent {
     pub cause: i8,
 }
 
+/// TESLoadGameEvent — dispatched when a save game is loaded.
+#[repr(C)]
+pub struct TESLoadGameEvent {
+    pub loaded: bool,
+}
+
+/// TESMagicEffectApplyEvent — dispatched when a magic effect applies.
+#[repr(C)]
+pub struct TESMagicEffectApplyEvent {
+    pub caster: u32,       // RefID
+    pub target: u32,       // RefID
+    pub effect_code: u32,  // Magic effect FormID
+    pub magnitude: f32,
+}
+
 /// Event type identifiers for sink registration.
 pub const EVENT_ON_HIT: u32 = 0;
 pub const EVENT_ON_ACTIVATE: u32 = 1;
 pub const EVENT_ON_EQUIP: u32 = 2;
 pub const EVENT_ON_CELL_CHANGE: u32 = 3;
 pub const EVENT_ON_DEATH: u32 = 4;
+pub const EVENT_ON_LOAD_GAME: u32 = 5;
+pub const EVENT_ON_MAGIC_EFFECT: u32 = 6;
 
 /// Callback type for event handlers.
 /// - `event_type`: one of EVENT_ON_* constants

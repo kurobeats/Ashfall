@@ -69,11 +69,20 @@ fn test_nvse_plugin_query_ok() {
 
 #[test]
 fn test_nvse_plugin_query_wrong_version() {
-    // Unsupported interface version → false, info untouched
+    // Version 0 predates the plugin interface → false, info untouched
     let mut info = PluginInfo::new("unchanged", 0);
-    let ok = NVSEPlugin_Query(99, &mut info, std::ptr::null_mut());
+    let ok = NVSEPlugin_Query(0, &mut info, std::ptr::null_mut());
     assert!(!ok);
     assert_eq!(info.name_str(), "unchanged");
+}
+
+#[test]
+fn test_nvse_plugin_query_forward_compat() {
+    // Newer interface versions are accepted (xNVSE v6+ bumps the version)
+    let mut info = PluginInfo::new("", 0);
+    let ok = NVSEPlugin_Query(2, &mut info, std::ptr::null_mut());
+    assert!(ok);
+    assert_eq!(info.name_str(), "Ashfall Bridge");
 }
 
 // ── NVSEInterface layout + NVSEPlugin_Load snapshot ──
