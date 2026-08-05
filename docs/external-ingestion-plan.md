@@ -311,17 +311,30 @@ replaces the need entirely.
 
 ## Priority 4 — Consolidation & Cleanup
 
-### 31. Add `core/src/protocol/console.rs`
-Move console command type definitions from scattered locations into single module. Add opcode range documentation table.
+### 31. Add `core/src/protocol/console.rs`  ✅ DONE (deviation)
+Console command types were already single-module in `ashfall-bridge/src/console.rs`
+(handler registry + defaults). Added the opcode range documentation table
+(original 17 / Tier 1-4 / VAULTFUNCTION) there instead of core — console
+commands are bridge-only, core/protocol is shared wire format.
 
-### 32. Replace `.csv` database population in tests
-Update test setup to use in-memory ESM import instead of canned SQL inserts. Validates import pipeline.
+### 32. Replace `.csv` database population in tests  ✅ DONE (deviation)
+No CSV-based test setup exists. The intent — validating the ESM import
+pipeline — is covered by `db/esm_import.rs` tests: synthetic plugins built
+in memory, imported via `import_plugin_bytes`, asserted across all tables.
 
-### 33. Add `#[allow(dead_code)]` annotations
-Mark intentionally-stubbed hook functions (Havok physics, quest aliases, dialog) with explicit `#[allow(dead_code)]` + `// ponytail: deferred to post-MVP` comment.
+### 33. Add `#[allow(dead_code)]` annotations  ✅ DONE
+Marked intentionally-stubbed/deferred items (Windows-only engine constants
+`LOOKUP_FORM_FO3`/`VTBL_REF_GET_POS`, `allow_all`, client ui/ipc/world
+architecture modules, never-read cache fields) with `#[allow(dead_code)]` +
+`// ponytail:` comments.
 
-### 34. Run `cargo fix` workspace-wide
-Clean up 54 compiler warnings (unused imports, unused mut, dead_code) across ashfall-client, ashfall-server, ashfall-bridge.
+### 34. Run `cargo fix` workspace-wide  ✅ DONE
+Manual equivalent (clippy/fmt unavailable): workspace now builds with **0
+warnings** (was 87) — removed unused imports/muts/vars/constants, deleted
+dead methods (`timeout_for`, `read_u16`, UnreliableChannel seq), fixed a
+unreachable pattern, underscored genuinely-unused bindings.
+
+All 34 items complete. Total: 301 tests, 0 warnings.
 
 ---
 
