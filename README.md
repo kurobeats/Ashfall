@@ -3,7 +3,7 @@
 **Rust multiplayer mod for Fallout 3 / Fallout: New Vegas.** Server-authoritative dedicated server with WASM scripting, UDP networking, SQLite persistence, and an egui client browser. Started as a recreation of [vaultmp-extended](https://github.com/massdivide/vaultmp-extended), got bigger, fast.
 
 [![Status](https://img.shields.io/badge/phases-1%E2%80%9310%20complete-brightgreen)](#status)
-[![Tests](https://img.shields.io/badge/tests-303%20passed-brightgreen)](https://github.com/YOUR_ORG/ashfall/actions)
+[![Tests](https://img.shields.io/badge/tests-312%20passed-brightgreen)](https://github.com/YOUR_ORG/ashfall/actions)
 [![License](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
 [![Work in Progress](https://img.shields.io/badge/status-work%20in%20progress-orange)](#whats-left)
 
@@ -36,7 +36,7 @@ Client connects to `127.0.0.1:1770`. Stub mode sends canned data — enough to v
 
 ## Status
 
-**Phases 1–10 complete. 303 tests, 0 failures. Zero-warning build.**
+**Phases 1–10 complete. 312 tests, 0 failures. Zero-warning build** (lib + test targets).
 
 | Phase | What's built |
 |-------|-------------|
@@ -44,7 +44,7 @@ Client connects to `127.0.0.1:1770`. Stub mode sends canned data — enough to v
 | 2. Server | UDP networking with a real reliability layer — ACK/NACK control frames, Jacobson/Karels RTO with exponential-backoff retransmission, 32-packet send window, per-channel priority queues (System > Game > Chat), per-address token-bucket rate limiting, varint sequence framing. Session state machine. Object registry. Packet dispatch routing all 140+ variants. Verified by real-UDP loss simulation (50/50 packets in order under 25% loss). |
 | 3. Sync | 9-cell visibility grid with enter/leave diff. Position, angle, velocity, actor state, item, container sync. Combat resolution (Fallout damage formula). NPC AI packages + faction hostility. |
 | 4. Persistence | SQLite — 17 tables. Records, weapons, NPCs, quest stages, dialogue flags, karma, reputation (FNV), hardcore stats, factions. Startup load at boot. **ESM/ESP import tool** (`ashfall-server --import-esm Fallout3.esm --import-game fo3 --import-db data/fallout3.sqlite3`) populates all tables from plugin files via a native TES4 parser. |
-| 5. Scripting | wasmtime v22 engine. 35 callbacks (OnHit, OnEquip, OnQuestStage + original 31). 51 host functions. Timer system. Example freeroam WASM script. SDK crate. |
+| 5. Scripting | wasmtime v22 engine. 35 callbacks (OnHit, OnEquip, OnQuestStage + original 31). 51 host functions — world/quest/chat/clock/player-count now real (Phase 5 Part B). Timer system with WASM callback routing. Script effect queue (chat/kick) drained per tick. Auth/chat/spawn-cell/death/time callback dispatch into WASM. 9 WAT-based runtime tests (no wasm32 toolchain needed). Example freeroam WASM script. SDK crate. |
 | 6. GUI | eframe/egui app. Server browser with direct connect. Chat overlay. Server-authored widget manager (windows, buttons, edits, checkboxes, lists). |
 | 7. Client | UDP networking. Connection flow (auth→load→ingame). Client object registry. Handlers for all packet categories. Background 30Hz poll loop. |
 | 8. Master | UDP server registry. Announce/query/cull lifecycle. Client integration for server browser population. |
@@ -53,9 +53,9 @@ Client connects to `127.0.0.1:1770`. Stub mode sends canned data — enough to v
 
 ## What's Left
 
+- **Full WASM game mode scripts** — host functions and callback dispatch now work end-to-end (auth, chat, spawn, quests, weather, timers, effects); remaining callbacks (on_hit, on_equip, on_activate, GUI) and object CRUD host functions are still stubs. Next: co-op quest logic, NPC AI, custom game modes on top.
 - **Proton runtime testing** — inject bridge.dll into actual FO3/FNV under Proton, verify VTable hooks fire correctly
 - **Proton integration testing** — end-to-end test with real Fallout running under Proton/Wine.
-- **Full WASM game mode scripts** — co-op quest logic, NPC AI behaviors, custom game modes.
 - **Network testing** — latency compensation, bandwidth tuning still open; reliability layer has ACK/NACK, RTO retransmit, send window, rate limiting, and a real-UDP loss-simulation suite (25% loss, 50/50 packets delivered in order — see tests/reliability.rs, tests/loss_simulation.rs).
 - **Windows native client** — currently Linux-only. Bridge DLL already cross-compiles for Windows.
 
@@ -70,7 +70,7 @@ git clone https://github.com/YOUR_ORG/ashfall.git
 cd ashfall
 
 cargo build --release
-cargo test --workspace   # 303 tests
+cargo test --workspace   # 312 tests
 ```
 
 Optional: cross-compile bridge DLL for Proton (`sudo apt install mingw-w64`):

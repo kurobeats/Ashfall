@@ -87,19 +87,36 @@ PRs within a phase often parallelizable unless noted.
 
 ---
 
-## Phase 5: Scripting ✅ DONE
+## Phase 5: Scripting ✅ DONE (Part B: real host functions + callback dispatch)
 
-**Implemented:**
+**Implemented (Part A — foundation):**
 - wasmtime v22 Engine + ScriptState + module loader + instance lifecycle
 - 35 callback stubs (OnHit, OnEquip, OnQuestStage, OnDialogueChoice + 31 original)
 - 51 host function stubs (server, object, item, actor, player, container, world, utility, timers, quest, combat, GUI widgets)
 - TimerManager with create_timer/kill_timer/tick, wired into dedicated loop
 - ashfall-script SDK crate with host_fn!/callback! macros and type aliases
 - Example freeroam WASM game mode (scripts/freeroam/)
-- Auth callback stub, 14 integration tests (engine creation, module loading, callback stubs, timer lifecycle)
+- 14 integration tests (engine creation, module loading, callback stubs, timer lifecycle)
 - Integrated into DedicatedServer::new() — scripts loaded at startup
 
-**Phase 5 total: ~1,500 LOC** ✅
+**Implemented (Part B — real execution, matching the freeroam ABI: u64 ids as i64, strings as ptr/len):**
+- Real host functions: set/get_game_weather, set_game_time, get/set_quest_stage,
+  get/set_dialogue_flag, chat_message/ui_message/kick (effect queue), timestamp,
+  get_current_players/get_max_players, host_log/debug_log, create_timer (reads
+  callback name from module memory)
+- Callback dispatch into WASM: on_client_authenticate (any 0 vote denies),
+  on_player_chat (blocks), on_player_request_game (spawn cell), on_spawn,
+  on_player_disconnect, on_actor_death, on_game_time_change; timer callbacks
+  routed to exported functions by name
+- Server wiring: auth/chat gates in dedicated.rs, script-chosen spawn cell,
+  tick drains ScriptEffect queue (private/broadcast chat, kick), tick syncs
+  script-authored weather/quest deltas to clients, live player count
+- Sharing fix: WeatherState/GlobalState/QuestManager Clone now shares via Arc
+  (script mutations were previously invisible to the dispatcher)
+- 9 new WAT-based runtime integration tests (tests/script_runtime.rs) — real
+  WASM execution without a wasm32 toolchain (wat crate parses WAT at test time)
+
+**Phase 5 total: ~2,100 LOC (312 workspace tests)** ✅
 
 ---
 
@@ -230,7 +247,7 @@ PRs within a phase often parallelizable unless noted.
 | P3 ESM import | #27–30 | `ashfall-server --import-esm` native TES4 parser → all 17 tables |
 | P4 cleanup | #31–34 | Opcode range docs, import-pipeline tests, dead-code annotations, zero-warning build |
 
-**303 tests, 0 warnings.** See `docs/external-ingestion-plan.md` for per-item status.
+**312 tests, 0 warnings** (lib + test targets). See `docs/external-ingestion-plan.md` for per-item status.
 
 P3+P4 can run in parallel (both depend on P2). P6+P7 can run in parallel after P5+P7 foundation ready. P10 can start after P7 IPC module (PR79).
 
