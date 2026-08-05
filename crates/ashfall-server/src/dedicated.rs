@@ -252,6 +252,9 @@ impl DedicatedServer {
                 for addr in ingame_addrs() {
                     let _ = self.network.send_reliable(addr, &pkt).await;
                 }
+                // Script on_quest_stage notification (covers script- and
+                // client-driven changes alike).
+                self.script_engine.notify_quest_stage(quest_id, stage);
             }
         }
     }
@@ -293,6 +296,18 @@ impl DedicatedServer {
             }
 
             let result = self.dispatcher.dispatch(&mut session, packet);
+
+            // Script on_actor_death notification for combat-resolved deaths
+            for pkt in result.responses.iter().chain(result.broadcasts.iter()) {
+                if let Packet::ActorDeathExt { id, killer, limbs, cause, .. } = pkt {
+                    self.script_engine.notify_actor_death(
+                        id.as_u64(),
+                        killer.as_u64(),
+                        *limbs,
+                        *cause,
+                    );
+                }
+            }
 
             // Send responses to this client
             for pkt in &result.responses {

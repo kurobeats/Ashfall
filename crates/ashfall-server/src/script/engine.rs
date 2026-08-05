@@ -380,6 +380,19 @@ impl ScriptEngine {
         }
     }
 
+    /// Notify scripts a quest stage changed.
+    pub fn notify_quest_stage(&mut self, quest_id: u32, stage: u16) {
+        for inst in &mut self.instances {
+            let f = inst
+                .instance
+                .get_typed_func::<(i32, i32), ()>(&mut inst.store, "on_quest_stage")
+                .ok();
+            if let Some(f) = f {
+                let _ = f.call(&mut inst.store, (quest_id as i32, stage as i32));
+            }
+        }
+    }
+
     /// Notify scripts the game clock changed.
     pub fn notify_game_time(&mut self, time: GameTime) {
         let f = |inst: &mut WasmInstance| {

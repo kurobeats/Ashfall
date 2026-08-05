@@ -76,6 +76,10 @@ const TEST_MODE: &str = r#"
   (func (export "on_actor_death") (param $a i64) (param $k i64) (param $limbs i32) (param $cause i32)
     (call $set_quest (i32.const 0x1000) (i32.const 10)))
 
+  ;; on_quest_stage: mirror every stage change into a dialogue flag
+  (func (export "on_quest_stage") (param $quest i32) (param $stage i32)
+    (call $set_flag (i32.const 55) (i32.const 1)))
+
   ;; Timer callback: swap the weather
   (func (export "tick_cb") (param $id i32)
     (call $set_weather (i32.const 0x00007777)))
@@ -251,6 +255,14 @@ fn test_effect_queue_private_chat() {
         vec![ScriptEffect::PrivateChat { player_id: 42, message: "Hello from script!".into() }]
     );
     assert!(engine.drain_effects().is_empty(), "queue drained");
+}
+
+#[test]
+fn test_quest_stage_notification() {
+    let state = new_state();
+    let mut engine = boot_with(state.clone());
+    engine.notify_quest_stage(0x999, 3);
+    assert!(state.quests.get_flag(55), "on_quest_stage callback fired");
 }
 
 // ═══════════════════════════════════════════════════════════════
