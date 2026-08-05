@@ -279,58 +279,62 @@ impl DedicatedServer {
             return;
         }
 
-        // Route to existing session
-        let should_disconnect = {
+        // Route to existing session. IMPORTANT: the `sessions` DashMap guard
+        // (write) must be dropped before iterating the same map for broadcast
+        // targets — DashMap locks are not reentrant, and holding the guard
+        // across `self.sessions.iter()` deadlocks on every broadcast (chat,
+        // positions, quests) once two players are connected.
+        let (responses, broadcasts, disconnect) = {
             let mut session = match self.sessions.get_mut(&addr) {
                 Some(s) => s,
                 None => return,
             };
             session.record_recv(data.len() as u64);
+            let player_id = session.player_id.map(|p| p.as_u64()).unwrap_or(0);
 
             // Script chat gate: on_player_chat may block the message.
             if let Packet::GameChat { message } = &packet {
-                let player_id = session.player_id.map(|p| p.as_u64()).unwrap_or(0);
                 if !self.script_engine.dispatch_chat(player_id, message) {
                     return;
                 }
             }
 
             let result = self.dispatcher.dispatch(&mut session, packet);
+            (result.responses, result.broadcasts, result.disconnect)
+        }; // session guard released here
 
-            // Script on_actor_death notification for combat-resolved deaths
-            for pkt in result.responses.iter().chain(result.broadcasts.iter()) {
-                if let Packet::ActorDeathExt { id, killer, limbs, cause, .. } = pkt {
-                    self.script_engine.notify_actor_death(
-                        id.as_u64(),
-                        killer.as_u64(),
-                        *limbs,
-                        *cause,
-                    );
-                }
+        // Script on_actor_death notification for combat-resolved deaths
+        for pkt in responses.iter().chain(broadcasts.iter()) {
+            if let Packet::ActorDeathExt { id, killer, limbs, cause, .. } = pkt {
+                self.script_engine.notify_actor_death(
+                    id.as_u64(),
+                    killer.as_u64(),
+                    *limbs,
+                    *cause,
+                );
             }
+        }
 
-            // Send responses to this client
-            for pkt in &result.responses {
-                let _ = self.network.send_reliable(addr, pkt).await;
+        // Send responses to this client
+        for pkt in &responses {
+            let _ = self.network.send_reliable(addr, pkt).await;
+        }
+
+        // Broadcast to all other clients
+        for pkt in &broadcasts {
+            let targets: Vec<SocketAddr> = self
+                .sessions
+                .iter()
+                .filter(|entry| entry.key() != &addr && entry.value().is_ingame())
+                .map(|entry| *entry.key())
+                .collect();
+
+            for target in &targets {
+                let _ = self.network.send_reliable(*target, pkt).await;
             }
+        }
 
-            // Broadcast to all other clients
-            for pkt in &result.broadcasts {
-                let targets: Vec<SocketAddr> = self.sessions
-                    .iter()
-                    .filter(|entry| entry.key() != &addr && entry.value().is_ingame())
-                    .map(|entry| *entry.key())
-                    .collect();
-
-                for target in &targets {
-                    let _ = self.network.send_reliable(*target, pkt).await;
-                }
-            }
-
-            result.disconnect
-        }; // session borrow released here
-
-        if should_disconnect {
+        if disconnect {
             self.disconnect(addr).await;
         }
     }

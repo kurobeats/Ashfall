@@ -76,10 +76,9 @@ async fn test_config() -> ServerConfig {
     }
 }
 
-/// Encode a reliable packet frame the same way the client does.
-fn encode_reliable(packet: &Packet) -> Vec<u8> {
+/// Encode a reliable packet frame with the given seq (mirrors the client).
+fn encode_reliable(packet: &Packet, seq: u16) -> Vec<u8> {
     let payload = postcard::to_stdvec(packet).expect("postcard");
-    let seq = 0u16; // first frame of a fresh client
     let seq_bytes: Vec<u8> = if seq < 128 {
         vec![0x80 | seq as u8]
     } else {
@@ -93,6 +92,35 @@ fn encode_reliable(packet: &Packet) -> Vec<u8> {
     buf.extend_from_slice(&seq_bytes);
     buf.extend_from_slice(&payload);
     buf
+}
+
+/// Raw UDP client that tracks its reliable sequence counter.
+struct TestClient {
+    sock: UdpSocket,
+    seq: u16,
+}
+
+impl TestClient {
+    async fn connect(port: u16) -> Self {
+        let sock = UdpSocket::bind("127.0.0.1:0").await.expect("client bind");
+        sock.connect(SocketAddr::from(([127, 0, 0, 1], port)))
+            .await
+            .expect("client connect");
+        TestClient { sock, seq: 0 }
+    }
+
+    async fn send_reliable(&mut self, packet: &Packet) {
+        let seq = self.seq;
+        self.seq = self.seq.wrapping_add(1);
+        self.sock
+            .send(&encode_reliable(packet, seq))
+            .await
+            .expect("send reliable");
+    }
+
+    async fn recv_packet(&self) -> Option<Packet> {
+        recv_packet(&self.sock).await
+    }
 }
 
 /// Read one packet from the wire, skipping ACK/control frames.
@@ -117,14 +145,6 @@ async fn recv_packet(sock: &UdpSocket) -> Option<Packet> {
     postcard::from_bytes(&buf[skip..3 + len]).ok()
 }
 
-async fn connect_client(port: u16) -> UdpSocket {
-    let sock = UdpSocket::bind("127.0.0.1:0").await.expect("client bind");
-    sock.connect(SocketAddr::from(([127, 0, 0, 1], port)))
-        .await
-        .expect("client connect");
-    sock
-}
-
 /// Run the server future on this thread alongside the client future.
 /// Returns the client future's output when it finishes first.
 async fn run_with_server<F, O>(server: DedicatedServer, client: F) -> O
@@ -145,17 +165,16 @@ async fn test_script_auth_gate_on_wire() {
     tokio::time::sleep(Duration::from_millis(200)).await; // let scripts instantiate
 
     let client = async {
-        let sock = connect_client(port).await;
-        sock.send(&encode_reliable(&Packet::GameAuth {
+        let mut sock = TestClient::connect(port).await;
+        sock.send_reliable(&Packet::GameAuth {
             name: "bob".into(),
             password: String::new(),
-        }))
-        .await
-        .expect("send auth");
+        })
+        .await;
 
         let mut saw_end = false;
         for _ in 0..8 {
-            if let Some(pkt) = recv_packet(&sock).await {
+            if let Some(pkt) = sock.recv_packet().await {
                 if let Packet::GameEnd { reason } = pkt {
                     saw_end = true;
                     assert_eq!(reason, ashfall_core::types::Reason::Denied as u8, "denied by script");
@@ -170,6 +189,76 @@ async fn test_script_auth_gate_on_wire() {
 }
 
 #[tokio::test]
+async fn test_two_client_chat_relay() {
+    let config = test_config().await;
+    let port = config.server.port;
+    let server = DedicatedServer::new(config).await.expect("server boots");
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    let client = async {
+        // Both players connect and reach InGame
+        let mut alice = TestClient::connect(port).await;
+        alice
+            .send_reliable(&Packet::GameAuth {
+                name: "alice".into(),
+                password: String::new(),
+            })
+            .await;
+
+        let mut bob = TestClient::connect(port).await;
+        bob.send_reliable(&Packet::GameAuth {
+            name: "carol".into(),
+            password: String::new(),
+        })
+        .await;
+
+        let mut alice_ready = false;
+        for _ in 0..12 {
+            if let Some(pkt) = alice.recv_packet().await {
+                if matches!(pkt, Packet::GameLoad) {
+                    alice_ready = true;
+                    break;
+                }
+            }
+        }
+        assert!(alice_ready, "alice reached GameLoad");
+
+        let mut bob_ready = false;
+        for _ in 0..12 {
+            if let Some(pkt) = bob.recv_packet().await {
+                if matches!(pkt, Packet::GameLoad) {
+                    bob_ready = true;
+                    break;
+                }
+            }
+        }
+        assert!(bob_ready, "carol reached GameLoad");
+
+        bob.send_reliable(&Packet::GameChat {
+            message: "hello alice".into(),
+        })
+        .await;
+
+        let mut saw_relay = false;
+        for _ in 0..16 {
+            if let Some(pkt) = alice.recv_packet().await {
+                // Stale spawn-welcome / PlayerNew packets may still be in
+                // alice's buffer — keep scanning until bob's relay arrives.
+                if let Packet::GameChat { message } = pkt {
+                    if message == "hello alice" {
+                        saw_relay = true;
+                        break;
+                    }
+                }
+            }
+        }
+        assert!(saw_relay, "alice received bob's chat");
+    };
+
+    run_with_server(server, client).await;
+}
+
+#[tokio::test]
 async fn test_script_world_and_spawn_effects_on_wire() {
     let config = test_config().await;
     let port = config.server.port;
@@ -177,19 +266,18 @@ async fn test_script_world_and_spawn_effects_on_wire() {
     tokio::time::sleep(Duration::from_millis(200)).await;
 
     let client = async {
-        let sock = connect_client(port).await;
-        sock.send(&encode_reliable(&Packet::GameAuth {
+        let mut sock = TestClient::connect(port).await;
+        sock.send_reliable(&Packet::GameAuth {
             name: "alice".into(),
             password: String::new(),
-        }))
-        .await
-        .expect("send auth");
+        })
+        .await;
 
         let mut saw_load = false;
         let mut saw_weather = false;
         let mut saw_welcome = false;
         for _ in 0..24 {
-            if let Some(pkt) = recv_packet(&sock).await {
+            if let Some(pkt) = sock.recv_packet().await {
                 match pkt {
                     Packet::GameLoad => saw_load = true,
                     Packet::GameWeather { weather } => {
