@@ -431,6 +431,32 @@ impl ScriptEngine {
         None
     }
 
+    /// Call an exported `(params) -> i64` function (test/tooling helper).
+    pub fn call_export_i64(&mut self, name: &str, args: &[Val]) -> Option<i64> {
+        for inst in &mut self.instances {
+            if let Some(f) = inst.instance.get_func(&mut inst.store, name) {
+                let mut results = [Val::I64(0)];
+                if f.call(&mut inst.store, args, &mut results).is_ok() {
+                    return results[0].i64();
+                }
+            }
+        }
+        None
+    }
+
+    /// Call an exported `(params) -> f32` function (test/tooling helper).
+    pub fn call_export_f32(&mut self, name: &str, args: &[Val]) -> Option<f32> {
+        for inst in &mut self.instances {
+            if let Some(f) = inst.instance.get_func(&mut inst.store, name) {
+                let mut results = [Val::F32(0.0_f32.to_bits())];
+                if f.call(&mut inst.store, args, &mut results).is_ok() {
+                    return results[0].f32();
+                }
+            }
+        }
+        None
+    }
+
     pub fn module_count(&self) -> usize {
         self.modules.len()
     }

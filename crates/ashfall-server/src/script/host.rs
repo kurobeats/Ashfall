@@ -8,6 +8,8 @@
 
 use crate::script::engine::ScriptState;
 use crate::script::state::{GameTime, ScriptEffect};
+use crate::world::objects::{Actor, Object};
+use ashfall_core::id::NetworkID;
 use std::time::{SystemTime, UNIX_EPOCH};
 use wasmtime::*;
 
@@ -34,6 +36,36 @@ fn now_ms() -> i64 {
     match SystemTime::now().duration_since(UNIX_EPOCH) {
         Ok(d) => d.as_millis() as i64,
         Err(_) => 0,
+    }
+}
+
+/// Read the authoritative position of an object or actor by NetworkID.
+fn object_pos(caller: &Caller<'_, ScriptState>, id: i64) -> Option<[f32; 3]> {
+    let registry = &caller.data().registry;
+    let arc = registry.get(NetworkID::new(id as u64))?;
+    let guard = arc.read();
+    if let Some(o) = guard.as_any().downcast_ref::<Object>() {
+        return Some(o.game_pos);
+    }
+    if let Some(a) = guard.as_any().downcast_ref::<Actor>() {
+        return Some(a.container.object.game_pos);
+    }
+    None
+}
+
+/// Set the authoritative position of an object or actor by NetworkID.
+fn set_object_pos(caller: &Caller<'_, ScriptState>, id: i64, pos: [f32; 3]) {
+    let registry = &caller.data().registry;
+    let Some(arc) = registry.get(NetworkID::new(id as u64)) else { return };
+    let mut guard = arc.write();
+    if let Some(o) = guard.as_any_mut().downcast_mut::<Object>() {
+        o.game_pos = pos;
+        o.net_pos = pos;
+        return;
+    }
+    if let Some(a) = guard.as_any_mut().downcast_mut::<Actor>() {
+        a.container.object.game_pos = pos;
+        a.container.object.net_pos = pos;
     }
 }
 
@@ -75,47 +107,93 @@ impl HostFunctions {
                 tracing::debug!("[script] {msg}");
             })?;
 
-        // ── Object CRUD (stubs: allocate IDs; real create/sync later) ──
+        // ── Object CRUD (real — spawn/destroy/position) ──
         linker.func_wrap("env", "create_object",
-            |caller: Caller<'_, ScriptState>, _ref_id: i32, _base_id: i32, _cell: i32| -> i64 {
-                caller.data().registry.allocate_id().as_u64() as i64
+            |caller: Caller<'_, ScriptState>, ref_id: i32, base_id: i32, cell: i32| -> i64 {
+                let state = caller.data();
+                let id = state.registry.allocate_id();
+                let obj = crate::world::objects::Object::new(id, ref_id as u32, base_id as u32, cell as u32);
+                state.registry.insert(obj);
+                state.registry.add_to_cell(cell as u32, id);
+                id.as_u64() as i64
             })?;
         linker.func_wrap("env", "destroy_object",
-            |_: Caller<'_, ScriptState>, _id_hi: i32, _id_lo: i32| {})?;
+            |caller: Caller<'_, ScriptState>, id: i64| {
+                caller.data().registry.remove(NetworkID::new(id as u64));
+            })?;
         linker.func_wrap("env", "get_pos_x",
-            |_: Caller<'_, ScriptState>, _id_hi: i32, _id_lo: i32| -> f32 { 0.0 })?;
+            |caller: Caller<'_, ScriptState>, id: i64| -> f32 {
+                object_pos(&caller, id).map(|p| p[0]).unwrap_or(0.0)
+            })?;
         linker.func_wrap("env", "get_pos_y",
-            |_: Caller<'_, ScriptState>, _id_hi: i32, _id_lo: i32| -> f32 { 0.0 })?;
+            |caller: Caller<'_, ScriptState>, id: i64| -> f32 {
+                object_pos(&caller, id).map(|p| p[1]).unwrap_or(0.0)
+            })?;
         linker.func_wrap("env", "get_pos_z",
-            |_: Caller<'_, ScriptState>, _id_hi: i32, _id_lo: i32| -> f32 { 0.0 })?;
+            |caller: Caller<'_, ScriptState>, id: i64| -> f32 {
+                object_pos(&caller, id).map(|p| p[2]).unwrap_or(0.0)
+            })?;
         linker.func_wrap("env", "set_pos",
-            |_: Caller<'_, ScriptState>, _id_hi: i32, _id_lo: i32, _x: f32, _y: f32, _z: f32| {})?;
+            |caller: Caller<'_, ScriptState>, id: i64, x: f32, y: f32, z: f32| {
+                set_object_pos(&caller, id, [x, y, z]);
+            })?;
 
-        // ── Actor ──
+        // ── Actor (real — spawn/values/kill) ──
         linker.func_wrap("env", "create_actor",
-            |caller: Caller<'_, ScriptState>, _ref_id: i32, _base_id: i32, _cell: i32| -> i64 {
-                caller.data().registry.allocate_id().as_u64() as i64
+            |caller: Caller<'_, ScriptState>, ref_id: i32, base_id: i32, cell: i32| -> i64 {
+                let state = caller.data();
+                let id = state.registry.allocate_id();
+                let actor = crate::world::objects::Actor::new(id, ref_id as u32, base_id as u32, cell as u32);
+                state.registry.insert(actor);
+                state.registry.add_to_cell(cell as u32, id);
+                id.as_u64() as i64
             })?;
         linker.func_wrap("env", "get_actor_value",
-            |_: Caller<'_, ScriptState>, _id_hi: i32, _id_lo: i32, _index: i32| -> f32 { 0.0 })?;
+            |caller: Caller<'_, ScriptState>, id: i64, index: i32| -> f32 {
+                let state = caller.data();
+                let Some(arc) = state.registry.get(NetworkID::new(id as u64)) else { return 0.0 };
+                let guard = arc.read();
+                guard.as_any().downcast_ref::<crate::world::objects::Actor>()
+                    .and_then(|a| a.values.get(&(index as u8)))
+                    .copied()
+                    .unwrap_or(0.0)
+            })?;
         linker.func_wrap("env", "set_actor_value",
-            |_: Caller<'_, ScriptState>, _id_hi: i32, _id_lo: i32, _index: i32, _value: f32| {})?;
+            |caller: Caller<'_, ScriptState>, id: i64, index: i32, value: f32| {
+                let state = caller.data();
+                let Some(arc) = state.registry.get(NetworkID::new(id as u64)) else { return };
+                let mut guard = arc.write();
+                if let Some(actor) = guard.as_any_mut().downcast_mut::<crate::world::objects::Actor>() {
+                    actor.set_value(index as u8, value, false);
+                }
+            })?;
         linker.func_wrap("env", "kill_actor",
-            |_: Caller<'_, ScriptState>, _id_hi: i32, _id_lo: i32| {})?;
+            |caller: Caller<'_, ScriptState>, id: i64| {
+                let state = caller.data();
+                let Some(arc) = state.registry.get(NetworkID::new(id as u64)) else { return };
+                let mut guard = arc.write();
+                if let Some(actor) = guard.as_any_mut().downcast_mut::<crate::world::objects::Actor>() {
+                    actor.dead = true;
+                }
+            })?;
 
-        // ── Item ──
+        // ── Item (create real; stack ops stubbed) ──
         linker.func_wrap("env", "create_item",
-            |caller: Caller<'_, ScriptState>, _ref_id: i32, _base_id: i32, _cont_hi: i32, _cont_lo: i32| -> i64 {
-                caller.data().registry.allocate_id().as_u64() as i64
+            |caller: Caller<'_, ScriptState>, ref_id: i32, base_id: i32, container: i64| -> i64 {
+                let state = caller.data();
+                let id = state.registry.allocate_id();
+                let item = crate::world::objects::Item::new(id, ref_id as u32, base_id as u32, NetworkID::new(container as u64));
+                state.registry.insert(item);
+                id.as_u64() as i64
             })?;
         linker.func_wrap("env", "add_item",
-            |_: Caller<'_, ScriptState>, _item_hi: i32, _item_lo: i32, _cont_hi: i32, _cont_lo: i32| {})?;
+            |_: Caller<'_, ScriptState>, _item: i64, _container: i64| {})?;
         linker.func_wrap("env", "remove_item",
-            |_: Caller<'_, ScriptState>, _item_hi: i32, _item_lo: i32| {})?;
+            |_: Caller<'_, ScriptState>, _item: i64| {})?;
         linker.func_wrap("env", "equip_item",
-            |_: Caller<'_, ScriptState>, _actor_hi: i32, _actor_lo: i32, _item_hi: i32, _item_lo: i32| {})?;
+            |_: Caller<'_, ScriptState>, _actor: i64, _item: i64| {})?;
         linker.func_wrap("env", "get_item_count",
-            |_: Caller<'_, ScriptState>, _item_hi: i32, _item_lo: i32| -> i32 { 0 })?;
+            |_: Caller<'_, ScriptState>, _item: i64| -> i32 { 0 })?;
 
         // ── Chat / UI / kick (real — queued as script effects) ──
         linker.func_wrap("env", "chat_message",

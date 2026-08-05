@@ -14,6 +14,7 @@ use ashfall_server::script::state::{GameTime, ScriptEffect};
 use ashfall_server::world::globals::GlobalState;
 use ashfall_server::world::registry::ObjectRegistry;
 use ashfall_server::world::weather::WeatherState;
+use ashfall_core::id::NetworkID;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
@@ -26,9 +27,18 @@ const TEST_MODE: &str = r#"
   (import "env" "chat_message" (func $chat (param i64 i32 i32)))
   (import "env" "create_timer" (func $create_timer (param i32 i32 i32 i32) (result i32)))
   (import "env" "get_current_players" (func $get_players (result i32)))
+  (import "env" "create_object" (func $create_object (param i32 i32 i32) (result i64)))
+  (import "env" "create_actor" (func $create_actor (param i32 i32 i32) (result i64)))
+  (import "env" "set_pos" (func $set_pos (param i64 f32 f32 f32)))
+  (import "env" "get_pos_x" (func $get_pos_x (param i64) (result f32)))
+  (import "env" "set_actor_value" (func $set_av (param i64 i32 f32)))
+  (import "env" "get_actor_value" (func $get_av (param i64 i32) (result f32)))
+  (import "env" "kill_actor" (func $kill (param i64)))
 
   (memory (export "memory") 1)
   (global $players (mut i32) (i32.const 0))
+  (global $obj_id (mut i64) (i64.const 0))
+  (global $actor_id (mut i64) (i64.const 0))
   (data (i32.const 2048) "tick_cb")
   (data (i32.const 4096) "Hello from script!")
 
@@ -83,6 +93,28 @@ const TEST_MODE: &str = r#"
 
   (func (export "get_player_count") (result i32)
     (global.get $players))
+
+  ;; Object/actor CRUD round-trip
+  (func (export "spawn_work")
+    (global.set $obj_id
+      (call $create_object (i32.const 0x100) (i32.const 0x200) (i32.const 0x300)))
+    (call $set_pos (global.get $obj_id) (f32.const 10) (f32.const 20) (f32.const 30))
+    (global.set $actor_id
+      (call $create_actor (i32.const 0x400) (i32.const 0x500) (i32.const 0x300)))
+    (call $set_av (global.get $actor_id) (i32.const 0x14) (f32.const 75.5))
+    (call $kill (global.get $actor_id)))
+
+  (func (export "get_obj_id") (result i64)
+    (global.get $obj_id))
+
+  (func (export "get_actor_id") (result i64)
+    (global.get $actor_id))
+
+  (func (export "get_obj_pos_x") (result f32)
+    (call $get_pos_x (global.get $obj_id)))
+
+  (func (export "get_actor_hp") (result f32)
+    (call $get_av (global.get $actor_id) (i32.const 0x14)))
 )
 "#;
 
@@ -219,4 +251,35 @@ fn test_effect_queue_private_chat() {
         vec![ScriptEffect::PrivateChat { player_id: 42, message: "Hello from script!".into() }]
     );
     assert!(engine.drain_effects().is_empty(), "queue drained");
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Object / actor CRUD host functions
+// ═══════════════════════════════════════════════════════════════
+
+#[test]
+fn test_object_actor_crud_host_functions() {
+    let state = new_state();
+    let mut engine = boot_with(state.clone());
+    assert!(engine.call_export_void("spawn_work", &[]), "spawn_work runs");
+
+    let obj_id = NetworkID::new(engine.call_export_i64("get_obj_id", &[]).unwrap() as u64);
+    assert_eq!(engine.call_export_f32("get_obj_pos_x", &[]), Some(10.0), "set/get_pos round-trip");
+    assert_eq!(engine.call_export_f32("get_actor_hp", &[]), Some(75.5), "set/get_actor_value round-trip");
+
+    // Host-side visibility: the registry holds the spawned object + actor.
+    let arc = state.registry.get(obj_id).expect("object in registry");
+    let guard = arc.read();
+    let obj = guard.as_any().downcast_ref::<ashfall_server::world::objects::Object>()
+        .expect("spawned object is an Object");
+    assert_eq!(obj.game_pos, [10.0, 20.0, 30.0], "set_pos mutated authoritative state");
+
+    let actor_id = NetworkID::new(engine.call_export_i64("get_actor_id", &[]).unwrap() as u64);
+    drop(guard);
+    let arc = state.registry.get(actor_id).expect("actor in registry");
+    let guard = arc.read();
+    let actor = guard.as_any().downcast_ref::<ashfall_server::world::objects::Actor>()
+        .expect("spawned actor is an Actor");
+    assert!(actor.dead, "kill_actor marked the actor dead");
+    assert_eq!(actor.values.get(&0x14), Some(&75.5), "set_actor_value stored");
 }
