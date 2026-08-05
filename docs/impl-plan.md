@@ -113,10 +113,15 @@ PRs within a phase often parallelizable unless noted.
   script-authored weather/quest deltas to clients, live player count
 - Sharing fix: WeatherState/GlobalState/QuestManager Clone now shares via Arc
   (script mutations were previously invisible to the dispatcher)
-- 9 new WAT-based runtime integration tests (tests/script_runtime.rs) — real
+- 11 new WAT-based runtime integration tests (tests/script_runtime.rs) — real
   WASM execution without a wasm32 toolchain (wat crate parses WAT at test time)
+- 3 full end-to-end tests (tests/script_e2e.rs) — real server + WASM game mode
+  + raw UDP clients over the wire: script auth gate, script-set weather,
+  on_spawn chat effect, and two-client chat relay. These caught two critical
+  pre-existing bugs: first-contact auth dropped by the reliability layer, and
+  a DashMap write-guard deadlock on every broadcast with 2+ players.
 
-**Phase 5 total: ~2,100 LOC (312 workspace tests)** ✅
+**Phase 5 total: ~2,100 LOC (318 workspace tests)** ✅
 
 ---
 
@@ -247,7 +252,7 @@ PRs within a phase often parallelizable unless noted.
 | P3 ESM import | #27–30 | `ashfall-server --import-esm` native TES4 parser → all 17 tables |
 | P4 cleanup | #31–34 | Opcode range docs, import-pipeline tests, dead-code annotations, zero-warning build |
 
-**312 tests, 0 warnings** (lib + test targets). See `docs/external-ingestion-plan.md` for per-item status.
+**318 tests, 0 warnings** (lib + test targets). See `docs/external-ingestion-plan.md` for per-item status.
 
 P3+P4 can run in parallel (both depend on P2). P6+P7 can run in parallel after P5+P7 foundation ready. P10 can start after P7 IPC module (PR79).
 
