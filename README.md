@@ -3,11 +3,13 @@
 **Rust multiplayer mod for Fallout 3 / Fallout: New Vegas.** Server-authoritative dedicated server with WASM scripting, UDP networking, SQLite persistence, and an egui client browser. Started as a recreation of [vaultmp-extended](https://github.com/massdivide/vaultmp-extended), got bigger, fast.
 
 [![Status](https://img.shields.io/badge/phases-1%E2%80%9310%20complete-brightgreen)](#status)
-[![Tests](https://img.shields.io/badge/tests-301%20passed-brightgreen)](https://github.com/YOUR_ORG/ashfall/actions)
+[![Tests](https://img.shields.io/badge/tests-303%20passed-brightgreen)](https://github.com/YOUR_ORG/ashfall/actions)
 [![License](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
 [![Work in Progress](https://img.shields.io/badge/status-work%20in%20progress-orange)](#whats-left)
 
-> **Bridge complete.** The bridge DLL now has a full memory patching system (SafeWrite*, VTable access, trampoline detours), GECK opcode interception engine with 11 default handlers, 36 pipe command opcodes, and 73 tests. Needs Proton runtime testing — see [What's Left](#whats-left).
+> **All 34 items of the external ingestion plan complete** ([docs/external-ingestion-plan.md](./docs/external-ingestion-plan.md)): NVSE plugin interface fixes, real VTable getters, a fully functional reliability layer (ACK/NACK, RTO retransmit, send window, rate limiting, varint framing), an ESM/ESP → SQLite import tool, and a zero-warning build.
+>
+> **Bridge:** full memory patching system (SafeWrite*, VTable access, trampoline detours), GECK opcode interception engine with 11 default handlers, 36 pipe command opcodes, 7 event sink types, 96 tests. Needs Proton runtime testing — see [What's Left](#whats-left).
 
 ---
 
@@ -34,20 +36,20 @@ Client connects to `127.0.0.1:1770`. Stub mode sends canned data — enough to v
 
 ## Status
 
-**Phases 1–10 complete. 301 tests, 0 failures. Zero-warning build.**
+**Phases 1–10 complete. 303 tests, 0 failures. Zero-warning build.**
 
 | Phase | What's built |
 |-------|-------------|
 | 1. Protocol | 140+ packet variants — physics, combat damage, NPC AI, quests, dialogue, FO3/FNV globals, cell snapshots. FormID type. 71 wire format tests. |
-| 2. Server | UDP networking with custom reliability layer (3 ordered + 1 unordered channel). Session state machine. Object registry. Packet dispatch routing all 140+ variants. |
+| 2. Server | UDP networking with a real reliability layer — ACK/NACK control frames, Jacobson/Karels RTO with exponential-backoff retransmission, 32-packet send window, per-channel priority queues (System > Game > Chat), per-address token-bucket rate limiting, varint sequence framing. Session state machine. Object registry. Packet dispatch routing all 140+ variants. Verified by real-UDP loss simulation (50/50 packets in order under 25% loss). |
 | 3. Sync | 9-cell visibility grid with enter/leave diff. Position, angle, velocity, actor state, item, container sync. Combat resolution (Fallout damage formula). NPC AI packages + faction hostility. |
-| 4. Persistence | SQLite — 17 tables. Records, weapons, NPCs, quest stages, dialogue flags, karma, reputation (FNV), hardcore stats, factions. Startup load at boot. |
+| 4. Persistence | SQLite — 17 tables. Records, weapons, NPCs, quest stages, dialogue flags, karma, reputation (FNV), hardcore stats, factions. Startup load at boot. **ESM/ESP import tool** (`ashfall-server --import-esm Fallout3.esm --import-game fo3 --import-db data/fallout3.sqlite3`) populates all tables from plugin files via a native TES4 parser. |
 | 5. Scripting | wasmtime v22 engine. 35 callbacks (OnHit, OnEquip, OnQuestStage + original 31). 51 host functions. Timer system. Example freeroam WASM script. SDK crate. |
 | 6. GUI | eframe/egui app. Server browser with direct connect. Chat overlay. Server-authored widget manager (windows, buttons, edits, checkboxes, lists). |
 | 7. Client | UDP networking. Connection flow (auth→load→ingame). Client object registry. Handlers for all packet categories. Background 30Hz poll loop. |
 | 8. Master | UDP server registry. Announce/query/cull lifecycle. Client integration for server browser population. |
 | 9. Security | Anti-cheat validator — position bounds, velocity caps, teleport detection, item count limits, damage bounds, sequence nonces, FormID whitelist. 48 security tests. |
-| 10. Bridge | Memory patching system (SafeWrite*, VTable access, trampoline detours). 36 command opcodes (Tier 1-4). GECK opcode interception engine (11 default handlers). 5 event sink structs. 73 tests. |
+| 10. Bridge | Memory patching system (SafeWrite*, VTable access, trampoline detours). 36 command opcodes (Tier 1-4). GECK opcode interception engine (11 default handlers, direct-indexed static table). Real VTable getters (cell, enabled, name, lock, parent cell, combat target — FO3/FNV aware). 7 event sink types + pipe event frames. 96 tests. |
 
 ## What's Left
 
@@ -68,7 +70,7 @@ git clone https://github.com/YOUR_ORG/ashfall.git
 cd ashfall
 
 cargo build --release
-cargo test --workspace   # 242 tests
+cargo test --workspace   # 303 tests
 ```
 
 Optional: cross-compile bridge DLL for Proton (`sudo apt install mingw-w64`):
@@ -77,6 +79,9 @@ Optional: cross-compile bridge DLL for Proton (`sudo apt install mingw-w64`):
 rustup target add x86_64-pc-windows-gnu
 cargo build --release --target x86_64-pc-windows-gnu -p ashfall-bridge
 ```
+
+> ⚠️ FO3/FNV are **32-bit** executables — real Proton injection needs
+> `i686-pc-windows-gnu` (see [docs/proton-setup.md](./docs/proton-setup.md)).
 
 ---
 

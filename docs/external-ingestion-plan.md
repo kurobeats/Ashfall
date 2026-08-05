@@ -1,5 +1,9 @@
 # Ashfall — External Repo Ingestion & Improvement Plan
 
+> ✅ **STATUS: COMPLETE (2026-08-05).** All 34 items across P0–P4 implemented.
+> Final state: **303 tests, 0 warnings, zero-warning build.** See the
+> per-item ✅ notes below; the implementation-order section is fully checked off.
+
 > Date: 2026-07-10
 > Scope: Incremental improvements only. No redesigns, no new architectures.
 > Sources: xNVSE/NVSE, FOSE, JIP LN, lStewieAl, GECK Extender, RakNet, ENet, GameNetworkingSockets, Bethesda-Plugin-Tools
@@ -334,7 +338,7 @@ warnings** (was 87) — removed unused imports/muts/vars/constants, deleted
 dead methods (`timeout_for`, `read_u16`, UnreliableChannel seq), fixed a
 unreachable pattern, underscored genuinely-unused bindings.
 
-All 34 items complete. Total: 301 tests, 0 warnings.
+All 34 items complete. Total: 303 tests, 0 warnings, zero-warning build.
 
 ---
 
@@ -356,25 +360,25 @@ All 34 items complete. Total: 301 tests, 0 warnings.
 ## Implementation Order
 
 ```
-Batch 1 (today, ~60 min):
+Batch 1 (today, ~60 min):                              ✅ DONE
   P0: #1-3 (fix signature, remove duplicates, consolidate events)
 
-Batch 2 (next session, ~2 hrs):
+Batch 2 (next session, ~2 hrs):                        ✅ DONE
   P1: #4-5-6-7-8-15 (opcode array, get_cell/enabled/name, write_rel_jump_padded, wire stubs)
 
-Batch 3 (next session, ~3 hrs):
+Batch 3 (next session, ~3 hrs):                        ✅ DONE
   P1: #9-10-11-12-13-14-16-17-18 (find_pattern, get_lock/parent_cell/combat_target, 
        AV constants, new events, version guard, mask fix)
 
-Batch 4 (dedicated session, ~4 hrs):
+Batch 4 (dedicated session, ~4 hrs):                   ✅ DONE
   P2: #19-20-21-22 (RTT fix, Jacobson RTO, retransmit, send window)
   P2: #23-24-25-26 (channel queues, NACK, rate limit, VarInt seq)
 
-Batch 5 (dedicated session, ~4 hrs):
-  P3: #27-28-29-30 (esplugin import, CLI flag, deprecate esm-reader)
+Batch 5 (dedicated session, ~4 hrs):                   ✅ DONE
+  P3: #27-28-29-30 (ESM import, CLI flag, native TES4 parser)
 
-Batch 6 (cleanup, ~2 hrs):
-  P4: #31-34 (console protocol module, csv deprecation, dead_code annotations, cargo fix)
+Batch 6 (cleanup, ~2 hrs):                             ✅ DONE
+  P4: #31-34 (opcode range docs, import-pipeline tests, dead_code annotations, zero warnings)
 ```
 
-**Total: 34 actionable items, ~16 hours of work.**
+**Total: 34 actionable items — all complete (303 tests, 0 warnings).**

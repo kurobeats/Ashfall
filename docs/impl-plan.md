@@ -200,7 +200,7 @@ PRs within a phase often parallelizable unless noted.
 - FormID mapping with different load orders → require load order match
 - Save/load never worked in any FO3/FNV MP mod → won't support
 
-**Phase 10 total: ~2,360 LOC, 73 tests** ✅
+**Phase 10 total: ~2,360 LOC, 96 tests** ✅
 
 ---
 
@@ -217,8 +217,20 @@ PRs within a phase often parallelizable unless noted.
 | Phase 7: Client | 68–80 | ~1,770 | ✅ DONE. UDP networking, connection flow, object cache, handlers, 30Hz poll loop |
 | Phase 8: Master Server | 81–87 | 420 | ✅ DONE. Announce/query/cull, server heartbeat, client query, 6 integration tests |
 | Phase 9: Security + Testing | 88–97 | ~1,610 | ✅ DONE. AntiCheat validator, 48 tests (AC, combat, stress, world_sync) |
-| Phase 10: Proton Bridge | 98–107 | ~2,360 | ✅ DONE. 36 commands, memory/VTable/detour/opcode hooks, 11 default opcode interceptors, 73 tests |
+| Phase 10: Proton Bridge | 98–107 | ~2,360 | ✅ DONE. 36 commands, memory/VTable/detour/opcode hooks, 11 default opcode interceptors, real VTable getters, 7 event sink types, 96 tests |
 | **Total** | **~102** | **~18,430** | |
+
+### Post-Phase-10 Follow-up (external-ingestion-plan.md, all 34 items ✅)
+
+| Batch | Items | Result |
+|-------|-------|--------|
+| P0 bridge fixes | #1–3 | NVSEInterface snapshot, PluginInfo dedupe, event-sink consolidation + pipe event frames |
+| P1 bridge hooks | #4–18 | Direct-indexed opcode table, real VTable getters (cell/enabled/name/lock/parent-cell/combat-target), `find_pattern`, `write_rel_jump_padded`, 2 new event types, forward-compat version guard |
+| P2 networking | #19–26 | Working reliability: ACK/NACK frames, Jacobson RTO, backoff retransmit, send window, priority queues, rate limiter, varint seqs — verified by real-UDP loss simulation |
+| P3 ESM import | #27–30 | `ashfall-server --import-esm` native TES4 parser → all 17 tables |
+| P4 cleanup | #31–34 | Opcode range docs, import-pipeline tests, dead-code annotations, zero-warning build |
+
+**303 tests, 0 warnings.** See `docs/external-ingestion-plan.md` for per-item status.
 
 P3+P4 can run in parallel (both depend on P2). P6+P7 can run in parallel after P5+P7 foundation ready. P10 can start after P7 IPC module (PR79).
 

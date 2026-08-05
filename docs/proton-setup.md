@@ -40,6 +40,11 @@ cargo build --release
 
 # Build bridge.dll (optional — prebuilt available in CI artifacts)
 cargo build --release --target x86_64-pc-windows-gnu -p ashfall-bridge
+
+> ⚠️ **32-bit caveat:** FO3/FNV are 32-bit executables, so a 64-bit DLL cannot
+> load into them. The x86_64 target works for compilation/testing today, but
+> real Proton injection will need `rustup target add i686-pc-windows-gnu` and
+> `cargo build --target i686-pc-windows-gnu`. Verify before runtime testing.
 ```
 
 ## Proton Setup
@@ -142,7 +147,9 @@ Same as desktop. Proton version ≥ 9 recommended. Bridge DLL works identically.
 - Firewall not an issue — TCP on loopback never leaves the machine
 
 ### Game crashes on startup
-- bridge.dll hooks are stubs by default (no VTable patching yet)
+- bridge.dll has memory-patching primitives and VTable getters, but `hooks::install()`
+  does not patch any engine addresses yet — hooks are inert until Proton runtime
+  testing confirms the hardcoded FO3/FNV offsets
 - Remove bridge.dll or set `WINEDLLOVERRIDES=""` to bypass
 - Check Proton logs: `PROTON_LOG=1 %command%`
 

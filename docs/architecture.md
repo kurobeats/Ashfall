@@ -18,6 +18,8 @@ ashfall/
 │   │           ├── mod.rs
 │   │           ├── channel.rs          # Channel enum (System/Game/Chat)
 │   │           ├── header.rs           # PacketHeader { id: u16, channel: u8 }
+│   │           ├── transport.rs        # Wire framing: varint seqs, reliable
+│   │           │                       #   flag bit, ACK/NACK control frames
 │   │           ├── system.rs           # Auth, Load, Start, End, Mod, Chat, etc.
 │   │           ├── reference.rs        # Reference/Base create/update
 │   │           ├── object.rs           # Object create/pos/angle/cell/name/lock
@@ -32,30 +34,33 @@ ashfall/
 │   │   ├── Cargo.toml
 │   │   └── src/
 │   │       ├── lib.rs                  # DllMain + NVSEPlugin_* exports
-│   │       ├── plugin.rs               # NVSE PluginInfo struct + Query/Load
-│   │       ├── network.rs              # TCP server on 127.0.0.1:1771
+│   │       ├── plugin.rs               # PluginInfo + NVSEInterface + Query/Load
+│   │       ├── network.rs              # TCP server on 127.0.0.1:1771, PIPE_OP_EVENT
 │   │       ├── commands.rs             # Command dispatcher (36 opcodes)
-│   │       ├── events.rs               # EventSink types (hit, activate, equip,
-│   │       │                           #   cell change, death) + callback registry
+│   │       ├── events.rs               # EventSink types + authoritative registry
+│   │       │                           #   (hit, activate, equip, cell change,
+│   │       │                           #   death, load game, magic effect)
 │   │       ├── console.rs              # Console command interception framework
 │   │       └── hooks/
-│   │           ├── mod.rs              # Public hook stubs (40+ engine functions)
+│   │           ├── mod.rs              # Hook API + encode_event_frame shim
 │   │           ├── memory.rs           # SafeWrite8/16/32/Buf, WriteRelJump/Call,
+│   │           │                       #   write_rel_jump_padded, find_pattern,
 │   │           │                       #   MemoryProtect RAII, Patch struct
 │   │           ├── vtable.rs           # VTable entry lookup, raw field access,
-│   │           │                       #   FormID resolution, concrete hook impls
-│   │           │                       #   (get_pos, get_angle, get_actor_state, etc.)
+│   │           │                       #   FormID resolution, concrete getters
+│   │           │                       #   (pos, angle, actor state, cell, enabled,
+│   │           │                       #   name, lock, parent cell, combat target)
 │   │           ├── detour.rs           # Trampoline-based function detour
-│   │           └── opcode.rs           # GECK script opcode interception engine
+│   │           └── opcode.rs           # Direct-indexed GECK opcode interception
 │   │                                   #   (PlaceAtMe, AddItem, EquipItem, Kill, Lock)
 │   │
 │   ├── ashfall-server/                 # Dedicated server binary
 │   │   ├── Cargo.toml
 │   │   └── src/
-│   │       ├── main.rs                 # CLI + config load + startup
+│   │       ├── main.rs                 # CLI + config load + startup + --import-esm
 │   │       ├── config.rs               # ini-style config parsing
 │   │       ├── dedicated.rs            # Main event loop, master announce
-│   │       ├── network.rs              # UDP socket, session management
+│   │       ├── network.rs              # UDP socket, reliability layer, rate limiter
 │   │       ├── session.rs              # Per-client Session { guid, addr, player_id, state }
 │   │       ├── dispatch.rs             # Packet dispatch: match packet → handler
 │   │       ├── handlers/               # Per-packet-type server logic
@@ -90,14 +95,19 @@ ashfall/
 │   │       ├── db/                     # SQLite persistence
 │   │       │   ├── mod.rs
 │   │       │   ├── schema.rs           # CREATE TABLE statements
+│   │       │   ├── esm_import.rs       # Native TES4 parser: ESM/ESP → all tables
 │   │       │   ├── record.rs           # Record: baseID → name/type/desc
 │   │       │   ├── reference.rs        # Reference persistence
 │   │       │   ├── exterior.rs         # Exterior cell data
+│   │       │   ├── interior.rs         # Interior cell data
 │   │       │   ├── weapon.rs           # Weapon records
 │   │       │   ├── race.rs             # Race records
 │   │       │   ├── npc.rs              # NPC records
 │   │       │   ├── container.rs        # Base container records
 │   │       │   ├── item.rs             # Base item records
+│   │       │   ├── faction.rs          # Faction records
+│   │       │   ├── quest.rs            # Quest stages + dialogue flags
+│   │       │   ├── global.rs           # Global variables
 │   │       │   └── terminal.rs         # Terminal records
 │   │       ├── script/                 # wasmtime scripting bridge
 │   │       │   ├── mod.rs
@@ -114,7 +124,7 @@ ashfall/
 │   │       ├── main.rs                 # Platform entry, connect flow
 │   │       ├── config.rs               # vaultmp.ini parsing
 │   │       ├── game.rs                 # Client orchestrator (Game)
-│   │       ├── network.rs              # UDP socket + reliability layer
+│   │       ├── network.rs              # UDP socket, varint framing, ACK queue
 │   │       ├── dispatch.rs             # Packet handler dispatch
 │   │       ├── handlers/               # Client-side packet processing
 │   │       │   ├── mod.rs
@@ -161,14 +171,9 @@ ashfall/
 │       └── src/
 │           └── lib.rs
 │
-├── data/                               # SQLite databases, config templates
-│   └── fallout3.sqlite3
-│
-├── docs/
-├── tests/
-├── tools/
-│   └── esm-reader/                     # ESM/Save reader (populate DB)
-└── examples/
+├── data/                               # Runtime SQLite databases (gitignored)
+├── docs/                               # Architecture, implementation plan, guides
+└── .pi-subagents/                      # Agent artifacts
 ```
 
 ### Workspace Cargo.toml
@@ -669,15 +674,25 @@ pub enum Packet {
 
 ### 3.2 Wire Format
 
+Data frames (shared helpers in `ashfall_core::protocol::transport`):
+
 ```
-| 2 bytes | 1 byte  | N bytes            |
-|---------|---------|--------------------|
-| length  | channel | postcard(Packet)   |
+| 2 bytes | 1 byte       | N bytes                     |
+|---------|--------------|-----------------------------|
+| length  | channel      | payload                     |
+|         | reliable:    | 0x80 | Channel, [varint seq][postcard]
+|         | unreliable:  | Channel,       [postcard]
+|         | control:     | 0xFF,          [ACK/NACK frame]
 ```
 
-Max packet size: 1200 bytes (safe UDP MTU). Fragmented packets use a reliability layer.
+Max packet size: 1200 bytes (safe UDP MTU). The reliable-flag bit on the
+channel byte makes framing unambiguous even for single-byte postcard packets
+(no payload-length heuristics). Control frames (cumulative ACK, NACK) carry
+varint sequence numbers.
 
-`postcard` encodes directly to/from `&[u8]`. The `Packet` enum is a flat serde enum; postcard's varint encoding keeps it compact. No hand-rolled BitStream needed.
+`postcard` encodes directly to/from `&[u8]`. The `Packet` enum is a flat serde
+enum; postcard's varint encoding keeps it compact. No hand-rolled BitStream
+needed.
 
 ### 3.3 Reliability Layer
 
@@ -685,24 +700,47 @@ Max packet size: 1200 bytes (safe UDP MTU). Fragmented packets use a reliability
 // crates/ashfall-server/src/network.rs
 // and crates/ashfall-client/src/network.rs
 
-/// Lightweight reliable-over-UDP layer per session.
-/// Ordered per channel. ACK-based, with sequence numbers.
-pub struct ReliableChannel {
+/// Reliable channel — ACK-based, ordered delivery, per-channel priority queues.
+/// Send queues are indexed by `Channel as usize` (System=0, Game=1, Chat=2)
+/// so retransmission drains System first, then Game, then Chat.
+struct ReliableChannel {
     send_seq: u16,
     recv_seq: u16,
-    send_buffer: VecDeque<(u16, Instant, Vec<u8>)>,   // (seq, sent_at, data)
-    recv_buffer: BTreeMap<u16, Vec<u8>>,                // reassembly
-    rtt: Duration,
-    rto: Duration,
+    send_queues: [VecDeque<SendEntry>; 3],   // priority-ordered outbound
+    recv_buffer: BTreeMap<u16, Vec<u8>>,      // reassembly
+    ready_queue: VecDeque<Vec<u8>>,           // in-order delivery
+    srtt: Duration,                           // smoothed RTT (Jacobson/Karels)
+    rttvar: Duration,
+    rto: Duration,                            // srtt + 4*rttvar, clamped 100ms-3s
 }
 
-/// Unreliable channel: fire-and-forget for position updates.
-pub struct UnreliableChannel {
-    send_seq: u16,
-}
+/// Unreliable channel: fire-and-forget for position updates (no seqs).
+struct UnreliableChannel;
 ```
 
-Three ordered reliable channels (System, Game, Chat) + one unordered unreliable channel for position/animation updates. This matches RakNet's channel semantics without RakNet's complexity.
+Wire framing (shared helpers in `ashfall_core::protocol::transport`):
+
+```text
+[2B length][channel: u8][payload]
+  reliable:  channel = 0x80 | Channel, payload = [varint seq][postcard]
+  unreliable: channel = Channel,        payload = [postcard]
+  control:   channel = 0xFF,            payload = [ACK/NACK frame]
+```
+
+Three ordered reliable channels (System, Game, Chat) + one unordered unreliable
+channel for position/animation updates — RakNet semantics without RakNet.
+
+Reliability properties:
+- **Cumulative ACK** with real RTT sampling (retransmit timer adapts per link).
+- **NACK fast retransmit**: sequence gaps trigger immediate resend.
+- **Exponential backoff** on retransmit (2^n × RTO), reset on ACK.
+- **Send window** (MAX_INFLIGHT = 32) throttles unacknowledged in-flight packets.
+- **Rate limiter**: per-address token bucket (200 pkt/s, burst 100) drops floods.
+- **Varint sequence numbers**: 1 byte for seqs < 128, else 3.
+
+Verified by real-UDP loopback tests (`tests/reliability.rs`,
+`tests/loss_simulation.rs`): 50/50 packets delivered exactly once, in order,
+under 25% randomized loss.
 
 ---
 
@@ -1192,7 +1230,13 @@ fn interpolate_position(last: [f32; 3], current: [f32; 3], t: f32) -> [f32; 3] {
 
 ## 9. Database Schema (rusqlite)
 
-Direct port of the same schema:
+Direct port of the same schema, populated two ways:
+
+1. **Startup** — `Database::startup_load()` loads records, weapons, NPCs,
+   items, containers, quest stages, dialogue flags, and factions into memory.
+2. **ESM import tool** — `ashfall-server --import-esm <file> --import-game fo3|fnv
+   --import-db <path>` parses plugin files with the native TES4 parser
+   (`db/esm_import.rs`) and fills all 17 tables. Runs at tool-time, not startup.
 
 ```sql
 CREATE TABLE IF NOT EXISTS records (
