@@ -7,6 +7,9 @@ use ashfall_core::protocol::Packet;
 use std::collections::HashMap;
 
 /// A client-side object — owned data, no locks.
+/// ponytail: several fields are written by apply_packet but not yet read
+/// (no renderer until engine IPC lands).
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub enum ClientObject {
     Object {
@@ -42,6 +45,10 @@ pub enum ClientObject {
 }
 
 /// Client-side object registry.
+/// Client-side object cache — populated by server packets, read by the
+/// renderer once engine IPC lands.
+/// ponytail: several fields are written but not yet read (no renderer).
+#[allow(dead_code)]
 pub struct ClientRegistry {
     pub objects: HashMap<NetworkID, ClientObject>,
     pub cell_objects: HashMap<u32, Vec<NetworkID>>,
@@ -123,10 +130,14 @@ impl ClientRegistry {
         }
     }
 
+    /// Look up a client object (used by the renderer once IPC lands).
+    #[allow(dead_code)]
     pub fn get(&self, id: NetworkID) -> Option<&ClientObject> {
         self.objects.get(&id)
     }
 
+    /// Iterate all client objects (used by the renderer once IPC lands).
+    #[allow(dead_code)]
     pub fn get_objects(&self) -> impl Iterator<Item = (&NetworkID, &ClientObject)> {
         self.objects.iter()
     }

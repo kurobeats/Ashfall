@@ -11,6 +11,9 @@ use std::net::SocketAddr;
 use std::time::Instant;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+// ponytail: Loading/InGame are never constructed in stub mode; the real flow
+// reaches them after GameStart arrives from the server.
+#[allow(dead_code)]
 pub enum ClientState {
     Disconnected,
     Connecting,

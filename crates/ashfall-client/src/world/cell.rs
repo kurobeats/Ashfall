@@ -1,4 +1,7 @@
 //! Client cell tracking.
+//!
+//! ponytail: unused by the stub-mode client; used once cell rendering lands.
+#![allow(dead_code)]
 
 pub struct CellTracker {
     pub current_cell: u32,

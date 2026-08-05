@@ -4,8 +4,6 @@
 //! in Phase 5 Part B (detailed host function codegen).
 
 use crate::script::engine::ScriptState;
-use crate::script::timer::TimerManager;
-use std::sync::{Arc, Mutex};
 use wasmtime::*;
 
 /// Registry of host functions callable from WASM.
@@ -29,7 +27,7 @@ impl HostFunctions {
 
         // ── Object CRUD ──
         linker.func_wrap("env", "create_object",
-            |mut caller: Caller<'_, ScriptState>, _ref_id: i32, _base_id: i32, _cell: i32| -> i64 {
+            |caller: Caller<'_, ScriptState>, _ref_id: i32, _base_id: i32, _cell: i32| -> i64 {
                 let state = caller.data();
                 state.registry.allocate_id().as_u64() as i64
             })?;
@@ -46,7 +44,7 @@ impl HostFunctions {
 
         // ── Actor ──
         linker.func_wrap("env", "create_actor",
-            |mut caller: Caller<'_, ScriptState>, _ref_id: i32, _base_id: i32, _cell: i32| -> i64 {
+            |caller: Caller<'_, ScriptState>, _ref_id: i32, _base_id: i32, _cell: i32| -> i64 {
                 caller.data().registry.allocate_id().as_u64() as i64
             })?;
         linker.func_wrap("env", "get_actor_value",
@@ -58,7 +56,7 @@ impl HostFunctions {
 
         // ── Item ──
         linker.func_wrap("env", "create_item",
-            |mut caller: Caller<'_, ScriptState>, _ref_id: i32, _base_id: i32, _cont_hi: i32, _cont_lo: i32| -> i64 {
+            |caller: Caller<'_, ScriptState>, _ref_id: i32, _base_id: i32, _cont_hi: i32, _cont_lo: i32| -> i64 {
                 caller.data().registry.allocate_id().as_u64() as i64
             })?;
         linker.func_wrap("env", "add_item",
@@ -80,7 +78,7 @@ impl HostFunctions {
 
         // ── GUI (window widgets) ──
         linker.func_wrap("env", "create_window",
-            |mut caller: Caller<'_, ScriptState>, _parent: i64, _label_ptr: i32, _label_len: i32| -> i64 {
+            |caller: Caller<'_, ScriptState>, _parent: i64, _label_ptr: i32, _label_len: i32| -> i64 {
                 caller.data().registry.allocate_id().as_u64() as i64
             })?;
         linker.func_wrap("env", "destroy_window",
@@ -96,31 +94,31 @@ impl HostFunctions {
         linker.func_wrap("env", "set_window_text",
             |_: Caller<'_, ScriptState>, _id: i64, _ptr: i32, _len: i32| {})?;
         linker.func_wrap("env", "create_button",
-            |mut caller: Caller<'_, ScriptState>, _parent: i64, _label_ptr: i32, _label_len: i32| -> i64 {
+            |caller: Caller<'_, ScriptState>, _parent: i64, _label_ptr: i32, _label_len: i32| -> i64 {
                 caller.data().registry.allocate_id().as_u64() as i64
             })?;
         linker.func_wrap("env", "create_text",
-            |mut caller: Caller<'_, ScriptState>, _parent: i64, _text_ptr: i32, _text_len: i32| -> i64 {
+            |caller: Caller<'_, ScriptState>, _parent: i64, _text_ptr: i32, _text_len: i32| -> i64 {
                 caller.data().registry.allocate_id().as_u64() as i64
             })?;
         linker.func_wrap("env", "create_edit",
-            |mut caller: Caller<'_, ScriptState>, _parent: i64, _max_len: i32| -> i64 {
+            |caller: Caller<'_, ScriptState>, _parent: i64, _max_len: i32| -> i64 {
                 caller.data().registry.allocate_id().as_u64() as i64
             })?;
         linker.func_wrap("env", "create_checkbox",
-            |mut caller: Caller<'_, ScriptState>, _parent: i64, _label_ptr: i32, _label_len: i32| -> i64 {
+            |caller: Caller<'_, ScriptState>, _parent: i64, _label_ptr: i32, _label_len: i32| -> i64 {
                 caller.data().registry.allocate_id().as_u64() as i64
             })?;
         linker.func_wrap("env", "create_radiobutton",
-            |mut caller: Caller<'_, ScriptState>, _parent: i64, _group: i32| -> i64 {
+            |caller: Caller<'_, ScriptState>, _parent: i64, _group: i32| -> i64 {
                 caller.data().registry.allocate_id().as_u64() as i64
             })?;
         linker.func_wrap("env", "create_list",
-            |mut caller: Caller<'_, ScriptState>, _parent: i64, _multiselect: i32| -> i64 {
+            |caller: Caller<'_, ScriptState>, _parent: i64, _multiselect: i32| -> i64 {
                 caller.data().registry.allocate_id().as_u64() as i64
             })?;
         linker.func_wrap("env", "add_list_item",
-            |mut caller: Caller<'_, ScriptState>, _list_id: i64, _text_ptr: i32, _text_len: i32| -> i64 {
+            |caller: Caller<'_, ScriptState>, _list_id: i64, _text_ptr: i32, _text_len: i32| -> i64 {
                 caller.data().registry.allocate_id().as_u64() as i64
             })?;
         linker.func_wrap("env", "remove_list_item",
@@ -138,14 +136,14 @@ impl HostFunctions {
 
         // ── Timers ──
         linker.func_wrap("env", "create_timer",
-            |mut caller: Caller<'_, ScriptState>, interval_ms: i32, _cb_ptr: i32, _cb_len: i32, _repeat: i32| -> i32 {
+            |caller: Caller<'_, ScriptState>, interval_ms: i32, _cb_ptr: i32, _cb_len: i32, _repeat: i32| -> i32 {
                 let state = caller.data();
                 let mut tm = state.timers.lock().unwrap();
                 let id = tm.create_timer(interval_ms as u64, "script_timer".to_string(), true);
                 id as i32
             })?;
         linker.func_wrap("env", "kill_timer",
-            |mut caller: Caller<'_, ScriptState>, id: i32| {
+            |caller: Caller<'_, ScriptState>, id: i32| {
                 caller.data().timers.lock().unwrap().kill_timer(id as u32);
             })?;
 

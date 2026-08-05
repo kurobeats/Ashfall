@@ -1,6 +1,7 @@
 //! Derived render state — interpolation helpers.
 //!
-//! ponytail: stubs — full interpolation in Phase 9.
+//! ponytail: unused by the stub-mode client; used once position rendering lands.
+#![allow(dead_code)]
 
 pub fn interpolate_position(last: [f32; 3], current: [f32; 3], t: f32) -> [f32; 3] {
     [

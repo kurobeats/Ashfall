@@ -111,11 +111,6 @@ impl ReliableChannel {
         buf
     }
 
-    /// Retransmission timeout for an entry (exponential backoff on retransmits).
-    fn timeout_for(&self, entry: &SendEntry) -> Duration {
-        self.rto.saturating_mul(2u32.saturating_pow(entry.retransmits.min(MAX_BACKOFF)))
-    }
-
     /// Collect packets whose RTO has elapsed. Updates `sent_at` and the
     /// per-entry retransmit counter (exponential backoff).
     /// Returns wire frames to resend.
@@ -246,19 +241,12 @@ impl ReliableChannel {
 }
 
 /// Unreliable channel — fire-and-forget for position/physics updates.
-struct UnreliableChannel {
-    send_seq: u16,
-}
+/// (No sequence numbers: loss is acceptable, ordering is not guaranteed.)
+struct UnreliableChannel;
 
 impl UnreliableChannel {
     fn new() -> Self {
-        UnreliableChannel { send_seq: 0 }
-    }
-
-    fn next_seq(&mut self) -> u16 {
-        let seq = self.send_seq;
-        self.send_seq = self.send_seq.wrapping_add(1);
-        seq
+        UnreliableChannel
     }
 }
 

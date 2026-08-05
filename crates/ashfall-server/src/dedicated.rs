@@ -16,7 +16,6 @@ use crate::ai::factions::FactionMatrix;
 use dashmap::DashMap;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
 use tokio::time::{interval, Duration};
 
 /// The dedicated server.

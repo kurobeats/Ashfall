@@ -17,7 +17,7 @@ impl CombatResolver {
         registry: &Arc<ObjectRegistry>,
         hit: &Packet,
     ) -> Option<Vec<Packet>> {
-        let (target_id, attacker_id, limb, base_damage, flags, weapon_id, projectile) = match hit {
+        let (target_id, attacker_id, limb, base_damage, flags, weapon_id, _projectile) = match hit {
             Packet::ActorHit { target, attacker, limb, base_damage, flags, weapon_id, projectile } => {
                 (*target, *attacker, *limb, *base_damage, *flags, *weapon_id, *projectile)
             }
@@ -31,7 +31,7 @@ impl CombatResolver {
         }
 
         // Validate attacker exists
-        let attacker_actor = registry.get_typed::<Actor>(attacker_id)?;
+        let _attacker_actor = registry.get_typed::<Actor>(attacker_id)?;
 
         // Validate distance (anti-teleport-hack)
         let target_arc = registry.get(target_id)?;

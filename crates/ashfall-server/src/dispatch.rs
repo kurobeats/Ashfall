@@ -8,7 +8,6 @@ use crate::handlers::{actor, auth, chat, combat, game, gui, item, object, physic
 use crate::quest::QuestManager;
 use crate::session::Session;
 use crate::world::globals::GlobalState;
-use crate::world::objects::{Actor, Container, Item, Object, Player};
 use crate::world::registry::ObjectRegistry;
 use crate::world::weather::WeatherState;
 use std::net::SocketAddr;

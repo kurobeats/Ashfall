@@ -1,5 +1,9 @@
 //! IPC bridge to the game engine process.
 //!
+//! ponytail: unused in stub mode (canned responses). Kept for when the
+//! game engine bridge (Proton/Wine) is exercised.
+#![allow(dead_code)]
+//!
 //! Transports:
 //! - **TCP loopback** (default) — `127.0.0.1:1771` to bridge.dll in Proton/Wine.
 //! - **Unix domain socket** — `/tmp/ashfall-ipc.sock` for native Linux engine stub.

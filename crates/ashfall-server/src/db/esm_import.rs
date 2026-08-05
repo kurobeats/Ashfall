@@ -42,7 +42,7 @@ impl std::str::FromStr for GameId {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_ascii_lowercase().as_str() {
             "fo3" | "fallout3" | "fallout 3" => Ok(GameId::Fallout3),
-            "fnv" | "falloutnv" | "falloutnv" | "fallout nv" | "newvegas" | "new vegas" => {
+            "fnv" | "falloutnv" | "fallout nv" | "newvegas" | "new vegas" => {
                 Ok(GameId::FalloutNV)
             }
             other => Err(anyhow::anyhow!("unknown game '{other}' (expected fo3 or fnv)")),
@@ -99,10 +99,6 @@ impl<'a> PluginReader<'a> {
         let slice = &self.data[self.pos..self.pos + n];
         self.pos += n;
         Some(slice)
-    }
-
-    fn read_u16(&mut self) -> Option<u16> {
-        Some(u16::from_le_bytes(self.read(2)?.try_into().unwrap()))
     }
 
     fn read_u32(&mut self) -> Option<u32> {

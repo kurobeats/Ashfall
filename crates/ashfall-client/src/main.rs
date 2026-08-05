@@ -44,7 +44,7 @@ impl eframe::App for AppState {
 
         ctx.request_repaint_after(Duration::from_millis(33));
 
-        let (obj_count, state, chat_msgs, local_id) = {
+        let (obj_count, state, chat_msgs, _local_id) = {
             let game = self.game.lock().unwrap();
             (game.registry.object_count(), game.state, game.chat_messages.clone(), game.local_player_id)
         };

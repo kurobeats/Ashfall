@@ -86,6 +86,9 @@ pub unsafe fn write_field<T>(obj: *mut u8, offset: usize, value: T) {
 
 /// Hardcoded address of `LookupFormByID` in FO3 1.7.0.3 EN.
 /// FNV equivalent: different address, detected at runtime.
+/// ponytail: only referenced on the Windows target (in-process patching);
+/// the non-Windows cfg path returns early.
+#[allow(dead_code)]
 const LOOKUP_FORM_FO3: usize = 0x00455190;
 
 /// Resolve a FormID to a memory pointer. Returns null if form not loaded.
@@ -115,6 +118,8 @@ pub unsafe fn lookup_form_by_id(form_id: u32) -> *mut u8 {
 /// TESObjectREFR::GetPos — returns [f32; 3] or similar (by ref/out param).
 /// On x86_64: returned in XMM0/XMM1 or via out pointer — implementation depends on game binary.
 /// ponytail: we read raw field offsets as fallback; VTable call for correctness.
+/// Only referenced on the Windows target (in-process patching).
+#[allow(dead_code)]
 const VTBL_REF_GET_POS: usize = vtable_index(0x30);        // index 12 (x86)
 const VTBL_REF_GET_BASE_FORM: usize = vtable_index(0x10);  // index 4 (x86)
 const VTBL_ACTOR_GET_VALUE: usize = vtable_index(0x68);    // index 26 (x86)
@@ -132,7 +137,6 @@ const OFFSET_ANGLE_Z: usize = 0x28; // radians
 const OFFSET_POS_X: usize = 0x2C;
 const OFFSET_POS_Y: usize = 0x30;
 const OFFSET_POS_Z: usize = 0x34;
-const OFFSET_GLOBAL_VALUE: usize = 0x24;
 
 // Anim data struct offsets (from vaultmp.cpp GetActorState: VTable+0x01E4 → struct)
 const OFFSET_ANIM_MOVING: usize = 0x4E;

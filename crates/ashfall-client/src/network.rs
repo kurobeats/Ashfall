@@ -126,13 +126,16 @@ impl ClientNetwork {
         postcard::from_bytes(packet_data).map(Some).map_err(|e| anyhow::anyhow!("{e}"))
     }
 
-    pub fn server_addr(&self) -> SocketAddr {
-        self.server_addr
-    }
-
-    /// The local UDP socket address (useful for tests and diagnostics).
+    /// The local UDP socket address (used by tests and diagnostics).
+    #[allow(dead_code)]
     pub fn local_addr(&self) -> anyhow::Result<SocketAddr> {
         Ok(self.socket.local_addr()?)
+    }
+
+    /// The server address this client is connected to.
+    #[allow(dead_code)]
+    pub fn server_addr(&self) -> SocketAddr {
+        self.server_addr
     }
 }
 

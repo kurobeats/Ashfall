@@ -35,6 +35,8 @@ pub enum OpcodeAction {
 pub type OpcodeHandler = fn(opcode: u16, params: &[u32]) -> OpcodeAction;
 
 /// Handler that always allows.
+/// ponytail: kept for callers that want an explicit pass-through handler.
+#[allow(dead_code)]
 fn allow_all(_opcode: u16, _params: &[u32]) -> OpcodeAction {
     OpcodeAction::Allow
 }

@@ -4,16 +4,11 @@ use ashfall_core::id::NetworkID;
 use ashfall_core::math::is_valid_angle3;
 use ashfall_core::protocol::Packet;
 use crate::anti_cheat::AntiCheat;
-use crate::physics::PhysicsValidator;
 use crate::session::Session;
 use crate::world::objects::{Container, Object};
 use crate::world::registry::ObjectRegistry;
 use std::sync::Arc;
 use std::time::Duration;
-
-// ponytail: generous delta time for position validation.
-// Real time deltas come from session last_recv.
-const DEFAULT_DELTA: Duration = Duration::from_millis(33);
 
 /// Handle UpdatePos — validate and update position.
 pub fn handle_update_pos(
