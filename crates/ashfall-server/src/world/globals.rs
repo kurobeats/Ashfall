@@ -1,26 +1,27 @@
 //! Global variables — key-value map synced to all clients.
+//!
+//! Clone shares the underlying map (Arc) — server and scripts agree.
 
 use dashmap::DashMap;
+use std::sync::Arc;
 
 /// Server-authoritative global variable state.
 pub struct GlobalState {
-    globals: DashMap<u32, i32>,
+    globals: Arc<DashMap<u32, i32>>,
 }
 
 impl Clone for GlobalState {
     fn clone(&self) -> Self {
-        let cloned = DashMap::new();
-        for entry in &self.globals {
-            cloned.insert(*entry.key(), *entry.value());
+        GlobalState {
+            globals: self.globals.clone(),
         }
-        GlobalState { globals: cloned }
     }
 }
 
 impl GlobalState {
     pub fn new() -> Self {
         GlobalState {
-            globals: DashMap::new(),
+            globals: Arc::new(DashMap::new()),
         }
     }
 

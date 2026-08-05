@@ -1,10 +1,41 @@
 //! Host functions exposed to WASM scripts.
 //!
-//! ponytail: minimal stubs that compile. Real implementations
-//! in Phase 5 Part B (detailed host function codegen).
+//! Real implementations for world/quest/chat/clock/player-count state;
+//! object CRUD remains ID-allocation stubs until object scripting lands.
+//!
+//! ABI note: `u64` ids cross the boundary as `i64`, strings as `(ptr, len)`
+//! pairs into linear memory — see scripts/freeroam/src/lib.rs.
 
 use crate::script::engine::ScriptState;
+use crate::script::state::{GameTime, ScriptEffect};
+use std::time::{SystemTime, UNIX_EPOCH};
 use wasmtime::*;
+
+/// Read a string from WASM linear memory at (ptr, len).
+fn read_wasm_string(caller: &mut Caller<'_, ScriptState>, ptr: i32, len: i32) -> String {
+    if ptr < 0 || len <= 0 {
+        return String::new();
+    }
+    let mem = match caller.get_export("memory").and_then(|e| e.into_memory()) {
+        Some(m) => m,
+        None => return String::new(),
+    };
+    let start = ptr as usize;
+    let end = start + len as usize;
+    let bytes = mem.data(&caller);
+    if end > bytes.len() {
+        return String::new();
+    }
+    String::from_utf8_lossy(&bytes[start..end]).into_owned()
+}
+
+/// Milliseconds since UNIX_EPOCH — real wall-clock for `timestamp()`.
+fn now_ms() -> i64 {
+    match SystemTime::now().duration_since(UNIX_EPOCH) {
+        Ok(d) => d.as_millis() as i64,
+        Err(_) => 0,
+    }
+}
 
 /// Registry of host functions callable from WASM.
 pub struct HostFunctions;
@@ -19,17 +50,35 @@ impl HostFunctions {
         linker.func_wrap("env", "set_server_name",
             |_: Caller<'_, ScriptState>, _ptr: i32, _len: i32| {})?;
         linker.func_wrap("env", "get_max_players",
-            |_: Caller<'_, ScriptState>| -> i32 { 4 })?;
+            |caller: Caller<'_, ScriptState>| -> i32 { caller.data().max_players as i32 })?;
         linker.func_wrap("env", "get_current_players",
-            |_: Caller<'_, ScriptState>| -> i32 { 0 })?;
-        linker.func_wrap("env", "timestamp",
-            || -> i64 { 0 })?;
+            |caller: Caller<'_, ScriptState>| -> i32 {
+                use std::sync::atomic::Ordering;
+                caller.data().player_count.load(Ordering::Relaxed) as i32
+            })?;
+        linker.func_wrap("env", "timestamp", || -> i64 { now_ms() })?;
 
-        // ── Object CRUD ──
+        // ── Logging ──
+        linker.func_wrap("env", "host_log",
+            |mut caller: Caller<'_, ScriptState>, level: i32, ptr: i32, len: i32| {
+                let msg = read_wasm_string(&mut caller, ptr, len);
+                match level {
+                    0 => tracing::error!("[script] {msg}"),
+                    1 => tracing::warn!("[script] {msg}"),
+                    2 => tracing::debug!("[script] {msg}"),
+                    _ => tracing::info!("[script] {msg}"),
+                }
+            })?;
+        linker.func_wrap("env", "debug_log",
+            |mut caller: Caller<'_, ScriptState>, ptr: i32, len: i32| {
+                let msg = read_wasm_string(&mut caller, ptr, len);
+                tracing::debug!("[script] {msg}");
+            })?;
+
+        // ── Object CRUD (stubs: allocate IDs; real create/sync later) ──
         linker.func_wrap("env", "create_object",
             |caller: Caller<'_, ScriptState>, _ref_id: i32, _base_id: i32, _cell: i32| -> i64 {
-                let state = caller.data();
-                state.registry.allocate_id().as_u64() as i64
+                caller.data().registry.allocate_id().as_u64() as i64
             })?;
         linker.func_wrap("env", "destroy_object",
             |_: Caller<'_, ScriptState>, _id_hi: i32, _id_lo: i32| {})?;
@@ -68,15 +117,38 @@ impl HostFunctions {
         linker.func_wrap("env", "get_item_count",
             |_: Caller<'_, ScriptState>, _item_hi: i32, _item_lo: i32| -> i32 { 0 })?;
 
-        // ── Chat / UI ──
+        // ── Chat / UI / kick (real — queued as script effects) ──
         linker.func_wrap("env", "chat_message",
-            |_: Caller<'_, ScriptState>, _ptr: i32, _len: i32| {})?;
+            |mut caller: Caller<'_, ScriptState>, player_id: i64, ptr: i32, len: i32| {
+                let message = read_wasm_string(&mut caller, ptr, len);
+                if message.is_empty() {
+                    return;
+                }
+                caller.data().effects.push(ScriptEffect::PrivateChat {
+                    player_id: player_id as u64,
+                    message,
+                });
+            })?;
         linker.func_wrap("env", "ui_message",
-            |_: Caller<'_, ScriptState>, _player_hi: i32, _player_lo: i32, _ptr: i32, _len: i32| {})?;
+            |mut caller: Caller<'_, ScriptState>, player_id: i64, ptr: i32, len: i32| {
+                let message = read_wasm_string(&mut caller, ptr, len);
+                if message.is_empty() {
+                    return;
+                }
+                // ponytail: UI channel not implemented yet — surface as chat.
+                caller.data().effects.push(ScriptEffect::PrivateChat {
+                    player_id: player_id as u64,
+                    message,
+                });
+            })?;
         linker.func_wrap("env", "kick",
-            |_: Caller<'_, ScriptState>, _player_hi: i32, _player_lo: i32| {})?;
+            |caller: Caller<'_, ScriptState>, player_id: i64| {
+                caller.data().effects.push(ScriptEffect::Kick {
+                    player_id: player_id as u64,
+                });
+            })?;
 
-        // ── GUI (window widgets) ──
+        // ── GUI (window widgets — stubs) ──
         linker.func_wrap("env", "create_window",
             |caller: Caller<'_, ScriptState>, _parent: i64, _label_ptr: i32, _label_len: i32| -> i64 {
                 caller.data().registry.allocate_id().as_u64() as i64
@@ -124,22 +196,33 @@ impl HostFunctions {
         linker.func_wrap("env", "remove_list_item",
             |_: Caller<'_, ScriptState>, _item_id: i64| {})?;
 
-        // ── World state ──
+        // ── World state (real) ──
         linker.func_wrap("env", "set_game_weather",
-            |_: Caller<'_, ScriptState>, _weather: i32| {})?;
+            |caller: Caller<'_, ScriptState>, weather: i32| {
+                caller.data().weather.set(weather as u32);
+            })?;
         linker.func_wrap("env", "get_game_weather",
-            |_: Caller<'_, ScriptState>| -> i32 { 0 })?;
+            |caller: Caller<'_, ScriptState>| -> i32 { caller.data().weather.get() as i32 })?;
         linker.func_wrap("env", "set_game_time",
-            |_: Caller<'_, ScriptState>, _year: i32, _month: i32, _day: i32, _hour: i32| {})?;
+            |caller: Caller<'_, ScriptState>, year: i32, month: i32, day: i32, hour: i32| {
+                caller.data().game_time.set(GameTime {
+                    year: year.max(0) as u32,
+                    month: month.max(0) as u32,
+                    day: day.max(0) as u32,
+                    hour: hour.max(0) as u32,
+                });
+            })?;
         linker.func_wrap("env", "set_time_scale",
             |_: Caller<'_, ScriptState>, _scale: f32| {})?;
 
-        // ── Timers ──
+        // ── Timers (real; callback name read from module memory) ──
         linker.func_wrap("env", "create_timer",
-            |caller: Caller<'_, ScriptState>, interval_ms: i32, _cb_ptr: i32, _cb_len: i32, _repeat: i32| -> i32 {
+            |mut caller: Caller<'_, ScriptState>, interval_ms: i32, cb_ptr: i32, cb_len: i32, repeat: i32| -> i32 {
+                let cb = read_wasm_string(&mut caller, cb_ptr, cb_len);
+                let cb = if cb.is_empty() { "script_timer".to_string() } else { cb };
                 let state = caller.data();
                 let mut tm = state.timers.lock().unwrap();
-                let id = tm.create_timer(interval_ms as u64, "script_timer".to_string(), true);
+                let id = tm.create_timer(interval_ms.max(1) as u64, cb, repeat != 0);
                 id as i32
             })?;
         linker.func_wrap("env", "kill_timer",
@@ -147,25 +230,31 @@ impl HostFunctions {
                 caller.data().timers.lock().unwrap().kill_timer(id as u32);
             })?;
 
-        // ── Quest ──
+        // ── Quest (real) ──
         linker.func_wrap("env", "get_quest_stage",
-            |_: Caller<'_, ScriptState>, _quest_id: i32| -> i32 { 0 })?;
+            |caller: Caller<'_, ScriptState>, quest_id: i32| -> i32 {
+                caller.data().quests.get_stage(quest_id as u32) as i32
+            })?;
         linker.func_wrap("env", "set_quest_stage",
-            |_: Caller<'_, ScriptState>, _quest_id: i32, _stage: i32| {})?;
+            |caller: Caller<'_, ScriptState>, quest_id: i32, stage: i32| {
+                caller.data().quests.set_stage(quest_id as u32, stage.max(0) as u16);
+            })?;
         linker.func_wrap("env", "get_dialogue_flag",
-            |_: Caller<'_, ScriptState>, _flag_id: i32| -> i32 { 0 })?;
+            |caller: Caller<'_, ScriptState>, flag_id: i32| -> i32 {
+                caller.data().quests.get_flag(flag_id as u32) as i32
+            })?;
         linker.func_wrap("env", "set_dialogue_flag",
-            |_: Caller<'_, ScriptState>, _flag_id: i32, _value: i32| {})?;
+            |caller: Caller<'_, ScriptState>, flag_id: i32, value: i32| {
+                caller.data().quests.set_flag(flag_id as u32, value != 0);
+            })?;
 
-        // ── Combat ──
+        // ── Combat (stubs) ──
         linker.func_wrap("env", "get_damage_resistance",
             |_: Caller<'_, ScriptState>, _actor_hi: i32, _actor_lo: i32| -> f32 { 0.0 })?;
         linker.func_wrap("env", "get_damage_threshold",
             |_: Caller<'_, ScriptState>, _actor_hi: i32, _actor_lo: i32| -> f32 { 0.0 })?;
 
         // ── Utility ──
-        linker.func_wrap("env", "debug_log",
-            |_: Caller<'_, ScriptState>, _ptr: i32, _len: i32| {})?;
         linker.func_wrap("env", "get_config_int",
             |_: Caller<'_, ScriptState>, _key_ptr: i32, _key_len: i32| -> i32 { 0 })?;
 

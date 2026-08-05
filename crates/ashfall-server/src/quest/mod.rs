@@ -1,34 +1,32 @@
 //! Quest manager — quest stage and dialogue flag tracking.
+//!
+//! Clone shares the underlying maps (Arc) — server and scripts agree.
 
 use dashmap::DashMap;
+use std::sync::Arc;
 
 /// Server-authoritative quest state.
 pub struct QuestManager {
     /// quest_id → current stage
-    stages: DashMap<u32, u16>,
+    stages: Arc<DashMap<u32, u16>>,
     /// flag_id → value
-    dialogue_flags: DashMap<u32, bool>,
+    dialogue_flags: Arc<DashMap<u32, bool>>,
 }
 
 impl Clone for QuestManager {
     fn clone(&self) -> Self {
-        let stages: DashMap<u32, u16> = DashMap::new();
-        for entry in &self.stages {
-            stages.insert(*entry.key(), *entry.value());
+        QuestManager {
+            stages: self.stages.clone(),
+            dialogue_flags: self.dialogue_flags.clone(),
         }
-        let flags: DashMap<u32, bool> = DashMap::new();
-        for entry in &self.dialogue_flags {
-            flags.insert(*entry.key(), *entry.value());
-        }
-        QuestManager { stages, dialogue_flags: flags }
     }
 }
 
 impl QuestManager {
     pub fn new() -> Self {
         QuestManager {
-            stages: DashMap::new(),
-            dialogue_flags: DashMap::new(),
+            stages: Arc::new(DashMap::new()),
+            dialogue_flags: Arc::new(DashMap::new()),
         }
     }
 

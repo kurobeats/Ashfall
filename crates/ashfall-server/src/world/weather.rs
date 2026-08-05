@@ -1,16 +1,20 @@
 //! Weather state — globally synced weather value.
+//!
+//! Clone shares the underlying value (Arc) — the server and every WASM
+//! script instance observe the same authoritative weather.
 
 use parking_lot::RwLock;
+use std::sync::Arc;
 
 /// Server-authoritative weather state.
 pub struct WeatherState {
-    weather: RwLock<u32>,
+    weather: Arc<RwLock<u32>>,
 }
 
 impl Clone for WeatherState {
     fn clone(&self) -> Self {
         WeatherState {
-            weather: RwLock::new(*self.weather.read()),
+            weather: self.weather.clone(),
         }
     }
 }
@@ -18,7 +22,7 @@ impl Clone for WeatherState {
 impl WeatherState {
     pub fn new(initial: u32) -> Self {
         WeatherState {
-            weather: RwLock::new(initial),
+            weather: Arc::new(RwLock::new(initial)),
         }
     }
 
