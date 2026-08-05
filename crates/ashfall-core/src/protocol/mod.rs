@@ -10,6 +10,7 @@ use std::collections::HashMap;
 
 pub mod channel;
 pub mod header;
+pub mod transport;
 
 pub use channel::Channel;
 pub use header::PacketHeader;

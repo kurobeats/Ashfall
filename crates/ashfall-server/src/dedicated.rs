@@ -123,6 +123,9 @@ impl DedicatedServer {
         // Fire script timers
         self.script_engine.tick_timers();
 
+        // Reliability maintenance: flush ACK/NACK frames, retransmit expired
+        self.network.tick().await;
+
         // Master server heartbeat (every 60s)
         let player_count = self.sessions.iter().filter(|e| e.value().is_ingame()).count() as u32;
         self.master_announcer.heartbeat(player_count).await;
@@ -141,6 +144,12 @@ impl DedicatedServer {
 
     /// Handle incoming UDP data.
     async fn handle_recv(&mut self, addr: SocketAddr, data: &[u8]) {
+        // Per-address rate limit (200 pkt/s, burst 100) — drop silently when exceeded
+        if !self.network.check_rate(addr) {
+            tracing::debug!("Rate limit exceeded for {addr}, dropping datagram");
+            return;
+        }
+
         // Try to reassemble a packet
         let packet = match self.network.try_recv(addr, data) {
             Some(p) => p,

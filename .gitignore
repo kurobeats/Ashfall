@@ -22,3 +22,5 @@ target
 
 # pi things
 .pi-subagents/
+# Runtime data (server database, logs)
+data/
