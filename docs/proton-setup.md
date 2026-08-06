@@ -69,6 +69,24 @@ cp target/i686-pc-windows-gnu/release/ashfall_bridge_proxy.dll \
 > (FO3 GOTY default target is `Fallout3Launcher.exe`), press Enter on it to
 > start the real game.
 
+### Save location
+
+Steam creates the prefix under the **game library's** compatdata (not
+`~/.local/share/Steam`):
+
+```bash
+# find the real prefix:
+find ~/.local/share -maxdepth 4 -type d -path "*/compatdata/22370"
+
+# FO3 saves (.fos) go in:
+$REAL_PREFIX/pfx/drive_c/users/steamuser/Documents/My Games/Fallout3/Saves/
+```
+
+`SLocalSavePath=Saves\` in FALLOUT.INI — saves live in the `Saves/`
+subdir, not the Fallout3 root. A prefix created by a manual
+`proton run` (default `~/.local/share/Steam/steamapps/compatdata`) is a
+decoy the game never reads.
+
 ### 3. Start Ashfall
 
 ```bash

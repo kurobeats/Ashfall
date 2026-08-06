@@ -71,3 +71,55 @@ Real-game injection test of `ashfall-bridge` + the new `ashfall-bridge-proxy`
 Stack for future runtime tests: `cargo build --release --target i686-pc-windows-gnu -p ashfall-bridge-proxy`
 → copy to game dir as `dinput8.dll` → launch via Steam (DRM) → Enter in launcher.
 Vtable commands need a loaded save (player ref valid) + offset re-verification.
+
+## Steam FO3 GOTY (test host) — address table MISMATCH, 2026-08-06
+
+The GOG 1.7.0.3-verified address table does **not** apply to the Steam build:
+
+| Constant (GOG-verified) | Steam build (in-process probe, 16B at addr) | Verdict |
+|---|---|---|
+| `LOOKUP_FORM_BY_ID` 0x455190 | `d9 cc d9 cd d9 cb d9 cc 83 c2 01...` (FPU ops — garbage) | ❌ wrong for Steam |
+| `EXTRACT_ARGS` 0x517950 | `1e 10 01 8b c8 8b 10 ff 52 04 68` (plausible code, unverified) | ⚠️ unverified |
+| `CREATE_FORM_INSTANCE` 0x43CDA0 | `24 28 03 f0 e8 97 5f 64 00` (plausible code) | ⚠️ unverified |
+| `CONSOLE_MANAGER_GET_SINGLETON` 0x62B5D0 | code tail, not a prologue | ⚠️ unverified |
+| `FORM_HEAP_ALLOCATE` 0x401000 | `56 68 50 ce 23 01 8b f1 ff 15...` (vtable call pattern) | ⚠️ unverified |
+| `DATA_HANDLER` 0x106CDCC | data bytes | ⚠️ unverified |
+
+**Consequence**: any vtable-path pipe command (`OP_GET_POS`, `OP_GET_ACTOR_VALUE`,
+`OP_IS_MOVING`, ...) crashes Fallout3.exe even with a valid loaded save —
+`get_actor_value` on refID 0x14 killed the game; probe evidence shows the
+underlying addresses are wrong for this binary.
+
+Steam Fallout3.exe is SteamStub-packed (no import table); the unpacked image
+is only in process memory. `/proc/<pid>/mem` is ptrace-blocked (yama), so the
+dump must come from inside the process: bridge debug opcodes (see below).
+
+### Bridge debug opcodes (temporary, in `commands.rs`/`hooks/mod.rs`)
+
+| Opcode | What it does |
+|---|---|
+| `OP_PROBE_CODE` 0xFD | returns 16 bytes at each hardcoded engine address (no execution) — used to prove the mismatch above |
+| `OP_PROBE_SAVES` 0xFE | resolves the save dir via `SHGetFolderPath` + counts `.fos` in-game |
+| `OP_DUMP_IMAGE` 0xFC | streams the unpacked image (mapping containing 0x400000 from wine's `/proc/self/maps`) as `[0x04][size:4][bytes]` |
+
+### Save location on Linux (verified)
+
+Steam puts the prefix under the **game library**'s compatdata, not
+`~/.local/share/Steam`:
+
+```
+/home/user/.local/share/.games/SteamLibrary/steamapps/compatdata/22370/
+  pfx/drive_c/users/steamuser/Documents/My Games/Fallout3/Saves/   <- .fos files
+```
+
+(`SLocalSavePath=Saves\` in FALLOUT.INI; FO3 saves live in the `Saves/`
+subdir, not the Fallout3 root. A hand-made prefix at
+`~/.local/share/Steam/steamapps/compatdata/22370` from a direct `proton run`
+is a decoy — the game never uses it.)
+
+### Next step
+
+Dump the unpacked image via `OP_DUMP_IMAGE`, disassemble locally
+(`i686-w64-mingw32-objdump -b binary -m i386 -D` on the raw dump), locate the
+real `LookupFormByID` (884-call-site function), re-derive the address table
+for the Steam build, then re-run the vtable round trip with a loaded save.

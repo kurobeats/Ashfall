@@ -12,26 +12,39 @@ Experimental, verified 2026-08-06 on test host — see
 - **Bridge TCP server**: `127.0.0.1:1771` LISTENING inside Fallout3.exe.
 - **Pipe protocol**: wakeup (`01` → `01`) and stub-path commands
   (`OP_GET_DEAD`, `OP_GET_ACTOR_VALUE` — no engine deref) round-trip.
-- **Game stability**: stable at main menu for 70s+ untouched.
+- **Game stability**: stable at main menu; crashes only on vtable-path commands.
+- **Save discovery**: real saves dir = game-library compatdata, `Saves/` subdir
+  (see below).
+
+## Why vtable commands crash (verified 2026-08-06, loaded save)
+
+**The address table was verified against the GOG 1.7.0.3 binary, and the
+Steam build differs.** In-process probe: `LOOKUP_FORM_BY_ID` at 0x455190
+holds FPU-op garbage, not the form lookup. Calling any of these addresses
+(or vtable calls through them) crashes the game — reproduced with a valid
+loaded save (player ref 0x14): `OP_GET_ACTOR_VALUE` killed Fallout3.exe;
+`OP_GET_POS` never ran after that. Probe evidence + constant table:
+[scripts/re/README.md](../scripts/re/README.md) (Steam FO3 GOTY section).
+
+Until the Steam-build table is re-derived: **do not send vtable-path commands
+(OP_GET_POS/SET_POS/GET_ANGLE/GET_CELL/GET_PARENT_CELL/IS_MOVING/
+GET_ACTOR_STATE/GET_ACTOR_VALUE/GET_BASE) — every one crashes the game.
+Only stub-path commands are safe (`OP_GET_DEAD`).**
 
 ## What crashes the game (verified)
 
-Any command reaching a real vtable call while no save is loaded:
-
-| Command | Path | Why it crashes |
-|---------|------|----------------|
-| `OP_GET_POS` / `OP_SET_POS` / `OP_GET_ANGLE` / `OP_GET_CELL` / `OP_GET_PARENT_CELL` | `vtable::get_pos` etc. | refID 0x14 (player) is garbage at the main menu — no player ref exists until a save loads |
-| `OP_IS_MOVING` / `OP_GET_ACTOR_STATE` | `vtable::get_actor_state` | same, plus anim-struct offsets (below) are unverified — reproduced: broken pipe + game exit |
-
-**Rule for the next session**: never send vtable-path commands at the main
-menu. Only test them after a save is loaded, and expect crashes until the
-offsets are re-verified — a crash is a data point, not a surprise.
+Any command reaching a real vtable call — see the mismatch note above.
+A loaded save does NOT make them safe: the GOG-verified offsets are wrong
+for the Steam build, so the crash is in the lookup, not the missing player.
 
 ## In-game verification plan
 
 1. Launch: Steam → Fallout 3 → launcher → Enter (SteamStub DRM: must go
    through Steam; launcher is the default target and needs the Play click).
-2. Load any save (player ref 0x14 now valid).
+2. Load any save (player ref 0x14 now valid) — saves live in the game
+   library's compatdata: `~/.local/share/.games/SteamLibrary/steamapps/
+   compatdata/22370/pfx/drive_c/users/steamuser/Documents/My Games/
+   Fallout3/Saves/`.
 3. Pipe round trip from the host (python, no tools needed):
 
 ```python
@@ -42,21 +55,24 @@ def cmd(op, refid=0x14):
               + bytes([4]) + struct.pack("<I", refid))
     return s.recv(64).hex()
 print("get_dead:", cmd(0x19))          # stub path — safe everywhere
-print("get_pos:", cmd(0x0001))         # vtable — needs loaded save
-print("get_cell:", cmd(0x0005))        # vtable — needs loaded save
-print("is_moving:", cmd(0x1B))         # vtable — needs loaded save
+print("probe_code:", ...)              # 0xFD — safe (no execution)
+print("get_pos:", cmd(0x0001))         # vtable — CRASHES until table re-derived
 s.close()
 ```
 
-4. Expected once offsets are right: `get_pos` returns 12 bytes (3 × f32 LE),
-   `get_cell` 4 bytes (formID LE), `is_moving` 1 byte, and the game stays
-   alive.
+4. **First re-verify the constants** (current table is GOG-only): dump the
+   unpacked image via `OP_DUMP_IMAGE` (0xFC), disassemble the raw dump with
+   `i686-w64-mingw32-objdump -b binary -m i386 -D`, find the real
+   `LookupFormByID` (884-call-site fn), then update
+   `hooks/mod.rs::fo3_17`. Only then test getters with a loaded save.
 
-## Constants to verify (the only unverified set left)
+## Constants to verify — GOG-verified only, WRONG for Steam
 
-All in `crates/ashfall-bridge/src/hooks/vtable.rs`. Verified sources are
-xFOSE headers + vaultmp-extended `vaultmp.cpp` — static source, never
-runtime-verified.
+All in `crates/ashfall-bridge/src/hooks/vtable.rs` / `mod.rs`. The values
+below were verified statically against the GOG 1.7.0.3 binary (xFOSE
+headers + vaultmp-extended + r2) — the in-process probe shows they do NOT
+hold in the Steam build (see [scripts/re/README.md](../scripts/re/README.md)).
+Re-derive from a dump of the Steam image before trusting any.
 
 | Constant | Value (FO3 1.7) | Source | Verify against |
 |----------|-----------------|--------|----------------|
@@ -82,7 +98,9 @@ Re-verification method options (in order of laziness):
 
 ## Safe command set (stub path — usable at any time)
 
-`OP_GET_DEAD` (0x19), `OP_GET_ACTOR_VALUE` (0x08), `OP_IS_MOVING` (0x1B,
-only via `get_actor_state` — NOT safe at menu). Everything else in
-`commands.rs` either stubs (returns zeros) or hits a vtable — check the
-`crate::hooks::` call in the dispatch arm before sending it.
+`OP_GET_DEAD` (0x19) is the only fully safe vtable-independent command.
+`OP_PROBE_CODE` (0xFD), `OP_PROBE_SAVES` (0xFE), `OP_DUMP_IMAGE` (0xFC) are
+debug-only and safe (reads, no execution). **Everything else in `commands.rs`
+either stubs (returns zeros) or hits a vtable call — check the
+`crate::hooks::` call in the dispatch arm before sending it. vtable-path
+commands crash the Steam build regardless of save state.**

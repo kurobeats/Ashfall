@@ -601,3 +601,121 @@ pub fn set_restrained(ref_id: u32, restrained: u8) {
     let _ = (ref_id, restrained);
     // TODO: Actor::SetRestrained() via GECK opcode
 }
+
+// ═══════════════════════════════════════════════════════════════
+// Save-dir probe (debug)
+// ═══════════════════════════════════════════════════════════════
+
+/// Temporary debug opcode: resolve the save dir the way the GAME does
+/// (SHGetFolderPath + ini SLocalSavePath) and count .fos files.
+/// Returns: <personal>\0<save_dir>\0<fos_count:4 LE><dir_exists:1>
+#[cfg(target_os = "windows")]
+pub fn probe_saves() -> Vec<u8> {
+    use windows_sys::Win32::Storage::FileSystem::{
+        FindClose, FindFirstFileA, FindNextFileA, WIN32_FIND_DATAA,
+    };
+    use windows_sys::Win32::UI::Shell::{SHGetFolderPathA, CSIDL_PERSONAL};
+
+    let mut out = Vec::new();
+    let mut personal = [0u8; 264];
+    let hr = unsafe { SHGetFolderPathA(0, CSIDL_PERSONAL as i32, 0, 0, personal.as_mut_ptr()) };
+    let personal_str = if hr == 0 {
+        let len = personal.iter().position(|&b| b == 0).unwrap_or(personal.len());
+        String::from_utf8_lossy(&personal[..len]).into_owned()
+    } else {
+        format!("SHGetFolderPath hr={hr:#x}")
+    };
+    out.extend_from_slice(personal_str.as_bytes());
+    out.push(0);
+
+    let save_dir = format!(r"{}\My Games\Fallout3\Saves", personal_str);
+    let pattern = format!(r"{}\*", save_dir);
+    let mut fd: WIN32_FIND_DATAA = unsafe { std::mem::zeroed() };
+    let pattern_c: Vec<u8> = pattern.bytes().chain(std::iter::once(0)).collect();
+    let handle = unsafe { FindFirstFileA(pattern_c.as_ptr(), &mut fd) };
+    let mut count = 0u32;
+    let mut exists = 0u8;
+    if handle != -1 {
+        exists = 1;
+        loop {
+            let name = &fd.cFileName;
+            let name_str = String::from_utf8_lossy(name);
+            if name_str.to_lowercase().ends_with(".fos") {
+                count += 1;
+            }
+            if unsafe { FindNextFileA(handle, &mut fd) } == 0 {
+                break;
+            }
+        }
+        unsafe { FindClose(handle) };
+    }
+    out.extend_from_slice(save_dir.as_bytes());
+    out.push(0);
+    out.extend_from_slice(&count.to_le_bytes());
+    out.push(exists);
+    out
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn probe_saves() -> Vec<u8> {
+    vec![]
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Image dump + code probe (debug — SteamStub unpacked image analysis)
+// ═══════════════════════════════════════════════════════════════
+
+/// Read `len` bytes at an absolute address in this process. No execution.
+#[cfg(target_os = "windows")]
+pub fn read_bytes(addr: usize, len: usize) -> Vec<u8> {
+    if addr == 0 || len == 0 || len > 64 {
+        return vec![];
+    }
+    let slice = unsafe { std::slice::from_raw_parts(addr as *const u8, len) };
+    slice.to_vec()
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn read_bytes(_addr: usize, _len: usize) -> Vec<u8> {
+    vec![]
+}
+
+/// Stream this process's unpacked image — via wine's `/proc/self/maps`
+/// (exposed as Z:\proc\self\maps), which needs no PE-header guessing and
+/// works even for SteamStub-packed images whose headers stay packed.
+/// Response: [PIPE_OP_RETURN_BIG][size:4][bytes] or [0x05][err:u32].
+#[cfg(target_os = "windows")]
+pub fn dump_image() -> Vec<u8> {
+    const BASE: usize = 0x0040_0000;
+    const CAP: usize = 0x1000_0000; // 256MB ceiling
+
+    let maps = std::fs::read_to_string(r"Z:\proc\self\maps").unwrap_or_default();
+    let mut range: Option<(usize, usize)> = None;
+    for line in maps.lines() {
+        let mut it = line.split_whitespace();
+        let Some(addr) = it.next() else { continue };
+        let Some((lo_s, hi_s)) = addr.split_once('-') else { continue };
+        let (Ok(lo), Ok(hi)) = (usize::from_str_radix(lo_s, 16), usize::from_str_radix(hi_s, 16)) else { continue };
+        let Some(perms) = it.next() else { continue };
+        // the mapping containing the image base, readable
+        if lo <= BASE && BASE < hi && perms.contains('r') {
+            range = Some((lo, hi));
+            break;
+        }
+    }
+    let Some((lo, hi)) = range else {
+        return vec![0x05, 1, 0, 0, 0]; // no image mapping found
+    };
+    let len = (hi - lo).min(CAP);
+    let src = unsafe { std::slice::from_raw_parts(lo as *const u8, len) };
+    let mut out = Vec::with_capacity(5 + len);
+    out.push(0x04); // PIPE_OP_RETURN_BIG
+    out.extend_from_slice(&(len as u32).to_le_bytes());
+    out.extend_from_slice(src);
+    out
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn dump_image() -> Vec<u8> {
+    vec![0x05]
+}

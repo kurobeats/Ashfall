@@ -56,6 +56,12 @@ pub mod opcodes {
     pub const OP_PLAY_GROUP: u32           = 0x0028;
     pub const OP_FORCE_WEATHER: u32        = 0x0029;
     pub const OP_SET_RESTRAINED: u32       = 0x002A;
+    /// Temporary debug: report what save dir the GAME process resolves.
+    pub const OP_PROBE_SAVES: u32          = 0x00FE;
+    /// Temporary debug: dump unpacked image (SteamStub analysis).
+    pub const OP_DUMP_IMAGE: u32           = 0x00FC;
+    /// Temporary debug: 16 bytes at each hardcoded engine address.
+    pub const OP_PROBE_CODE: u32           = 0x00FD;
 }
 
 /// Read a u32 from little-endian bytes at an offset within a slice.
@@ -428,6 +434,34 @@ pub fn execute(func: u32, params: &[u8]) -> Vec<u8> {
             let restrained = params[4];
             crate::hooks::set_restrained(ref_id, restrained);
             vec![1]
+        }
+
+        // ── Debug ──
+        OP_PROBE_SAVES => {
+            crate::hooks::probe_saves()
+        }
+        OP_DUMP_IMAGE => {
+            crate::hooks::dump_image()
+        }
+        OP_PROBE_CODE => {
+            const ADDRS: [usize; 10] = [
+                0x0045_5190, // fo3 LOOKUP_FORM_BY_ID
+                0x0051_7950, // fo3 EXTRACT_ARGS
+                0x0043_CDA0, // fo3 CREATE_FORM_INSTANCE
+                0x0062_B5D0, // fo3 CONSOLE_MANAGER_GET_SINGLETON
+                0x0040_1000, // fo3 FORM_HEAP_ALLOCATE
+                0x0040_1010, // fo3 FORM_HEAP_FREE
+                0x0106_CDCC, // fo3 DATA_HANDLER
+                0x0040_0000, // image base
+                0x0040_003C, // e_lfanew (PE header offset)
+                0x0040_0000, // dup, sanity
+            ];
+            let mut out = Vec::new();
+            for a in ADDRS {
+                out.extend_from_slice(&(a as u32).to_le_bytes());
+                out.extend_from_slice(&crate::hooks::read_bytes(a, 16));
+            }
+            out
         }
 
         // ── Unknown ──
