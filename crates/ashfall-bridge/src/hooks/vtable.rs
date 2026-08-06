@@ -174,12 +174,21 @@ const VTBL_ACTOR_ANIM_DATA: usize = vtable_index(0x01E4);   // index 121 (x86, v
 // ═══════════════════════════════════════════════════════════════
 
 const OFFSET_REF_ID: usize = 0x0C;
-const OFFSET_ANGLE_X: usize = 0x20; // radians
-const OFFSET_ANGLE_Y: usize = 0x24; // radians
-const OFFSET_ANGLE_Z: usize = 0x28; // radians
-const OFFSET_POS_X: usize = 0x2C;
-const OFFSET_POS_Y: usize = 0x30;
-const OFFSET_POS_Z: usize = 0x34;
+
+// Field offsets verified against xFOSE GameObjects.h (FO3 1.7) and
+// xNVSE GameObjects.h (FNV 1.4), both STATIC_ASSERT-anchored.
+//   FO3: rot 0x20/0x24/0x28, pos 0x2C/0x30/0x34, parentCell 0x3C
+//   FNV: rot 0x24/0x28/0x2C, pos 0x30/0x34/0x38, parentCell 0x40
+fn pos_offset(index: usize) -> usize {
+    if crate::hooks::is_fnv() { 0x30 + index * 4 } else { 0x2C + index * 4 }
+}
+fn angle_offset(index: usize) -> usize {
+    if crate::hooks::is_fnv() { 0x24 + index * 4 } else { 0x20 + index * 4 }
+}
+/// `TESObjectREFR::parentCell` — FO3 0x3C / FNV 0x40.
+fn parent_cell_offset() -> usize {
+    if crate::hooks::is_fnv() { 0x40 } else { 0x3C }
+}
 
 // Anim data struct offsets (from vaultmp.cpp GetActorState: VTable+0x01E4 → struct)
 const OFFSET_ANIM_MOVING: usize = 0x4E;
@@ -202,9 +211,9 @@ pub unsafe fn get_pos(ref_id: u32) -> [f32; 3] {
     // On x86: GetPos([f32;3]* out) — tricky calling convention.
     // ponytail: read raw field offsets directly — same memory, faster.
     // Vaultmp does the same (vaultmp.cpp GetPosAngle reads +0x2C/+0x30/+0x34).
-    let x = read_field::<f32>(obj, OFFSET_POS_X);
-    let y = read_field::<f32>(obj, OFFSET_POS_Y);
-    let z = read_field::<f32>(obj, OFFSET_POS_Z);
+    let x = read_field::<f32>(obj, pos_offset(0));
+    let y = read_field::<f32>(obj, pos_offset(1));
+    let z = read_field::<f32>(obj, pos_offset(2));
     [x, y, z]
 }
 
@@ -216,9 +225,9 @@ pub unsafe fn get_angle(ref_id: u32) -> [f32; 3] {
         return [0.0, 0.0, 0.0];
     }
 
-    let ax = read_field::<f32>(obj, OFFSET_ANGLE_X);
-    let ay = read_field::<f32>(obj, OFFSET_ANGLE_Y);
-    let az = read_field::<f32>(obj, OFFSET_ANGLE_Z);
+    let ax = read_field::<f32>(obj, angle_offset(0));
+    let ay = read_field::<f32>(obj, angle_offset(1));
+    let az = read_field::<f32>(obj, angle_offset(2));
 
     // vaultmp.cpp: data[n] * 180 / M_PI
     use std::f32::consts::PI;
@@ -321,9 +330,9 @@ pub unsafe fn set_pos(ref_id: u32, pos: [f32; 3]) {
     }
 
     // Fallback: raw field write (vaultmp.cpp approach via SETPOS engine function)
-    write_field(obj, OFFSET_POS_X, pos[0]);
-    write_field(obj, OFFSET_POS_Y, pos[1]);
-    write_field(obj, OFFSET_POS_Z, pos[2]);
+    write_field(obj, pos_offset(0), pos[0]);
+    write_field(obj, pos_offset(1), pos[1]);
+    write_field(obj, pos_offset(2), pos[2]);
 }
 
 /// Set angle (accept degrees, convert to radians for engine).
@@ -334,9 +343,9 @@ pub unsafe fn set_angle(ref_id: u32, angle: [f32; 3]) {
     }
 
     use std::f32::consts::PI;
-    write_field(obj, OFFSET_ANGLE_X, angle[0] * PI / 180.0);
-    write_field(obj, OFFSET_ANGLE_Y, angle[1] * PI / 180.0);
-    write_field(obj, OFFSET_ANGLE_Z, angle[2] * PI / 180.0);
+    write_field(obj, angle_offset(0), angle[0] * PI / 180.0);
+    write_field(obj, angle_offset(1), angle[1] * PI / 180.0);
+    write_field(obj, angle_offset(2), angle[2] * PI / 180.0);
 }
 
 /// Set actor value by index.
@@ -353,7 +362,7 @@ pub unsafe fn set_actor_value(ref_id: u32, index: u8, value: f32) {
 }
 
 /// Read cell of a reference.
-/// Path: `TESObjectREFR+0x3C` → `TESObjectCELL*`, then `TESForm::refID` at +0x14.
+/// Path: `TESObjectREFR::parentCell` (FO3 +0x3C / FNV +0x40) → `TESObjectCELL*`, then `TESForm::refID` at +0x0C.
 pub unsafe fn get_cell(ref_id: u32) -> u32 {
     get_cell_from_obj(lookup_form_by_id(ref_id))
 }
@@ -363,12 +372,13 @@ pub unsafe fn get_cell_from_obj(obj: *mut u8) -> u32 {
     if obj.is_null() {
         return 0;
     }
-    let cell_ptr = read_field::<usize>(obj, 0x3C);
+    let cell_ptr = read_field::<usize>(obj, parent_cell_offset());
     if cell_ptr == 0 {
         return 0;
     }
-    // TESForm::refID is the first u32 of any TESForm-derived object
-    read_field::<u32>(cell_ptr as *mut u8, 0x14)
+    // TESForm::refID lives at +0x0C (xFOSE GameForms.h, STATIC_ASSERT
+    // offsetof(TESForm, refID) == 0x00C).
+    read_field::<u32>(cell_ptr as *mut u8, OFFSET_REF_ID)
 }
 
 /// Read base FormID (TESObjectREFR::GetBaseForm → TESForm::GetFormID).
@@ -425,7 +435,7 @@ pub unsafe fn get_lock_from_obj(obj: *mut u8) -> u32 {
     vcall_0(obj, VTBL_REF_GET_LOCKED)
 }
 
-/// Parent cell offset: `TESObjectREFR+0x28` (FO3) / `+0x2C` (FNV).
+/// Parent cell: `TESObjectREFR::parentCell` — FO3 +0x3C / FNV +0x40.
 /// Returns the parent cell FormID (or 0 when the engine hasn't set it).
 pub unsafe fn get_parent_cell(ref_id: u32) -> u32 {
     get_parent_cell_from_obj(lookup_form_by_id(ref_id))
@@ -436,7 +446,7 @@ pub unsafe fn get_parent_cell_from_obj(obj: *mut u8) -> u32 {
     if obj.is_null() {
         return 0;
     }
-    let offset: usize = if crate::hooks::is_fnv() { 0x2C } else { 0x28 };
+    let offset = parent_cell_offset();
     read_field::<u32>(obj, offset)
 }
 
@@ -539,13 +549,13 @@ mod tests {
         let ptr = buf.as_mut_ptr();
         unsafe {
             // Write pos at known offsets
-            write_field::<f32>(ptr, OFFSET_POS_X, 1.0f32);
-            write_field::<f32>(ptr, OFFSET_POS_Y, 2.0f32);
-            write_field::<f32>(ptr, OFFSET_POS_Z, 3.0f32);
+            write_field::<f32>(ptr, pos_offset(0), 1.0f32);
+            write_field::<f32>(ptr, pos_offset(1), 2.0f32);
+            write_field::<f32>(ptr, pos_offset(2), 3.0f32);
 
-            let x: f32 = read_field(ptr, OFFSET_POS_X);
-            let y: f32 = read_field(ptr, OFFSET_POS_Y);
-            let z: f32 = read_field(ptr, OFFSET_POS_Z);
+            let x: f32 = read_field(ptr, pos_offset(0));
+            let y: f32 = read_field(ptr, pos_offset(1));
+            let z: f32 = read_field(ptr, pos_offset(2));
             assert_eq!((x, y, z), (1.0, 2.0, 3.0));
         }
     }
@@ -556,13 +566,13 @@ mod tests {
         let ptr = buf.as_mut_ptr();
         unsafe {
             // Write angles in radians
-            write_field::<f32>(ptr, OFFSET_ANGLE_X, std::f32::consts::PI); // 180°
-            write_field::<f32>(ptr, OFFSET_ANGLE_Y, std::f32::consts::FRAC_PI_2); // 90°
-            write_field::<f32>(ptr, OFFSET_ANGLE_Z, 0.0);
+            write_field::<f32>(ptr, angle_offset(0), std::f32::consts::PI); // 180°
+            write_field::<f32>(ptr, angle_offset(1), std::f32::consts::FRAC_PI_2); // 90°
+            write_field::<f32>(ptr, angle_offset(2), 0.0);
 
-            let ax: f32 = read_field(ptr, OFFSET_ANGLE_X);
-            let ay: f32 = read_field(ptr, OFFSET_ANGLE_Y);
-            let az: f32 = read_field(ptr, OFFSET_ANGLE_Z);
+            let ax: f32 = read_field(ptr, angle_offset(0));
+            let ay: f32 = read_field(ptr, angle_offset(1));
+            let az: f32 = read_field(ptr, angle_offset(2));
 
             // Convert to degrees (vaultmp convention)
             let dx = ax * 180.0 / std::f32::consts::PI;
@@ -660,18 +670,18 @@ mod tests {
     #[test]
     fn test_get_cell_from_obj() {
         unsafe {
-            // Fake cell object with refID at TESForm offset 0x14
+            // Fake cell object with refID at TESForm offset 0x0C (xFOSE-verified)
             let mut cell = vec![0u8; 32];
-            write_field::<u32>(cell.as_mut_ptr(), 0x14, 0xCAFE);
+            write_field::<u32>(cell.as_mut_ptr(), 0x0C, 0xCAFE);
 
             let mut obj = vec![0u8; 128];
-            write_field::<usize>(obj.as_mut_ptr(), 0x3C, cell.as_ptr() as usize);
+            write_field::<usize>(obj.as_mut_ptr(), parent_cell_offset(), cell.as_ptr() as usize);
 
             assert_eq!(get_cell_from_obj(obj.as_mut_ptr()), 0xCAFE);
 
             // Null cell pointer → 0
             let mut obj2 = vec![0u8; 128];
-            write_field::<usize>(obj2.as_mut_ptr(), 0x3C, 0);
+            write_field::<usize>(obj2.as_mut_ptr(), parent_cell_offset(), 0);
             assert_eq!(get_cell_from_obj(obj2.as_mut_ptr()), 0);
         }
     }
@@ -705,9 +715,15 @@ mod tests {
     #[test]
     fn test_get_parent_cell_from_obj_fo3_offset() {
         unsafe {
+            // FO3 path (default engine state): parentCell at +0x3C (xFOSE-verified)
             let mut obj = vec![0u8; 128];
-            write_field::<u32>(obj.as_mut_ptr(), 0x28, 0x1234); // FO3 path (default engine state)
+            write_field::<u32>(obj.as_mut_ptr(), 0x3C, 0x1234);
             assert_eq!(get_parent_cell_from_obj(obj.as_mut_ptr()), 0x1234);
+
+            // rotZ at +0x28 must NOT be interpreted as the parent cell
+            let mut obj2 = vec![0u8; 128];
+            write_field::<u32>(obj2.as_mut_ptr(), 0x28, 0xDEADBEEF);
+            assert_eq!(get_parent_cell_from_obj(obj2.as_mut_ptr()), 0, "0x28 is rotZ, not a cell");
         }
     }
 

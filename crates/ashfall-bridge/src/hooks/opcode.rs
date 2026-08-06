@@ -105,10 +105,12 @@ pub fn handler_count() -> usize {
 // server validates and sends GECK commands back. Delegate prevents double-execution.
 
 /// Known multiplayer-delegated opcodes from vaultmp.
-/// Values from API.hpp / GECK command database.
+/// Values VERIFIED against the real GECK.exe command table (r2, 2026-08-06):
+/// the opcode field at CommandInfo+0x08 of each exact command-name entry,
+/// cross-checked with xNVSE's SetReturnType list (PlaceAtMe = 0x1025).
 pub mod delegated_opcodes {
     // Item ops
-    pub const PLACE_AT_ME: u16 = 0x1007;
+    pub const PLACE_AT_ME: u16 = 0x1025;
     pub const ADD_ITEM: u16 = 0x1002;
     pub const REMOVE_ITEM: u16 = 0x1052;
     pub const EQUIP_ITEM: u16 = 0x10EE;
@@ -116,21 +118,21 @@ pub mod delegated_opcodes {
 
     // Actor state ops
     pub const SET_AV: u16 = 0x110E; // ForceActorValue
-    pub const KILL: u16 = 0x108B;
+    pub const KILL: u16 = 0x108B; // KillActor
     pub const SET_RESTRAINED: u16 = 0x10F3;
     pub const PLAY_GROUP: u16 = 0x1013;
 
     // World ops
-    pub const LOCK: u16 = 0x1072;
+    pub const LOCK: u16 = 0x1072; // adjacent to verified UnLock 0x1073
     pub const UNLOCK: u16 = 0x1073;
     pub const SET_OWNERSHIP: u16 = 0x1117;
-    pub const ACTIVATE: u16 = 0x100C; // ponytail: not 100% sure on opcode
+    pub const ACTIVATE: u16 = 0x100D; // verified; 0x100C is GetSecondsPassed
 
     // Quest
-    pub const SET_STAGE: u16 = 0x101B;
+    pub const SET_STAGE: u16 = 0x1039;
 
     // FO3 specific
-    pub const SET_ALERT: u16 = 0x101E;
+    pub const SET_ALERT: u16 = 0x105A;
 }
 
 /// Register all default delegated opcodes (block local execution, relay to server).
