@@ -5,113 +5,164 @@ use ashfall_core::math::is_valid_angle3;
 use ashfall_core::protocol::Packet;
 use crate::anti_cheat::AntiCheat;
 use crate::session::Session;
-use crate::world::objects::{Container, Object};
+use crate::world::objects::{Actor, Container, Object, Player};
 use crate::world::registry::ObjectRegistry;
 use std::sync::Arc;
 use std::time::Duration;
 
+/// A client may only mutate entities it owns — its own player object.
+fn owned(session: &Session, id: NetworkID) -> bool {
+    session.player_id == Some(id)
+}
+
+/// Read the position of any position-bearing entity (Object, Actor, Player).
+fn read_pos(registry: &Arc<ObjectRegistry>, id: NetworkID) -> Option<[f32; 3]> {
+    let arc = registry.get(id)?;
+    let guard = arc.read();
+    if let Some(obj) = guard.as_any().downcast_ref::<Object>() {
+        return Some(obj.net_pos);
+    }
+    if let Some(actor) = guard.as_any().downcast_ref::<Actor>() {
+        return Some(actor.container.object.net_pos);
+    }
+    if let Some(player) = guard.as_any().downcast_ref::<Player>() {
+        return Some(player.actor.container.object.net_pos);
+    }
+    None
+}
+
+/// Apply a closure to the position-bearing container of an entity.
+fn with_entity_mut(
+    registry: &Arc<ObjectRegistry>,
+    id: NetworkID,
+    f: impl FnOnce(&mut Object),
+) -> bool {
+    let Some(arc) = registry.get(id) else { return false };
+    let mut guard = arc.write();
+    if let Some(obj) = guard.as_any_mut().downcast_mut::<Object>() {
+        f(obj);
+        return true;
+    }
+    if let Some(actor) = guard.as_any_mut().downcast_mut::<Actor>() {
+        f(&mut actor.container.object);
+        return true;
+    }
+    if let Some(player) = guard.as_any_mut().downcast_mut::<Player>() {
+        f(&mut player.actor.container.object);
+        return true;
+    }
+    false
+}
+
 /// Handle UpdatePos — validate and update position.
+/// Ownership: only the session's own player may be moved via client packets;
+/// world/NPC objects are server-authoritative (scripts, bridge commands).
 pub fn handle_update_pos(
     registry: &Arc<ObjectRegistry>,
     session: &Session,
     id: NetworkID,
     pos: [f32; 3],
 ) -> Option<Packet> {
-    if let Some(arc) = registry.get(id) {
-        let guard = arc.read();
-        if let Some(obj) = guard.as_any().downcast_ref::<Object>() {
-            let prev = obj.net_pos;
-            let delta = session.last_recv.elapsed().min(Duration::from_secs(1));
-            drop(guard);
-
-            // Anti-cheat: validate position with speed + teleport check
-            if !AntiCheat::validate_position(pos, Some(prev), delta) {
-                tracing::warn!("AntiCheat: position rejected from {}", session.player_name);
-                return None;
-            }
-
-            let mut guard = arc.write();
-            if let Some(obj) = guard.as_any_mut().downcast_mut::<Object>() {
-                obj.net_pos = pos;
-                obj.game_pos = pos;
-            }
-        }
+    if !owned(session, id) {
+        tracing::warn!("Rejected UpdatePos for {id} from {} (not owner)", session.player_name);
+        return None;
     }
+    let Some(prev) = read_pos(registry, id) else { return None };
+    let delta = session.last_recv.elapsed().min(Duration::from_secs(1));
+
+    // Anti-cheat: validate position with speed + teleport check
+    if !AntiCheat::validate_position(pos, Some(prev), delta) {
+        tracing::warn!("AntiCheat: position rejected from {}", session.player_name);
+        return None;
+    }
+
+    with_entity_mut(registry, id, |obj| {
+        obj.net_pos = pos;
+        obj.game_pos = pos;
+    });
 
     Some(Packet::UpdatePos { id, pos })
 }
 
 /// Handle UpdateAngle.
+/// Ownership: same rule as position — own player only.
 pub fn handle_update_angle(
     registry: &Arc<ObjectRegistry>,
+    session: &Session,
     id: NetworkID,
     angle: [f32; 2],
 ) -> Option<Packet> {
+    if !owned(session, id) {
+        return None;
+    }
     let angle3 = [angle[0], 0.0, angle[1]];
     if !is_valid_angle3(angle3) {
         return None;
     }
-
-    if let Some(arc) = registry.get(id) {
-        let mut guard = arc.write();
-        if let Some(obj) = guard.as_any_mut().downcast_mut::<Object>() {
-            obj.angle = angle3;
-        }
-    }
+    with_entity_mut(registry, id, |obj| {
+        obj.angle = angle3;
+    });
 
     Some(Packet::UpdateAngle { id, angle })
 }
 
 /// Handle UpdateCell — move object between cells.
+/// Handle UpdateCell — move object between cells.
+/// Ownership: own player only (cell changes are server-authoritative for
+/// world/NPC objects).
 pub fn handle_update_cell(
     registry: &Arc<ObjectRegistry>,
+    session: &Session,
     id: NetworkID,
     cell: u32,
     pos: [f32; 3],
 ) -> Option<Packet> {
-    if let Some(arc) = registry.get(id) {
-        let mut guard = arc.write();
-        if let Some(obj) = guard.as_any_mut().downcast_mut::<Object>() {
-            obj.cell = cell;
-            obj.net_pos = pos;
-        }
-        registry.add_to_cell(cell, id);
+    if !owned(session, id) {
+        return None;
     }
+    with_entity_mut(registry, id, |obj| {
+        obj.cell = cell;
+        obj.net_pos = pos;
+    });
+    registry.add_to_cell(cell, id);
 
     Some(Packet::UpdateCell { id, cell, pos })
 }
 
 /// Handle UpdateName.
+/// Ownership: only the session's own player may be renamed by the client.
 pub fn handle_update_name(
     registry: &Arc<ObjectRegistry>,
+    session: &Session,
     id: NetworkID,
     name: String,
 ) -> Option<Packet> {
-    if let Some(arc) = registry.get(id) {
-        let mut guard = arc.write();
-        if let Some(obj) = guard.as_any_mut().downcast_mut::<Object>() {
-            obj.name = name.clone();
-        }
+    if !owned(session, id) {
+        return None;
     }
+    with_entity_mut(registry, id, |obj| {
+        obj.name = name.clone();
+    });
     Some(Packet::UpdateName { id, name })
 }
 
 /// Handle UpdateScale.
 pub fn handle_update_scale(
     registry: &Arc<ObjectRegistry>,
+    session: &Session,
     id: NetworkID,
     scale: f32,
 ) -> Option<Packet> {
+    if !owned(session, id) {
+        return None;
+    }
     if !AntiCheat::validate_scale(scale) {
         tracing::warn!("AntiCheat: scale rejected — {scale}");
         return None;
     }
-    if let Some(arc) = registry.get(id) {
-        let mut guard = arc.write();
-        if let Some(obj) = guard.as_any_mut().downcast_mut::<Object>() {
-            obj.scale = scale;
-        }
-    }
+    with_entity_mut(registry, id, |obj| {
+        obj.scale = scale;
+    });
     Some(Packet::UpdateScale { id, scale })
 }
 

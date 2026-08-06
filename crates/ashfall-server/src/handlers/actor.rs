@@ -2,7 +2,7 @@
 
 use ashfall_core::id::NetworkID;
 use ashfall_core::protocol::Packet;
-use crate::world::objects::Actor;
+use crate::world::objects::{Actor, Player};
 use crate::world::registry::ObjectRegistry;
 use std::sync::Arc;
 
@@ -32,7 +32,15 @@ pub fn handle_actor_new(registry: &Arc<ObjectRegistry>, packet: &Packet) -> Opti
 }
 
 /// Handle UpdateActorState.
-pub fn handle_actor_state(registry: &Arc<ObjectRegistry>, id: NetworkID, idle: u32, moving: u8, moving_xy: u8, weapon: u8, alerted: bool, sneaking: bool, firing: bool) -> Option<Packet> {
+/// Ownership: only the session's own actor may be mutated via client packets.
+fn owned(session: &crate::session::Session, id: NetworkID) -> bool {
+    session.player_id == Some(id)
+}
+
+pub fn handle_actor_state(registry: &Arc<ObjectRegistry>, session: &crate::session::Session, id: NetworkID, idle: u32, moving: u8, moving_xy: u8, weapon: u8, alerted: bool, sneaking: bool, firing: bool) -> Option<Packet> {
+    if !owned(session, id) {
+        return None;
+    }
     if let Some(arc) = registry.get(id) {
         let mut guard = arc.write();
         if let Some(actor) = guard.as_any_mut().downcast_mut::<Actor>() {
@@ -42,36 +50,58 @@ pub fn handle_actor_state(registry: &Arc<ObjectRegistry>, id: NetworkID, idle: u
             actor.weapon_anim = weapon;
             actor.alerted = alerted;
             actor.sneaking = sneaking;
+        } else if let Some(player) = guard.as_any_mut().downcast_mut::<Player>() {
+            player.actor.idle_anim = idle;
+            player.actor.moving_anim = moving;
+            player.actor.moving_xy = moving_xy;
+            player.actor.weapon_anim = weapon;
+            player.actor.alerted = alerted;
+            player.actor.sneaking = sneaking;
         }
     }
     Some(Packet::UpdateActorState { id, idle, moving, moving_xy, weapon, alerted, sneaking, firing })
 }
 
 /// Handle UpdateActorValue.
-pub fn handle_actor_value(registry: &Arc<ObjectRegistry>, id: NetworkID, base: bool, index: u8, value: f32) -> Option<Packet> {
+pub fn handle_actor_value(registry: &Arc<ObjectRegistry>, session: &crate::session::Session, id: NetworkID, base: bool, index: u8, value: f32) -> Option<Packet> {
+    if !owned(session, id) {
+        return None;
+    }
     if let Some(arc) = registry.get(id) {
         let mut guard = arc.write();
         if let Some(actor) = guard.as_any_mut().downcast_mut::<Actor>() {
             actor.set_value(index, value, base);
+        } else if let Some(player) = guard.as_any_mut().downcast_mut::<Player>() {
+            player.actor.set_value(index, value, base);
         }
     }
     Some(Packet::UpdateActorValue { id, base, index, value })
 }
 
 /// Handle UpdateActorDead — mark actor as dead.
-pub fn handle_actor_dead(registry: &Arc<ObjectRegistry>, id: NetworkID, dead: bool, limbs: u16, cause: i8) -> Option<Packet> {
+pub fn handle_actor_dead(registry: &Arc<ObjectRegistry>, session: &crate::session::Session, id: NetworkID, dead: bool, limbs: u16, cause: i8) -> Option<Packet> {
+    if !owned(session, id) {
+        return None;
+    }
     if let Some(arc) = registry.get(id) {
         let mut guard = arc.write();
         if let Some(actor) = guard.as_any_mut().downcast_mut::<Actor>() {
             actor.dead = dead;
             actor.death_limbs = limbs;
             actor.death_cause = cause;
+        } else if let Some(player) = guard.as_any_mut().downcast_mut::<Player>() {
+            player.actor.dead = dead;
+            player.actor.death_limbs = limbs;
+            player.actor.death_cause = cause;
         }
     }
     Some(Packet::UpdateActorDead { id, dead, limbs, cause })
 }
 
 /// Handle UpdateFireWeapon.
-pub fn handle_fire_weapon(_registry: &Arc<ObjectRegistry>, id: NetworkID, weapon: u32) -> Option<Packet> {
+pub fn handle_fire_weapon(_registry: &Arc<ObjectRegistry>, session: &crate::session::Session, id: NetworkID, weapon: u32) -> Option<Packet> {
+    if !owned(session, id) {
+        return None;
+    }
     Some(Packet::UpdateFireWeapon { id, weapon })
 }

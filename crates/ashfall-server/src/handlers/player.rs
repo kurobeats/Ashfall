@@ -36,10 +36,15 @@ pub fn handle_player_new(
 /// Handle UpdateControl — player control binding change.
 pub fn handle_update_control(
     registry: &Arc<ObjectRegistry>,
+    session: &Session,
     id: NetworkID,
     control: u8,
     key: u8,
 ) -> Option<Packet> {
+    // Only the session's own player may set its controls.
+    if session.player_id != Some(id) {
+        return None;
+    }
     if let Some(arc) = registry.get(id) {
         let mut guard = arc.write();
         if let Some(player) = guard.as_any_mut().downcast_mut::<Player>() {
@@ -57,6 +62,10 @@ pub fn handle_update_context(
     cells: [u32; 9],
     spawn: bool,
 ) -> Vec<Packet> {
+    // Only the session's own player may move its cell context.
+    if session.player_id != Some(id) {
+        return Vec::new();
+    }
     let old_ctx = CellContext { cells: session.cell_context };
     let new_ctx = CellContext { cells };
 

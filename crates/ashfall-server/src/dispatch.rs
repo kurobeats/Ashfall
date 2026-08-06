@@ -92,25 +92,25 @@ impl Dispatcher {
                 }
             }
             Packet::UpdateAngle { id, angle } => {
-                match object::handle_update_angle(&self.registry, id, angle) {
+                match object::handle_update_angle(&self.registry, session, id, angle) {
                     Some(pkt) => DispatchResult::new().broadcast(pkt),
                     None => DispatchResult::new(),
                 }
             }
             Packet::UpdateScale { id, scale } => {
-                match object::handle_update_scale(&self.registry, id, scale) {
+                match object::handle_update_scale(&self.registry, session, id, scale) {
                     Some(pkt) => DispatchResult::new().broadcast(pkt),
                     None => DispatchResult::new(),
                 }
             }
             Packet::UpdateCell { id, cell, pos } => {
-                match object::handle_update_cell(&self.registry, id, cell, pos) {
+                match object::handle_update_cell(&self.registry, session, id, cell, pos) {
                     Some(pkt) => DispatchResult::new().broadcast(pkt),
                     None => DispatchResult::new(),
                 }
             }
             Packet::UpdateName { id, name } => {
-                match object::handle_update_name(&self.registry, id, name) {
+                match object::handle_update_name(&self.registry, session, id, name) {
                     Some(pkt) => DispatchResult::new().broadcast(pkt),
                     None => DispatchResult::new(),
                 }
@@ -164,25 +164,25 @@ impl Dispatcher {
                 }
             }
             Packet::UpdateActorDead { id, dead, limbs, cause } => {
-                match actor::handle_actor_dead(&self.registry, id, dead, limbs, cause) {
+                match actor::handle_actor_dead(&self.registry, session, id, dead, limbs, cause) {
                     Some(pkt) => DispatchResult::new().broadcast(pkt),
                     None => DispatchResult::new(),
                 }
             }
             Packet::UpdateActorState { id, idle, moving, moving_xy, weapon, alerted, sneaking, firing } => {
-                match actor::handle_actor_state(&self.registry, id, idle, moving, moving_xy, weapon, alerted, sneaking, firing) {
+                match actor::handle_actor_state(&self.registry, session, id, idle, moving, moving_xy, weapon, alerted, sneaking, firing) {
                     Some(pkt) => DispatchResult::new().broadcast(pkt),
                     None => DispatchResult::new(),
                 }
             }
             Packet::UpdateActorValue { id, base, index, value } => {
-                match actor::handle_actor_value(&self.registry, id, base, index, value) {
+                match actor::handle_actor_value(&self.registry, session, id, base, index, value) {
                     Some(pkt) => DispatchResult::new().broadcast(pkt),
                     None => DispatchResult::new(),
                 }
             }
             Packet::UpdateFireWeapon { id, weapon } => {
-                match actor::handle_fire_weapon(&self.registry, id, weapon) {
+                match actor::handle_fire_weapon(&self.registry, session, id, weapon) {
                     Some(pkt) => DispatchResult::new().broadcast(pkt),
                     None => DispatchResult::new(),
                 }
@@ -231,7 +231,7 @@ impl Dispatcher {
 
             // ═══ Player ═══
             Packet::UpdateControl { id, control, key } => {
-                match player::handle_update_control(&self.registry, id, control, key) {
+                match player::handle_update_control(&self.registry, session, id, control, key) {
                     Some(pkt) => DispatchResult::new().broadcast(pkt),
                     None => DispatchResult::new(),
                 }
