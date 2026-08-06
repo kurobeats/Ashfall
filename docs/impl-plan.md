@@ -131,7 +131,12 @@ PRs within a phase often parallelizable unless noted.
   ScriptEffect::BroadcastPacket; ButtonNew/TextNew protocol variants added
 - 16 WAT runtime tests total
 
-**Phase 5 total: ~2,300 LOC (336 workspace tests)** ✅
+**Phase 5 total: ~2,300 LOC (362 workspace tests)** ✅
+- All 35 callbacks dispatched (hit gate, equip, activate, item count/condition/
+  equipped, cell change, window select/text/mode, dialogue, lock, actor
+  sub-events) — WASM bool/u32 args are i32; typed notify helpers
+- Real Rust-compiled freeroam WASM game mode builds and runs end-to-end
+  (rustup wasm32 target; SDK macros emit #[link(wasm_import_module = "env")])
 
 ---
 
@@ -272,11 +277,11 @@ PRs within a phase often parallelizable unless noted.
 | Phase 2: Server Foundation | 18–29 | ~2,030 | ✅ DONE. Config, UDP + reliability, sessions, registry, dispatch, combat resolver, AI, physics |
 | Phase 3: World Sync | 30–39 | ~1,690 | ✅ DONE. Cell grid, position/angle/actor/item sync, combat, projectile, NPC AI, cell snapshot |
 | Phase 4: Persistence | 40–47 | ~800 | ✅ DONE. 17 SQLite tables, CRUD, startup load, quest/karma/reputation/hardcore/factions |
-| Phase 5: Scripting | 48–59 | ~2,300 | ✅ DONE. wasmtime v22, 35 callbacks, all 51 host fns real (world/quest/chat/items/combat/GUI/meta), timers, effects queue, WAT runtime tests, e2e suite |
+| Phase 5: Scripting | 48–59 | ~2,300 | ✅ DONE. wasmtime v22, all 35 callbacks dispatched, all 51 host fns real, real WASM game mode builds + runs e2e, timers, effects queue |
 | Phase 6: GUI | 60–67 | ~1,120 | ✅ DONE. eframe/egui app, server browser, chat overlay, widget manager |
 | Phase 7: Client | 68–80 | ~1,770 | ✅ DONE. UDP networking, connection flow, object cache, handlers, 30Hz poll loop |
 | Phase 8: Master Server | 81–87 | 420 | ✅ DONE. Announce/query/cull, server heartbeat, client query, 6 integration tests |
-| Phase 9: Security + Testing | 88–97 | ~1,610 | ✅ DONE. AntiCheat validator, 48 tests (AC, combat, stress, world_sync). Handler ownership enforcement (own-player-only mutation, 14 tests) |
+| Phase 9: Security + Testing | 88–97 | ~1,610 | ✅ DONE. AntiCheat validator + handler ownership (own-player + own-inventory-only mutation) + item container-chain authz |
 | Phase 10: Proton Bridge | 98–107 | ~2,360 | ✅ DONE. 36 commands, memory/VTable/detour/opcode hooks, 11 default opcode interceptors (all 15 opcodes two-tool verified — 4 corrected), real VTable getters (2 field offsets corrected), FOSE/NVSE ABI corrected, i686 cross-build + wine protocol round-trip, 96 tests |
 | **Total** | **~102** | **~18,430** | |
 
@@ -290,7 +295,7 @@ PRs within a phase often parallelizable unless noted.
 | P3 ESM import | #27–30 | `ashfall-server --import-esm` native TES4 parser → all 17 tables |
 | P4 cleanup | #31–34 | Opcode range docs, import-pipeline tests, dead-code annotations, zero-warning build |
 
-**318 tests, 0 warnings** (lib + test targets). See `docs/external-ingestion-plan.md` for per-item status.
+**362 tests, 0 warnings** (lib + test targets). See `docs/external-ingestion-plan.md` for per-item status.
 
 P3+P4 can run in parallel (both depend on P2). P6+P7 can run in parallel after P5+P7 foundation ready. P10 can start after P7 IPC module (PR79).
 

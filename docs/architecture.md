@@ -1207,9 +1207,9 @@ ponytail: skip initial; simple full state per update. Add delta compression when
 
 Client interpolates between last two known positions for remote objects. Linear lerp over tick interval. No extrapolation — if update missed, hold last position.
 
-> ⚠️ Status (2026-08-06): `interpolate_position` in `world/state.rs` is defined
-> but NOT yet wired into the render loop — the client displays last-received
-> positions directly. Wiring is on the roadmap.
+> Status (2026-08-06): interpolation is wired — `interpolated_pos()` blends
+> between the last two received updates (100ms window) and the connected panel
+> lists remote objects with interpolated positions.
 
 ```rust
 fn interpolate_position(last: [f32; 3], current: [f32; 3], t: f32) -> [f32; 3] {

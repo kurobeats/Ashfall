@@ -3,7 +3,7 @@
 **Rust multiplayer mod for Fallout 3 / Fallout: New Vegas.** Server-authoritative dedicated server with WASM scripting, UDP networking, SQLite persistence, and an egui client browser. Started as a recreation of [vaultmp-extended](https://github.com/massdivide/vaultmp-extended), got bigger, fast.
 
 [![Status](https://img.shields.io/badge/phases-1%E2%80%9310%20complete-brightgreen)](#status)
-[![Tests](https://img.shields.io/badge/tests-336%20passed-brightgreen)](https://github.com/YOUR_ORG/ashfall/actions)
+[![Tests](https://img.shields.io/badge/tests-362%20passed-brightgreen)](https://github.com/YOUR_ORG/ashfall/actions)
 [![License](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
 [![Work in Progress](https://img.shields.io/badge/status-work%20in%20progress-orange)](#whats-left)
 
@@ -36,7 +36,7 @@ Client connects to `127.0.0.1:1770`. Stub mode sends canned data — enough to v
 
 ## Status
 
-**Phases 1–10 complete. 336 tests, 0 failures. Zero-warning build** (lib + test targets).
+**Phases 1–10 complete. 362 tests, 0 failures. Zero-warning build** (lib + test targets).
 
 | Phase | What's built |
 |-------|-------------|
@@ -44,20 +44,20 @@ Client connects to `127.0.0.1:1770`. Stub mode sends canned data — enough to v
 | 2. Server | UDP networking with a real reliability layer — ACK/NACK control frames, Jacobson/Karels RTO with exponential-backoff retransmission, 32-packet send window, per-channel priority queues (System > Game > Chat), per-address token-bucket rate limiting, varint sequence framing. Session state machine. Object registry. Packet dispatch routing all 140+ variants. Verified by real-UDP loss simulation (50/50 packets in order under 25% loss). |
 | 3. Sync | 9-cell visibility grid with enter/leave diff. Position, angle, velocity, actor state, item, container sync. Combat resolution (Fallout damage formula). NPC AI packages + faction hostility. |
 | 4. Persistence | SQLite — 17 tables. Records, weapons, NPCs, quest stages, dialogue flags, karma, reputation (FNV), hardcore stats, factions. Startup load at boot. **ESM/ESP import tool** (`ashfall-server --import-esm Fallout3.esm --import-game fo3 --import-db data/fallout3.sqlite3`) populates all tables from plugin files via a native TES4 parser. |
-| 5. Scripting | wasmtime v22 engine. 35 callbacks (OnHit, OnEquip, OnQuestStage + original 31). **All 51 host functions now real** — world/quest/chat/clock/player-count/object-actor CRUD, item ops (add/remove/equip/count), combat DR/DT, GUI widget emitters, config/time-scale/server-name. Timer system with WASM callback routing. Script effect queue (chat/kick/packet broadcast) drained per tick. Auth/chat/spawn-cell/death/quest-stage/time callback dispatch into WASM. 16 WAT-based runtime tests + 3 full end-to-end tests (server + WASM + raw UDP clients: auth gate, weather sync, spawn chat, two-client chat relay). Example freeroam WASM script. SDK crate. |
+| 5. Scripting | wasmtime v22 engine. **All 35 callbacks dispatched** — auth/chat/spawn/hit-gate/equip/activate/item/death/quest/time/cell/window/dialogue/lock + actor sub-events; **all 51 host functions real** (world/quest/chat/items/combat/GUI/meta). Timers, script effect queue (chat/kick/packet broadcast), **real Rust-compiled freeroam WASM game mode builds and runs end-to-end** (wasm32 via rustup; SDK macros emit `#[link(wasm_import_module = "env")]`). 19 WAT runtime tests + 5 e2e wire tests. SDK crate. |
 | 6. GUI | eframe/egui app. Server browser with direct connect. Chat overlay. Server-authored widget manager (windows, buttons, edits, checkboxes, lists). |
 | 7. Client | UDP networking. Connection flow (auth→load→ingame). Client object registry. Handlers for all packet categories. Background 30Hz poll loop. |
 | 8. Master | UDP server registry. Announce/query/cull lifecycle. Client integration for server browser population. |
-| 9. Security | Anti-cheat validator — position bounds, velocity caps, teleport detection, item count limits, damage bounds, sequence nonces, FormID whitelist. 48 security tests. **Handler ownership enforcement** (2026-08-06): clients may only mutate their own player object — position/velocity/angle/cell/name/scale, actor state/value/death, controls, and combat hits all reject non-owner targets; world/NPC objects are server-authoritative. 14 ownership + PvP tests. |
+| 9. Security | Anti-cheat validator — position bounds, velocity caps, teleport detection, item count limits, damage bounds, sequence nonces, FormID whitelist. **Handler ownership enforcement**: clients may only mutate their own player object (movement, actor state/value/death, controls, combat hits) and their own inventory items (item→container→player chain); world/NPC objects are server-authoritative. 22 ownership/PvP/item tests. |
 | 10. Bridge | Memory patching system (SafeWrite*, VTable access, trampoline detours). 36 command opcodes (Tier 1-4). GECK opcode interception engine (11 default handlers, direct-indexed static table). Real VTable getters (cell, enabled, name, lock, parent cell, combat target — FO3/FNV aware). 7 event sink types + pipe event frames. 96 tests. **Every hardcoded constant verified against the real GOG 1.7.0.3 binaries with two independent tools** (r2 + python/objdump/headers — see scripts/re/) — 4 wrong opcodes and 2 wrong field offsets were found and fixed; FOSE/NVSE plugin ABI corrected to the real interface layout. Bridge cross-compiles to i686 Windows and runs under wine (TCP pipe protocol round-trip verified, no game needed). |
 
 ## What's Left
 
-- **WASM callbacks + client GUI rendering** — all 51 host functions are real (incl. item ops, combat values, GUI widget emitters); the remaining work is dispatching the still-unwired callbacks (on_hit, on_equip, on_activate, on_window_*) and implementing the native client's window-packet renderer (the server already broadcasts real window packets). Then: co-op quest logic, NPC AI, custom game modes on top.
-- **Proton runtime testing** — inject bridge.dll into actual FO3/FNV under Proton, verify VTable hooks fire correctly
+- **Co-op game mode content** — the full script stack now works (host functions, callbacks, real WASM builds); next is writing actual game modes: co-op quest logic, NPC AI behaviors, custom rules on top of the freeroam example.
+- **Proton runtime testing** — inject bridge.dll into actual FO3/FNV under Proton, verify VTable hooks fire correctly (vtable index offsets + anim struct fields are the only unverified constants left; game files + wine host are ready).
 - **Proton integration testing** — end-to-end test with real Fallout running under Proton/Wine.
-- **Network testing** — latency compensation, bandwidth tuning still open; reliability layer has ACK/NACK, RTO retransmit, send window, rate limiting, and a real-UDP loss-simulation suite (25% loss, 50/50 packets delivered in order — see tests/reliability.rs, tests/loss_simulation.rs). The auth flow and two-client chat relay are now verified end-to-end over real UDP (tests/script_e2e.rs).
 - **Windows native client** — currently Linux-only. Bridge DLL already cross-compiles for Windows.
+- **Client world renderer** — the GUI layer renders server-authored windows, but there is no 3D/2D world view yet; remote objects are listed with interpolated positions. `on_actor_punch` has no wire source (no Punch packet).
 - **Client interpolation is dead code** — `interpolate_position` (world/state.rs) is defined but never called; the client renders last-received positions directly.
 - **Item ownership chain** — item count/condition/equipped handlers cap values but lack the item→container→player authorization chain (client could inflate its own item counts).
 
@@ -72,7 +72,7 @@ git clone https://github.com/YOUR_ORG/ashfall.git
 cd ashfall
 
 cargo build --release
-cargo test --workspace   # 336 tests
+cargo test --workspace   # 362 tests
 ```
 
 Optional: cross-compile bridge DLL for Proton (`sudo apt install mingw-w64`):
