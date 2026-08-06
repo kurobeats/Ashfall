@@ -8,12 +8,15 @@
 //! Ship: copy target/i686-pc-windows-gnu/release/ashfall_bridge_proxy.dll \
 //!         "$FALLOUT3_DIR/dinput8.dll"
 
+#[cfg(target_os = "windows")]
 use std::ffi::c_void;
+#[cfg(target_os = "windows")]
 use std::sync::atomic::{AtomicBool, Ordering};
 
 #[cfg(target_os = "windows")]
 use windows_sys::Win32::System::LibraryLoader::{GetProcAddress, LoadLibraryA};
 
+#[cfg(target_os = "windows")]
 static INITIALIZED: AtomicBool = AtomicBool::new(false);
 
 /// Bridge init — same as bridge.dll's DllMain attach (hooks + TCP server).

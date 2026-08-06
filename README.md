@@ -3,13 +3,15 @@
 **Rust multiplayer mod for Fallout 3 / Fallout: New Vegas.** Server-authoritative dedicated server with WASM scripting, UDP networking, SQLite persistence, and an egui client browser. Started as a recreation of [vaultmp-extended](https://github.com/massdivide/vaultmp-extended), got bigger, fast.
 
 [![Status](https://img.shields.io/badge/phases-1%E2%80%9310%20complete-brightgreen)](#status)
-[![Tests](https://img.shields.io/badge/tests-362%20passed-brightgreen)](https://github.com/YOUR_ORG/ashfall/actions)
+[![Tests](https://img.shields.io/badge/tests-382%20passed-brightgreen)](https://github.com/YOUR_ORG/ashfall/actions)
 [![License](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
 [![Work in Progress](https://img.shields.io/badge/status-work%20in%20progress-orange)](#whats-left)
 
 > **All 34 items of the external ingestion plan complete** ([docs/external-ingestion-plan.md](./docs/external-ingestion-plan.md)): NVSE plugin interface fixes, real VTable getters, a fully functional reliability layer (ACK/NACK, RTO retransmit, send window, rate limiting, varint framing), an ESM/ESP → SQLite import tool, and a zero-warning build.
 >
 > **Bridge:** full memory patching system (SafeWrite*, VTable access, trampoline detours), GECK opcode interception engine with 11 default handlers, 36 pipe command opcodes, 7 event sink types, 96 tests. Needs Proton runtime testing — see [What's Left](#whats-left).
+>
+> **NVMP lineage ingestion** ([vaultmp](https://github.com/foxtacles/vaultmp) + [mojave-online](https://github.com/knork-fork/mojave-online), both MIT): full classic-Steam FO3 multiplayer patch table + 34 byte-exact detour recipes (`hooks/vaultmp`), remote-actor animation state machine (`hooks/animation`, vaultmp `net_SetActorState` semantics), render-behind interpolation buffer with extrapolation (`ashfall-client` `world::state`, mojave-online semantics), 2,580-function GECK script index + host-function roadmap (`docs/geck/`), NVMP server-mod ESPs (`data/plugins/`), and a vaultmp-dump ↔ SQLite cross-checker (`scripts/verify-esm-dumps.py`). 382 tests, zero warnings.
 
 ---
 
@@ -36,7 +38,7 @@ Client connects to `127.0.0.1:1770`. Stub mode sends canned data — enough to v
 
 ## Status
 
-**Phases 1–10 complete. 362 tests, 0 failures. Zero-warning build** (lib + test targets).
+**Phases 1–10 complete. 382 tests, 0 failures. Zero-warning build** (lib + test targets).
 
 | Phase | What's built |
 |-------|-------------|
@@ -57,11 +59,13 @@ Client connects to `127.0.0.1:1770`. Stub mode sends canned data — enough to v
 - **Proton runtime testing** — injection + pipe protocol verified in real FO3 GOTY under Proton; **the GOG-verified address table does NOT match the Steam build** (in-process probe: 0x455190 is garbage — vtable commands crash the game). Next: dump the unpacked image via bridge `OP_DUMP_IMAGE`, re-derive constants, re-test — see [docs/proton-testing.md](./docs/proton-testing.md).
 - **Proton integration testing** — end-to-end test with real Fallout running under Proton/Wine.
 - **Windows native client** — currently Linux-only. Bridge DLL already cross-compiles for Windows.
-- **Client world renderer** — the GUI layer renders server-authored windows, but there is no 3D/2D world view yet; remote objects are listed with interpolated positions. `on_actor_punch` has no wire source (no Punch packet).
-- **Client interpolation is dead code** — `interpolate_position` (world/state.rs) is defined but never called; the client renders last-received positions directly.
+- **Client world renderer** — the GUI layer renders server-authored windows, but there is no 3D/2D world view yet; remote objects are listed with render-behind interpolated positions (67ms delay + 500ms extrapolation, `world::state::InterpBuffer`). `on_actor_punch` has no wire source (no Punch packet).
+- **Bridge animation executor** — `hooks::animation` (remote-actor PlayGroup state machine) is tested and ready; wiring it into the game needs the engine-side PlayGroup dispatcher (classic Steam `0x45F704`, or re-derived per build) and a client→bridge `OP_PLAY_GROUP` pipe command.
 - **Item ownership chain** — item count/condition/equipped handlers cap values but lack the item→container→player authorization chain (client could inflate its own item counts).
 
-> ✅ ESM reader tool: **done** — `ashfall-server --import-esm Fallout3.esm --import-game fo3 --import-db data/fallout3.sqlite3` populates all 17 tables from plugin files. **Verified against the real game**: base game + all 5 DLC esms (GOG 1.7.0.3, 276MB master) import in ~15s each — 301 weapons, 3,642 NPCs, 747k world references total. Requires real-binary fixes: 24-byte record headers, TES4 16-byte tail, and zlib decompression for compressed records (flag 0x00040000, data = [u32 size][zlib]). Counts cross-verified with an independent python record walker (weapons 160, NPCs 2,180 = NPC_+CREA, refs 573,610 = REFR+ACHR+ACRE, items 1,601, factions 326 — all exact). Quests boot at stage 0 (the import's stage lists are known-stages, not progress).
+> ✅ ESM reader tool: **done** — `ashfall-server --import-esm Fallout3.esm --import-game fo3 --import-db data/fallout3.sqlite3` populates all 17 tables from plugin files. **Verified against the real game**: base game + all 5 DLC esms (GOG 1.7.0.3, 276MB master) import in ~15s each — 301 weapons, 3,642 NPCs, 747k world references total. Requires real-binary fixes: 24-byte record headers, TES4 16-byte tail, and zlib decompression for compressed records (flag 0x00040000, data = [u32 size][zlib]). Counts cross-verified with an independent python record walker (weapons 160, NPCs 2,180 = NPC_+CREA, refs 573,610 = REFR+ACHR+ACRE, items 1,601, factions 326 — all exact) and against the vaultmp `other/data3` dumps (`scripts/verify-esm-dumps.py`: 301 weapons, 2736 NPC_, 747,790 REFR+ACHR+ACRE, 30 races, 485 terminals — exact). Quests boot at stage 0 (the import's stage lists are known-stages, not progress).
+>
+> ✅ ESP import path: **verified** — the four NVMP server-mod ESPs (`data/plugins/`) import cleanly without masters (285/41/54/62 records; overrides only, base stats come from the master ESM).
 
 ---
 
@@ -72,7 +76,7 @@ git clone https://github.com/YOUR_ORG/ashfall.git
 cd ashfall
 
 cargo build --release
-cargo test --workspace   # 362 tests
+cargo test --workspace   # 382 tests
 ```
 
 Optional: cross-compile bridge DLL for Proton (`sudo apt install mingw-w64`):

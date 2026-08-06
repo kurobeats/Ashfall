@@ -56,7 +56,8 @@ pub struct ClientRegistry {
     pub weather: u32,
     #[allow(dead_code)]
     pub globals: HashMap<u32, i32>,
-    last_positions: HashMap<NetworkID, ([f32; 3], std::time::Instant)>,
+    /// Per-entity render-behind interpolation buffers.
+    interp: HashMap<NetworkID, crate::world::state::InterpBuffer>,
 }
 
 impl ClientRegistry {
@@ -66,7 +67,7 @@ impl ClientRegistry {
             cell_objects: HashMap::new(),
             weather: 0,
             globals: HashMap::new(),
-            last_positions: HashMap::new(),
+            interp: HashMap::new(),
         }
     }
 
@@ -76,10 +77,10 @@ impl ClientRegistry {
             Packet::ObjectNew {
                 id, name, net_pos, angle, scale, cell, enabled, ..
             } => {
-                let now = std::time::Instant::now();
-                if let Some(ClientObject::Object { pos, .. }) | Some(ClientObject::Actor { pos, .. }) = self.objects.get(id) {
-                    self.last_positions.insert(*id, (*pos, now));
-                }
+                self.interp
+                    .entry(*id)
+                    .or_insert_with(crate::world::state::InterpBuffer::new)
+                    .push_now(*net_pos);
                 self.objects.insert(
                     *id,
                     ClientObject::Object {
@@ -89,7 +90,7 @@ impl ClientRegistry {
                 );
             }
             Packet::UpdatePos { id, pos } => { self.update_pos(*id, *pos); }
-            Packet::ObjectRemove { id, .. } => { self.objects.remove(id); self.last_positions.remove(id); }
+            Packet::ObjectRemove { id, .. } => { self.objects.remove(id); self.interp.remove(id); }
             Packet::ItemNew { id, base_id, count, condition, equipped, .. } => {
                 self.objects.insert(*id, ClientObject::Item {
                     base_id: *base_id, cond: *condition, count: *count, equipped: *equipped,
@@ -146,8 +147,9 @@ impl ClientRegistry {
 
     pub fn object_count(&self) -> usize { self.objects.len() }
 
-    /// Interpolated position of an object: blended between the last two
-    /// received updates (100ms window), falling back to the raw position.
+    /// Interpolated position of an object: render-behind buffer with
+    /// extrapolation (mojave-online semantics — see `world::state`), falling
+    /// back to the raw position when the object type has no position.
     pub fn interpolated_pos(&self, id: NetworkID) -> Option<[f32; 3]> {
         let pos = match self.objects.get(&id) {
             Some(ClientObject::Object { pos: p, .. })
@@ -155,22 +157,19 @@ impl ClientRegistry {
             | Some(ClientObject::Player { pos: p, .. }) => Some(*p),
             _ => None,
         }?;
-        if let Some((last, at)) = self.last_positions.get(&id) {
-            let elapsed = at.elapsed().as_millis() as f32;
-            let alpha = crate::world::state::interpolation_alpha(elapsed);
-            return Some(crate::world::state::interpolate_position(*last, pos, alpha));
-        }
-        Some(pos)
+        Some(
+            self.interp
+                .get(&id)
+                .map(crate::world::state::InterpBuffer::render_now)
+                .unwrap_or(pos),
+        )
     }
 
     fn update_pos(&mut self, id: NetworkID, pos: [f32; 3]) {
-        let old = match self.objects.get(&id) {
-            Some(ClientObject::Object { pos: p, .. }) | Some(ClientObject::Actor { pos: p, .. }) | Some(ClientObject::Player { pos: p, .. }) => Some(*p),
-            _ => None,
-        };
-        if let Some(old) = old {
-            self.last_positions.insert(id, (old, std::time::Instant::now()));
-        }
+        self.interp
+            .entry(id)
+            .or_insert_with(crate::world::state::InterpBuffer::new)
+            .push_now(pos);
         match self.objects.get_mut(&id) {
             Some(ClientObject::Object { pos: p, .. }) | Some(ClientObject::Actor { pos: p, .. }) | Some(ClientObject::Player { pos: p, .. }) => *p = pos,
             _ => {}
@@ -185,7 +184,6 @@ impl Default for ClientRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::world::state::{interpolate_position, interpolation_alpha};
     use ashfall_core::protocol::Packet;
 
     #[test]
@@ -200,10 +198,13 @@ mod tests {
         });
         reg.apply_packet(&Packet::UpdatePos { id, pos: [100.0, 0.0, 0.0] });
 
-        // Immediately after the update, interpolation is ~at the old position
+        // Render-behind (INTERP_DELAY=67ms): immediately after the update the
+        // render time still lands on the old sample, so the interpolated
+        // position trails at the previous position. Smoothness comes from the
+        // buffer (unit-tested in world::state), not from zero-latency.
         let p = reg.interpolated_pos(id).unwrap();
-        assert!(p[0] < 100.0, "interpolated between old and new, got x={}", p[0]);
-        // Raw position is the new one
+        assert_eq!(p[0], 0.0, "render-behind trails at the old sample");
+        // Raw position is the new one.
         match reg.objects.get(&id).unwrap() {
             ClientObject::Object { pos, .. } => assert_eq!(*pos, [100.0, 0.0, 0.0]),
             _ => panic!("expected object"),
@@ -211,8 +212,16 @@ mod tests {
     }
 
     #[test]
-    fn test_interp_helpers() {
-        assert_eq!(interpolate_position([0.0, 0.0, 0.0], [10.0, 0.0, 0.0], 0.25), [2.5, 0.0, 0.0]);
-        assert_eq!(interpolation_alpha(100.0), 1.0);
+    fn test_interp_buffer_used() {
+        let mut reg = ClientRegistry::new();
+        let id = NetworkID::new(9);
+        reg.apply_packet(&Packet::ObjectNew {
+            id, ref_id: 0x100, base_id: 0x200, name: "y".into(),
+            game_pos: [0.0, 0.0, 0.0], net_pos: [0.0, 0.0, 0.0],
+            angle: [0.0; 3], scale: 1.0, cell: 1, enabled: true, lock: 0, owner: 0,
+        });
+        assert!(reg.interp.contains_key(&id), "buffer created on spawn");
+        reg.apply_packet(&Packet::ObjectRemove { id, silent: true });
+        assert!(!reg.interp.contains_key(&id), "buffer dropped on despawn");
     }
 }

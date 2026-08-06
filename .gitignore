@@ -23,4 +23,6 @@ target
 # pi things
 .pi-subagents/
 # Runtime data (server database, logs)
-data/
+data/*
+# ...except the vendored NVMP server-mod ESPs (reference import corpus)
+!data/plugins/

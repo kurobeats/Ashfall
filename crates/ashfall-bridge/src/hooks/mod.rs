@@ -14,9 +14,11 @@
 //!
 //! Resource: https://github.com/ianpatt/fose/blob/master/common/GameAPI.cpp
 
+pub mod animation;
 pub mod detour;
 pub mod memory;
 pub mod opcode;
+pub mod vaultmp;
 pub mod vtable;
 
 use std::sync::atomic::{AtomicBool, Ordering};
