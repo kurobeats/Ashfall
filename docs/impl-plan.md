@@ -209,7 +209,17 @@ PRs within a phase often parallelizable unless noted.
 ### What Still Needs Runtime Testing
 - [ ] **VTable patch verification** — inject bridge.dll into actual FO3/FNV under Proton, verify hook fires
 - [ ] **Proton integration test** — end-to-end: bridge.dll → TCP → client → server
-- [ ] **CRC validation** — confirm `FALLOUT3_EN_VER17 = 0x00E59528` and `FNV_EN_VER14 = 0x0206FEC7` against actual binaries
+- [x] **CRC validation — RESOLVED (real-binary analysis, 2026-08-06)** — the
+      `FALLOUT3_EN_VER17 = 0x00E59528` / `FNV_EN_VER14 = 0x0206FEC7` constants
+      match NO computable hash of the real GOG Fallout3.exe 1.7.0.3
+      (whole-file CRC32 = 0x425A8C16). FOSE/NVSE never use CRC detection
+      (they compile per-version). detect_engine was de-fabricated; real
+      scheme (VS_VERSION_INFO) deferred to runtime testing.
+- [x] **Address table — VERIFIED (xFOSE fose.h FALLOUT_VERSION_1_7, checked
+      against the real binary)** — LookupFormByID = 0x00455190 (884 xrefs),
+      ExtractArgs = 0x00517950, CreateFormInstance = 0x0043CDA0,
+      ConsoleManager_GetSingleton = 0x0062B5D0, FormHeap 0x00401000/0x401010,
+      DataHandler = 0x0106CDCC. Now in `ashfall-bridge/src/hooks/mod.rs`.
 - [ ] **NVSE CommandTable registration** — actual `NVSEPlugin_Load` integration with NVSE SDK
 - [ ] **Engine AI suppression patches** — FO3/FNV addresses for 4 AI fixes (different per game version)
 - [ ] **Wine VTable layout** — verify Wine mirrors Windows VTable exactly
