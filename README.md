@@ -59,7 +59,7 @@ Client connects to `127.0.0.1:1770`. Stub mode sends canned data — enough to v
 - **Network testing** — latency compensation, bandwidth tuning still open; reliability layer has ACK/NACK, RTO retransmit, send window, rate limiting, and a real-UDP loss-simulation suite (25% loss, 50/50 packets delivered in order — see tests/reliability.rs, tests/loss_simulation.rs). The auth flow and two-client chat relay are now verified end-to-end over real UDP (tests/script_e2e.rs).
 - **Windows native client** — currently Linux-only. Bridge DLL already cross-compiles for Windows.
 
-> ✅ ESM reader tool: **done** — `ashfall-server --import-esm Fallout3.esm --import-game fo3 --import-db data/fallout3.sqlite3` populates all 17 tables from plugin files.
+> ✅ ESM reader tool: **done** — `ashfall-server --import-esm Fallout3.esm --import-game fo3 --import-db data/fallout3.sqlite3` populates all 17 tables from plugin files. **Verified against the real game**: base game + all 5 DLC esms (GOG 1.7.0.3, 276MB master) import in ~15s each — 301 weapons, 3,642 NPCs, 747k world references total. Requires real-binary fixes: 24-byte record headers, TES4 16-byte tail, and zlib decompression for compressed records (flag 0x00040000, data = [u32 size][zlib]).
 
 ---
 

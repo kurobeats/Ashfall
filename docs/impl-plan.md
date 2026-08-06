@@ -208,7 +208,15 @@ PRs within a phase often parallelizable unless noted.
 
 ### What Still Needs Runtime Testing
 - [ ] **VTable patch verification** — inject bridge.dll into actual FO3/FNV under Proton, verify hook fires
+- [x] **Wine runtime verification — DONE (2026-08-06, wine 11, no game)** — the
+      bridge now cross-compiles to i686-pc-windows-gnu (first time ever; needed
+      Win32_Foundation + Win32_System_LibraryLoader features) and runs under
+      wine: DLL loads, all exports resolve, Query/Load return true, the TCP
+      server binds 127.0.0.1:1771 on the Linux loopback, and the pipe protocol
+      round-trips (heartbeat + PIPE_OP_COMMAND → PIPE_OP_RETURN). Game-address
+      getters safely return zeros outside the game via `is_game_process()`.
 - [ ] **Proton integration test** — end-to-end: bridge.dll → TCP → client → server
+      (needs the game running; protocol side already verified)
 - [x] **CRC validation — RESOLVED (real-binary analysis, 2026-08-06)** — the
       `FALLOUT3_EN_VER17 = 0x00E59528` / `FNV_EN_VER14 = 0x0206FEC7` constants
       match NO computable hash of the real GOG Fallout3.exe 1.7.0.3
