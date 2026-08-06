@@ -599,3 +599,179 @@ impl Default for ScriptEngine {
         ScriptEngine::new().expect("wasmtime engine init")
     }
 }
+
+// ═══════════════════════════════════════════════════════════════
+// Remaining callback notifications (GUI selects, actor sub-events,
+// dialogue, lock) — freeroam-declared, wired 2026-08-06.
+// ═══════════════════════════════════════════════════════════════
+
+impl ScriptEngine {
+    /// on_window_text_change(player, window, text_ptr, text_len)
+    pub fn notify_window_text(&mut self, player: u64, window: u64, text: &str) {
+        for inst in &mut self.instances {
+            if !inst.write_str(text, WasmInstance::STR_SCRATCH) {
+                continue;
+            }
+            let f = inst
+                .instance
+                .get_typed_func::<(i64, i64, i32, i32), ()>(&mut inst.store, "on_window_text_change")
+                .ok();
+            if let Some(f) = f {
+                let _ = f.call(
+                    &mut inst.store,
+                    (
+                        player as i64,
+                        window as i64,
+                        WasmInstance::STR_SCRATCH as i32,
+                        text.len() as i32,
+                    ),
+                );
+            }
+        }
+    }
+
+    /// on_checkbox_select(player, checkbox, selected) — bool is i32 in wasm.
+    pub fn notify_checkbox(&mut self, player: u64, checkbox: u64, selected: bool) {
+        self.notify_2i64_1i32("on_checkbox_select", player, checkbox, selected as u32);
+    }
+
+    /// on_radio_button_select(player, radio, prev)
+    pub fn notify_radio(&mut self, player: u64, radio: u64, prev: u64) {
+        self.notify_3i64("on_radio_button_select", player, radio, prev);
+    }
+
+    /// on_list_item_select(player, item, selected)
+    pub fn notify_list_item(&mut self, player: u64, item: u64, selected: bool) {
+        self.notify_2i64_1i32("on_list_item_select", player, item, selected as u32);
+    }
+
+    /// on_actor_fire_weapon(actor, weapon)
+    pub fn notify_fire_weapon(&mut self, actor: u64, weapon: u32) {
+        for inst in &mut self.instances {
+            let f = inst
+                .instance
+                .get_typed_func::<(i64, i32), ()>(&mut inst.store, "on_actor_fire_weapon")
+                .ok();
+            if let Some(f) = f {
+                let _ = f.call(&mut inst.store, (actor as i64, weapon as i32));
+            }
+        }
+    }
+
+    /// on_item_condition_change(item, condition)
+    pub fn notify_item_condition(&mut self, item: u64, condition: f32) {
+        for inst in &mut self.instances {
+            let f = inst
+                .instance
+                .get_typed_func::<(i64, f32), ()>(&mut inst.store, "on_item_condition_change")
+                .ok();
+            if let Some(f) = f {
+                let _ = f.call(&mut inst.store, (item as i64, condition));
+            }
+        }
+    }
+
+    /// on_item_equipped_change(item, equipped)
+    pub fn notify_item_equipped_change(&mut self, item: u64, equipped: bool) {
+        for inst in &mut self.instances {
+            let f = inst
+                .instance
+                .get_typed_func::<(i64, i32), ()>(&mut inst.store, "on_item_equipped_change")
+                .ok();
+            if let Some(f) = f {
+                let _ = f.call(&mut inst.store, (item as i64, equipped as i32));
+            }
+        }
+    }
+
+    /// on_actor_alert(actor, alerted)
+    pub fn notify_actor_alert(&mut self, actor: u64, alerted: bool) {
+        self.notify_i64_1i32("on_actor_alert", actor, alerted as u32);
+    }
+
+    /// on_actor_sneak(actor, sneaking)
+    pub fn notify_actor_sneak(&mut self, actor: u64, sneaking: bool) {
+        self.notify_i64_1i32("on_actor_sneak", actor, sneaking as u32);
+    }
+
+    /// on_actor_value_change / on_actor_base_value_change(actor, index, value)
+    pub fn notify_actor_value(&mut self, actor: u64, index: u8, value: f32, base: bool) {
+        let name = if base { "on_actor_base_value_change" } else { "on_actor_value_change" };
+        for inst in &mut self.instances {
+            let f = inst
+                .instance
+                .get_typed_func::<(i64, i32, f32), ()>(&mut inst.store, name)
+                .ok();
+            if let Some(f) = f {
+                let _ = f.call(&mut inst.store, (actor as i64, index as i32, value));
+            }
+        }
+    }
+
+    /// on_window_mode(player, enabled)
+    pub fn notify_window_mode(&mut self, player: u64, enabled: bool) {
+        self.notify_i64_1i32("on_window_mode", player, enabled as u32);
+    }
+
+    /// on_dialogue_choice(player, flag_id, choice)
+    pub fn notify_dialogue_choice(&mut self, player: u64, flag_id: u32, choice: u32) {
+        self.notify_i64_2i32("on_dialogue_choice", player, flag_id, choice);
+    }
+
+    /// on_lock_change(object, actor, lock)
+    pub fn notify_lock_change(&mut self, object: u64, actor: u64, lock: u32) {
+        self.notify_2i64_1i32("on_lock_change", object, actor, lock);
+    }
+
+    /// Shared: (i64, i32) -> () callback (bool/u32 args).
+    fn notify_i64_1i32(&mut self, name: &str, a: u64, b: u32) {
+        for inst in &mut self.instances {
+            let f = inst
+                .instance
+                .get_typed_func::<(i64, i32), ()>(&mut inst.store, name)
+                .ok();
+            if let Some(f) = f {
+                let _ = f.call(&mut inst.store, (a as i64, b as i32));
+            }
+        }
+    }
+
+    /// Shared: (i64, i32, i32) -> () callback.
+    fn notify_i64_2i32(&mut self, name: &str, a: u64, b: u32, c: u32) {
+        for inst in &mut self.instances {
+            let f = inst
+                .instance
+                .get_typed_func::<(i64, i32, i32), ()>(&mut inst.store, name)
+                .ok();
+            if let Some(f) = f {
+                let _ = f.call(&mut inst.store, (a as i64, b as i32, c as i32));
+            }
+        }
+    }
+
+    /// Shared: (i64, i64, i32) -> () callback (bool/u32 third arg).
+    fn notify_2i64_1i32(&mut self, name: &str, a: u64, b: u64, c: u32) {
+        for inst in &mut self.instances {
+            let f = inst
+                .instance
+                .get_typed_func::<(i64, i64, i32), ()>(&mut inst.store, name)
+                .ok();
+            if let Some(f) = f {
+                let _ = f.call(&mut inst.store, (a as i64, b as i64, c as i32));
+            }
+        }
+    }
+
+    /// Shared: (i64, i64, i64) -> () callback.
+    fn notify_3i64(&mut self, name: &str, a: u64, b: u64, c: u64) {
+        for inst in &mut self.instances {
+            let f = inst
+                .instance
+                .get_typed_func::<(i64, i64, i64), ()>(&mut inst.store, name)
+                .ok();
+            if let Some(f) = f {
+                let _ = f.call(&mut inst.store, (a as i64, b as i64, c as i64));
+            }
+        }
+    }
+}

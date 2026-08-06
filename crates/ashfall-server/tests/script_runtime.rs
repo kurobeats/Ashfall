@@ -121,6 +121,36 @@ const TEST_MODE: &str = r#"
   (func (export "on_destroy") (param $o i64)
     (call $set_flag (i32.const 73) (i32.const 1)))
 
+  ;; remaining callback mirrors: flags 74..85
+  (func (export "on_window_text_change") (param $p i64) (param $w i64) (param $t i32) (param $tl i32)
+    (call $set_flag (i32.const 74) (i32.const 1)))
+  (func (export "on_checkbox_select") (param $p i64) (param $c i64) (param $s i32)
+    (call $set_flag (i32.const 75) (i32.const 1)))
+  (func (export "on_radio_button_select") (param $p i64) (param $r i64) (param $prev i64)
+    (call $set_flag (i32.const 76) (i32.const 1)))
+  (func (export "on_list_item_select") (param $p i64) (param $i i64) (param $s i32)
+    (call $set_flag (i32.const 77) (i32.const 1)))
+  (func (export "on_actor_fire_weapon") (param $a i64) (param $w i32)
+    (call $set_flag (i32.const 78) (i32.const 1)))
+  (func (export "on_item_condition_change") (param $i i64) (param $c f32)
+    (call $set_flag (i32.const 79) (i32.const 1)))
+  (func (export "on_item_equipped_change") (param $i i64) (param $e i32)
+    (call $set_flag (i32.const 80) (i32.const 1)))
+  (func (export "on_actor_alert") (param $a i64) (param $al i32)
+    (call $set_flag (i32.const 81) (i32.const 1)))
+  (func (export "on_actor_sneak") (param $a i64) (param $s i32)
+    (call $set_flag (i32.const 82) (i32.const 1)))
+  (func (export "on_actor_value_change") (param $a i64) (param $i i32) (param $v f32)
+    (call $set_flag (i32.const 83) (i32.const 1)))
+  (func (export "on_actor_base_value_change") (param $a i64) (param $i i32) (param $v f32)
+    (call $set_flag (i32.const 84) (i32.const 1)))
+  (func (export "on_window_mode") (param $p i64) (param $e i32)
+    (call $set_flag (i32.const 85) (i32.const 1)))
+  (func (export "on_dialogue_choice") (param $p i64) (param $f i32) (param $c i32)
+    (call $set_flag (i32.const 86) (i32.const 1)))
+  (func (export "on_lock_change") (param $o i64) (param $a i64) (param $l i32)
+    (call $set_flag (i32.const 87) (i32.const 1)))
+
   ;; Timer callback: swap the weather
   (func (export "tick_cb") (param $id i32)
     (call $set_weather (i32.const 0x00007777)))
@@ -509,4 +539,43 @@ fn test_notify_callbacks_wired() {
     assert!(state.quests.get_flag(71), "on_window_click fired");
     assert!(state.quests.get_flag(72), "on_create fired");
     assert!(state.quests.get_flag(73), "on_destroy fired");
+}
+
+#[test]
+fn test_remaining_callbacks_wired() {
+    let state = new_state();
+    let mut engine = boot_with(state.clone());
+    engine.notify_window_text(1, 2, "hello");
+    engine.notify_checkbox(1, 2, true);
+    engine.notify_radio(1, 2, 3);
+    engine.notify_list_item(1, 2, true);
+    engine.notify_fire_weapon(1, 0x999);
+    engine.notify_item_condition(2, 0.5);
+    engine.notify_item_equipped_change(2, true);
+    engine.notify_actor_alert(1, true);
+    engine.notify_actor_sneak(1, true);
+    engine.notify_actor_value(1, 0x14, 80.0, false);
+    engine.notify_actor_value(1, 0x14, 85.0, true);
+    engine.notify_window_mode(1, true);
+    engine.notify_dialogue_choice(1, 7, 3);
+    engine.notify_lock_change(9, 1, 100);
+
+    for (flag, name) in [
+        (74, "on_window_text_change"),
+        (75, "on_checkbox_select"),
+        (76, "on_radio_button_select"),
+        (77, "on_list_item_select"),
+        (78, "on_actor_fire_weapon"),
+        (79, "on_item_condition_change"),
+        (80, "on_item_equipped_change"),
+        (81, "on_actor_alert"),
+        (82, "on_actor_sneak"),
+        (83, "on_actor_value_change"),
+        (84, "on_actor_base_value_change"),
+        (85, "on_window_mode"),
+        (86, "on_dialogue_choice"),
+        (87, "on_lock_change"),
+    ] {
+        assert!(state.quests.get_flag(flag), "{name} fired (flag {flag})");
+    }
 }

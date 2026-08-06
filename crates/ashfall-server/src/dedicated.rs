@@ -376,6 +376,47 @@ impl DedicatedServer {
                         .unwrap_or(0);
                     self.script_engine.notify_window_return(pid, id.as_u64());
                 }
+                Packet::UpdateWindowText { id, text } => {
+                    let pid = self.sessions_player_id(&addr);
+                    self.script_engine.notify_window_text(pid, id.as_u64(), text);
+                }
+                Packet::UpdateCheckboxSelected { id, selected } => {
+                    let pid = self.sessions_player_id(&addr);
+                    self.script_engine.notify_checkbox(pid, id.as_u64(), *selected);
+                }
+                Packet::UpdateRadioButtonSelected { id, previous, .. } => {
+                    let pid = self.sessions_player_id(&addr);
+                    self.script_engine.notify_radio(pid, id.as_u64(), previous.as_u64());
+                }
+                Packet::UpdateListItemSelected { id, selected } => {
+                    let pid = self.sessions_player_id(&addr);
+                    self.script_engine.notify_list_item(pid, id.as_u64(), *selected);
+                }
+                Packet::UpdateFireWeapon { id, weapon } => {
+                    self.script_engine.notify_fire_weapon(id.as_u64(), *weapon);
+                }
+                Packet::UpdateItemCondition { id, condition, .. } => {
+                    self.script_engine.notify_item_condition(id.as_u64(), *condition);
+                }
+                Packet::UpdateActorState { id, alerted, sneaking, .. } => {
+                    self.script_engine.notify_actor_alert(id.as_u64(), *alerted);
+                    self.script_engine.notify_actor_sneak(id.as_u64(), *sneaking);
+                }
+                Packet::UpdateActorValue { id, base, index, value } => {
+                    self.script_engine.notify_actor_value(id.as_u64(), *index, *value, *base);
+                }
+                Packet::UpdateWindowMode { enabled } => {
+                    let pid = self.sessions_player_id(&addr);
+                    self.script_engine.notify_window_mode(pid, *enabled);
+                }
+                Packet::DialogueChoice { flag_id, choice } => {
+                    let pid = self.sessions_player_id(&addr);
+                    self.script_engine.notify_dialogue_choice(pid, *flag_id, *choice);
+                }
+                Packet::UpdateLock { id, lock } => {
+                    let pid = self.sessions_player_id(&addr);
+                    self.script_engine.notify_lock_change(id.as_u64(), pid, *lock);
+                }
                 // Death handled below (needs limbs/cause from the packet).
                 _ => {}
             }
@@ -521,6 +562,15 @@ impl DedicatedServer {
         self.sessions.insert(addr, session);
 
         tracing::info!("Player {name} (id={player_id}) connected from {addr}");
+    }
+
+    /// Player id for a session address (0 when absent).
+    fn sessions_player_id(&self, addr: &SocketAddr) -> u64 {
+        self.sessions
+            .get(addr)
+            .and_then(|s| s.value().player_id)
+            .map(|p| p.as_u64())
+            .unwrap_or(0)
     }
 
     /// Disconnect a session.

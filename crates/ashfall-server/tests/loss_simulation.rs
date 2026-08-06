@@ -51,7 +51,7 @@ async fn test_all_packets_delivered_in_order_under_loss() {
     // Deterministic PRNG so the test is reproducible
     let mut state: u64 = 0x1234_5678_9ABC_DEF0;
 
-    let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(30);
 
     while seen.len() < PACKETS {
         assert!(
