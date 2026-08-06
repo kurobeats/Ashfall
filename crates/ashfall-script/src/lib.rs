@@ -42,6 +42,7 @@ pub type FactionID = u32;
 #[macro_export]
 macro_rules! host_fn {
     ($vis:vis fn $name:ident($($arg:ident: $ty:ty),* $(,)?) $(-> $ret:ty)?) => {
+        #[link(wasm_import_module = "env")]
         extern "C" {
             $vis fn $name($($arg: $ty),*) $(-> $ret)?;
         }
@@ -52,6 +53,7 @@ macro_rules! host_fn {
 #[macro_export]
 macro_rules! host_fns {
     ($(fn $name:ident($($arg:ident: $ty:ty),* $(,)?) $(-> $ret:ty)?;)+) => {
+        #[link(wasm_import_module = "env")]
         extern "C" {
             $(
                 fn $name($($arg: $ty),*) $(-> $ret)?;

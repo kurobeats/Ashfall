@@ -6,23 +6,28 @@
 //! Built with: `cargo build --target wasm32-unknown-unknown --release`
 //! Copy `target/wasm32-unknown-unknown/release/ashfall_freeroam.wasm`
 //! to the server's `scripts/` directory.
+//!
+//! Host import names must match the engine's linker exactly (see
+//! crates/ashfall-server/src/script/host.rs): host_log, chat_message,
+//! set_game_weather, set_game_time, ...
 
-use ashfall_script::*;
 
 // ═══════════════════════════════════════════════════════════════
-// Host function imports (provided by ashfall-server wasmtime engine)
+// Host function imports (provided by ashfall-server wasmtime engine,
+// module "env")
 // ═══════════════════════════════════════════════════════════════
 
+#[link(wasm_import_module = "env")]
 extern "C" {
     // ── Server lifecycle ──
     fn host_log(level: u32, ptr: *const u8, len: u32);
 
     // ── Player lifecycle ──
-    fn host_chat_message(player_id: u64, ptr: *const u8, len: u32);
+    fn chat_message(player_id: u64, ptr: *const u8, len: u32);
 
     // ── World ──
-    fn host_set_game_weather(weather: u32);
-    fn host_set_game_time(year: u32, month: u32, day: u32, hour: u32);
+    fn set_game_weather(weather: u32);
+    fn set_game_time(year: u32, month: u32, day: u32, hour: u32);
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -36,10 +41,10 @@ pub extern "C" fn on_server_init() {
     unsafe { host_log(3, msg.as_ptr(), msg.len() as u32) }; // 3 = info
 
     // Set default weather (clear)
-    unsafe { host_set_game_weather(0x00015E5E) };
+    unsafe { set_game_weather(0x00015E5E) };
 
     // Set game time to morning
-    unsafe { host_set_game_time(2277, 8, 17, 9) };
+    unsafe { set_game_time(2277, 8, 17, 9) };
 }
 
 /// Called when server shuts down.
@@ -51,7 +56,7 @@ pub extern "C" fn on_server_exit(shutdown: bool) {
 /// Authenticate a connecting player. Return 1 = allow, 0 = deny.
 #[no_mangle]
 pub extern "C" fn on_client_authenticate(
-    name_ptr: *const u8,
+    _name_ptr: *const u8,
     name_len: u32,
     _pwd_ptr: *const u8,
     _pwd_len: u32,
@@ -83,7 +88,7 @@ pub extern "C" fn on_player_request_game(_player_id: u64) -> u32 {
 pub extern "C" fn on_spawn(player_id: u64) {
     // Welcome message
     let msg = b"Welcome to the Wasteland!";
-    unsafe { host_chat_message(player_id, msg.as_ptr(), msg.len() as u32) };
+    unsafe { chat_message(player_id, msg.as_ptr(), msg.len() as u32) };
 }
 
 /// Player sent a chat message. Return 1 = relay, 0 = block.

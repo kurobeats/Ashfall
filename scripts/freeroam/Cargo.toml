@@ -12,3 +12,5 @@ ashfall-script = { path = "../../crates/ashfall-script" }
 [profile.release]
 opt-level = "s"
 lto = true
+
+[workspace]
