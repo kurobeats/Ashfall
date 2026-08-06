@@ -65,6 +65,9 @@ pub struct EsmImportStats {
     pub interiors: usize,
     pub exteriors: usize,
     pub references: usize,
+    /// Compressed records whose zlib stream failed to decompress — skipped
+    /// (rare; e.g. one corrupt LAND record in the GOG FNV build).
+    pub skipped_compressed: usize,
 }
 
 /// One parsed subrecord.
@@ -295,10 +298,19 @@ impl Database {
             }
             let expected = u32::from_le_bytes(body[..4].try_into().unwrap()) as usize;
             let mut out = Vec::with_capacity(expected);
-            ZlibDecoder::new(&body[4..])
-                .read_to_end(&mut out)
-                .map_err(|e| anyhow::anyhow!("record 0x{form_id:08X} zlib: {e}"))?;
-            std::borrow::Cow::Owned(out)
+            match ZlibDecoder::new(&body[4..]).read_to_end(&mut out) {
+                Ok(_) => std::borrow::Cow::Owned(out),
+                Err(e) => {
+                    // One corrupt record must not abort the whole import
+                    // (1 LAND record in the GOG FNV build fails zlib).
+                    stats.skipped_compressed += 1;
+                    tracing::warn!(
+                        "record 0x{form_id:08X} zlib: {e} — skipped ({})",
+                        stats.skipped_compressed
+                    );
+                    return Ok(());
+                }
+            }
         } else {
             std::borrow::Cow::Borrowed(body)
         };
@@ -689,4 +701,24 @@ mod tests {
         let stats = db.import_plugin_bytes(&plugin, GameId::Fallout3).unwrap();
         assert_eq!(stats.weapons, 1, "compressed WEAP record imported");
     }
+    #[test]
+    fn test_corrupt_compressed_record_skipped_not_abort() {
+        let db = Database::open_in_memory().unwrap();
+        // WEAP record flagged compressed, but the payload is not valid zlib —
+        // the import must skip it and continue, not error out.
+        let mut rec = Vec::new();
+        rec.extend_from_slice(b"WEAP");
+        rec.extend_from_slice(&20u32.to_le_bytes()); // size
+        rec.extend_from_slice(&0x0004_0000u32.to_le_bytes()); // compressed flag
+        rec.extend_from_slice(&0x100u32.to_le_bytes()); // formID
+        rec.extend_from_slice(&[0u8; 8]); // timestamp + vcs + internal
+        rec.extend_from_slice(&[0x78, 0x9C, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+                               0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]); // garbage
+        let mut plugin = header(1);
+        plugin.extend_from_slice(&group(*b"WEAP", 0, &rec));
+        let stats = db.import_plugin_bytes(&plugin, GameId::Fallout3).unwrap();
+        assert_eq!(stats.weapons, 0, "corrupt record not imported");
+        assert_eq!(stats.skipped_compressed, 1, "corrupt record counted as skipped");
+    }
 }
+

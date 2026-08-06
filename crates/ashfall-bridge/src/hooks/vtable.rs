@@ -176,7 +176,9 @@ const VTBL_ACTOR_ANIM_DATA: usize = vtable_index(0x01E4);   // index 121 (x86, v
 const OFFSET_REF_ID: usize = 0x0C;
 
 // Field offsets verified against xFOSE GameObjects.h (FO3 1.7) and
-// xNVSE GameObjects.h (FNV 1.4), both STATIC_ASSERT-anchored.
+// xNVSE GameObjects.h (FNV 1.4), both STATIC_ASSERT-anchored; parentCell
+// additionally confirmed in both binaries (3,877 [reg+0x3C] reads in FO3,
+// 8,924 [reg+0x40] reads in FNV).
 //   FO3: rot 0x20/0x24/0x28, pos 0x2C/0x30/0x34, parentCell 0x3C
 //   FNV: rot 0x24/0x28/0x2C, pos 0x30/0x34/0x38, parentCell 0x40
 fn pos_offset(index: usize) -> usize {

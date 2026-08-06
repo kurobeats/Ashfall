@@ -69,6 +69,29 @@ pub mod fo3_17 {
     pub const DATA_HANDLER: usize = 0x0106_CDCC;
 }
 
+// ═══════════════════════════════════════════════════════════════
+// Verified FNV 1.4.0.525 address table (xNVSE GameAPI.cpp RUNTIME block,
+// cross-checked against the real GOG FalloutNV.exe — 32-bit PE,
+// md5 0f374bae0d6c34b754d3a487d49486ba, crc32 0x881FDAF8)
+pub mod fnv_14 {
+    /// FNV has NO direct LookupFormByID function — xNVSE wraps the form-map
+    /// global: `*(NiTPointerMap<TESForm>**)0x11C54C0` then `->Lookup(id)`.
+    pub const FORM_MAP: usize = 0x011C_54C0;
+    /// Script-VM argument extraction.
+    pub const EXTRACT_ARGS: usize = 0x005A_CCB0;
+    /// `void* CreateFormInstance(...)`.
+    pub const CREATE_FORM_INSTANCE: usize = 0x0046_5110;
+    /// `ConsoleManager* ConsoleManager_GetSingleton(bool)`.
+    pub const CONSOLE_MANAGER_GET_SINGLETON: usize = 0x0071_B160;
+    /// `TESForm::FormHeap_Allocate/Free`.
+    pub const FORM_HEAP_ALLOCATE: usize = 0x0040_1000;
+    pub const FORM_HEAP_FREE: usize = 0x0040_1030;
+    /// `bool* bEchoConsole` global.
+    pub const ECHO_CONSOLE: usize = 0x011F_158C;
+    /// `TESForm* GetFormByID(...)` — LookupFormByID's neighbor.
+    pub const GET_FORM_BY_ID: usize = 0x0048_3A00;
+}
+
 pub fn is_fnv() -> bool {
     GAME_ENGINE.load(Ordering::SeqCst) == 1
 }
