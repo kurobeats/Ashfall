@@ -20,6 +20,7 @@ parking_lot = { workspace = true }
 clap = { version = "4", features = ["derive"] }
 shellexpand = "3"
 toml = "0.8"
+flate2 = "1"
 
 [dev-dependencies]
 wat = "1"

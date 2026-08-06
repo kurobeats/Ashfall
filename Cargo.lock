@@ -340,6 +340,7 @@ dependencies = [
  "bytes",
  "clap",
  "dashmap",
+ "flate2",
  "parking_lot",
  "postcard",
  "rusqlite",

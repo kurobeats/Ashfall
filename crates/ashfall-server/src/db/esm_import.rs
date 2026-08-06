@@ -3,8 +3,8 @@
 //!
 //! Implements the minimal TES4 plugin-format walker needed for record
 //! extraction (esplugin's record/subrecord APIs are `pub(crate)`, so a native
-//! parser is required). FO3/FNV plugins are uncompressed; records carrying
-//! the compressed flag are skipped with a warning.
+//! parser is required). Real masters compress some records (LAND, NPC_, ...)
+//! with the 0x00040000 flag — those are zlib-decompressed before parsing.
 //!
 //! ## Record → table mapping
 //!
@@ -191,11 +191,12 @@ impl Database {
         let mut reader = PluginReader::new(data);
         let mut stats = EsmImportStats::default();
 
-        // TES4 file header record
+        // TES4 file header record — 24-byte record header: type(4) size(4)
+        // flags(4) formID(4) timestamp(4) vcs(2) internal(2) = 4+4+16.
         if reader.peek_4cc() == Some(*b"TES4") {
             reader.read(4); // record type
             let size = reader.read_u32().unwrap_or(0) as usize;
-            reader.read(20); // flags, formID, timestamp, vcs, internal
+            reader.read(16); // flags, formID, timestamp, vcs, internal
             reader.read(size); // header subrecords
         }
 
@@ -276,17 +277,33 @@ impl Database {
         let size = reader.read_u32().ok_or_else(|| anyhow::anyhow!("truncated record"))? as usize;
         let flags = reader.read_u32().unwrap_or(0);
         let form_id = reader.read_u32().unwrap_or(0);
-        reader.read(12); // timestamp + version control + internal
+        reader.read(8); // timestamp(4) + version control(2) + internal(2)
         let body = reader
             .read(size)
             .ok_or_else(|| anyhow::anyhow!("record 0x{form_id:08X} overruns file"))?;
 
-        // Compressed records are skipped (FO3/FNV plugins are uncompressed)
-        if flags & 0x0004_0000 != 0 {
-            return Ok(());
-        }
+        // Real masters compress some records (flag 0x00040000): the data
+        // field is [u32 uncompressed_size][zlib stream] that decompresses to
+        // the subrecords.
+        let body: std::borrow::Cow<'_, [u8]> = if flags & 0x0004_0000 != 0 {
+            use flate2::read::ZlibDecoder;
+            use std::io::Read;
+            if body.len() < 4 {
+                return Err(anyhow::anyhow!(
+                    "record 0x{form_id:08X}: truncated compressed body"
+                ));
+            }
+            let expected = u32::from_le_bytes(body[..4].try_into().unwrap()) as usize;
+            let mut out = Vec::with_capacity(expected);
+            ZlibDecoder::new(&body[4..])
+                .read_to_end(&mut out)
+                .map_err(|e| anyhow::anyhow!("record 0x{form_id:08X} zlib: {e}"))?;
+            std::borrow::Cow::Owned(out)
+        } else {
+            std::borrow::Cow::Borrowed(body)
+        };
 
-        let subs = parse_subrecords(body);
+        let subs = parse_subrecords(&body);
         self.import_record(&rec_type, form_id, &subs, game, stats, world_ctx, cell_ctx);
         Ok(())
     }
@@ -444,8 +461,8 @@ mod tests {
         v.extend_from_slice(&0u32.to_le_bytes()); // flags
         v.extend_from_slice(&form_id.to_le_bytes());
         v.extend_from_slice(&0u32.to_le_bytes()); // timestamp
-        v.extend_from_slice(&0u32.to_le_bytes()); // version control
-        v.extend_from_slice(&0u32.to_le_bytes()); // internal
+        v.extend_from_slice(&0u16.to_le_bytes()); // version control
+        v.extend_from_slice(&0u16.to_le_bytes()); // internal
         for s in subs {
             v.extend_from_slice(s);
         }
@@ -643,15 +660,33 @@ mod tests {
     }
 
     #[test]
-    fn test_compressed_record_skipped() {
+    fn test_compressed_record_decompressed() {
         let db = Database::open_in_memory().unwrap();
-        // WEAP record with the compressed flag set → skipped, no insert
-        let mut rec = record(b"WEAP", 0x100, &[sub(b"FULL", b"Zzz\0")]);
-        let flags_offset = 8; // [type 4][size 4][flags 4]
-        rec[flags_offset..flags_offset + 4].copy_from_slice(&0x0004_0000u32.to_le_bytes());
+        // WEAP record with the compressed flag (0x00040000): the data field
+        // is a zlib stream that decompresses to the real subrecords.
+        use flate2::write::ZlibEncoder;
+        use std::io::Write;
+        let raw = record(b"WEAP", 0x100, &[sub(b"FULL", b"Zzz\0")]);
+        let raw_body = &raw[24..]; // [type 4][size 4][flags 4][formID 4][ts 4][vcs 2][int 2]
+        let mut enc = ZlibEncoder::new(Vec::new(), flate2::Compression::default());
+        enc.write_all(raw_body).unwrap();
+        let zlib_body = enc.finish().unwrap();
+        // TES4 compressed record data: [u32 uncompressed_size][zlib stream]
+        let mut compressed = Vec::with_capacity(4 + zlib_body.len());
+        compressed.extend_from_slice(&(raw_body.len() as u32).to_le_bytes());
+        compressed.extend_from_slice(&zlib_body);
+
+        let mut rec = Vec::new();
+        rec.extend_from_slice(b"WEAP");
+        rec.extend_from_slice(&(compressed.len() as u32).to_le_bytes());
+        rec.extend_from_slice(&0x0004_0000u32.to_le_bytes()); // compressed flag
+        rec.extend_from_slice(&0x100u32.to_le_bytes()); // formID
+        rec.extend_from_slice(&[0u8; 8]); // timestamp(4) + vcs(2) + internal(2)
+        rec.extend_from_slice(&compressed);
+
         let mut plugin = header(1);
         plugin.extend_from_slice(&group(*b"WEAP", 0, &rec));
         let stats = db.import_plugin_bytes(&plugin, GameId::Fallout3).unwrap();
-        assert_eq!(stats.weapons, 0);
+        assert_eq!(stats.weapons, 1, "compressed WEAP record imported");
     }
 }
