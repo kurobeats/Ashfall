@@ -5,8 +5,10 @@ use ashfall_core::math::distance;
 use ashfall_core::protocol::{self, Packet};
 use crate::combat::DamageFormula;
 use crate::world::objects::{Actor, Player};
+use crate::world::position_history::PositionHistory;
 use crate::world::registry::ObjectRegistry;
 use std::sync::Arc;
+use std::time::Instant;
 
 /// Read-only actor access covering both Actor and Player entities
 /// (Player wraps an Actor by composition, not inheritance).
@@ -57,6 +59,18 @@ impl CombatResolver {
         registry: &Arc<ObjectRegistry>,
         hit: &Packet,
     ) -> Option<Vec<Packet>> {
+        Self::resolve_hit_compensated(registry, hit, &PositionHistory::new())
+    }
+
+    /// Resolve a hit with server-side lag compensation: the range check uses
+    /// the attacker's position ~1 RTT before the server processed the hit
+    /// (the attacker's own view), instead of its current position which is
+    /// ahead by one network round-trip.
+    pub fn resolve_hit_compensated(
+        registry: &Arc<ObjectRegistry>,
+        hit: &Packet,
+        history: &PositionHistory,
+    ) -> Option<Vec<Packet>> {
         let (target_id, attacker_id, limb, base_damage, flags, weapon_id, _projectile) = match hit {
             Packet::ActorHit { target, attacker, limb, base_damage, flags, weapon_id, projectile } => {
                 (*target, *attacker, *limb, *base_damage, *flags, *weapon_id, *projectile)
@@ -82,11 +96,16 @@ impl CombatResolver {
             return None;
         }
 
-        // Validate distance (anti-teleport-hack)
+        // Validate distance (anti-teleport-hack) with lag compensation:
+        // use the attacker's position as of ~1 RTT ago when available.
         let mut target_pos = [0.0; 3];
         with_actor(registry, target_id, |a| target_pos = a.container.object.net_pos)?;
         let mut attacker_pos = [0.0; 3];
         with_actor(registry, attacker_id, |a| attacker_pos = a.container.object.net_pos)?;
+        let compensated = history.lag_compensated(attacker_id, Instant::now());
+        if let Some(comp) = compensated {
+            attacker_pos = comp;
+        }
 
         let dist = distance(target_pos, attacker_pos);
         let max_range = 5000.0; // ponytail: generous max weapon range

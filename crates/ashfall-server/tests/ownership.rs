@@ -373,3 +373,58 @@ fn test_own_equip_accepted() {
     let guard = arc.read();
     assert!(guard.as_any().downcast_ref::<Item>().unwrap().equipped);
 }
+
+
+// ═══════════════════════════════════════════════════════════════
+// Lag compensation — combat range checks use the attacker's position
+// ~1 RTT before processing, not its (ahead) current position
+// ═══════════════════════════════════════════════════════════════
+
+use ashfall_server::combat::resolver::CombatResolver;
+use ashfall_server::world::position_history::{PositionHistory, LAG_COMP_REWIND};
+use std::time::Duration as StdDuration;
+
+fn player_nid(id: NetworkID, health: f32, pos: [f32; 3]) -> Player {
+    let mut p = Player::new(id, 0x14, 0x07, 5);
+    p.actor.set_value(0x14, health, false);
+    p.actor.container.object.game_pos = pos;
+    p.actor.container.object.net_pos = pos;
+    p
+}
+
+#[test]
+fn test_combat_lag_compensation_uses_old_position() {
+    let registry = Arc::new(ObjectRegistry::new());
+    let attacker = registry.allocate_id();
+    let target = registry.allocate_id();
+    // Attacker fired from 6000 units out (out of range) while moving toward
+    // the target — by processing time it is at 4000 (in range).
+    registry.insert(player_nid(attacker, 100.0, [4000.0, 0.0, 0.0]));
+    registry.insert(player_nid(target, 100.0, [0.0, 0.0, 0.0]));
+
+    let history = PositionHistory::new();
+    // The attacker's position when it fired: 6000 units away (out of range)
+    history.record(attacker, [6000.0, 0.0, 0.0]);
+    std::thread::sleep(StdDuration::from_millis(LAG_COMP_REWIND.as_millis() as u64 + 20));
+
+    let hit = Pkt::ActorHit {
+        target,
+        attacker,
+        limb: 0,
+        base_damage: 25.0,
+        flags: 0,
+        weapon_id: 0,
+        projectile: 0,
+    };
+
+    // Without compensation: current position (4000) is in range → accepted.
+    assert!(
+        CombatResolver::resolve_hit(&registry, &hit).is_some(),
+        "current-position check accepts (attacker now in range)"
+    );
+    // With compensation: the 6000-unit fire position is used → rejected.
+    assert!(
+        CombatResolver::resolve_hit_compensated(&registry, &hit, &history).is_none(),
+        "lag-compensated check uses the attacker's fire-time position"
+    );
+}

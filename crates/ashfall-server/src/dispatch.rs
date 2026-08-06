@@ -56,6 +56,8 @@ pub struct Dispatcher {
     pub globals: GlobalState,
     pub quests: QuestManager,
     pub factions: FactionMatrix,
+    /// Ring-buffered positions for server-side lag compensation.
+    pub pos_history: crate::world::position_history::PositionHistory,
 }
 
 impl Dispatcher {
@@ -66,6 +68,7 @@ impl Dispatcher {
             globals: GlobalState::new(),
             quests: QuestManager::new(),
             factions: FactionMatrix::default(),
+            pos_history: crate::world::position_history::PositionHistory::new(),
         }
     }
 
@@ -87,7 +90,10 @@ impl Dispatcher {
             // ═══ Object ═══
             Packet::UpdatePos { id, pos } => {
                 match object::handle_update_pos(&self.registry, session, id, pos) {
-                    Some(pkt) => DispatchResult::new().broadcast(pkt),
+                    Some(pkt) => {
+                        self.pos_history.record(id, pos);
+                        DispatchResult::new().broadcast(pkt)
+                    }
                     None => DispatchResult::new(), // rejected
                 }
             }
