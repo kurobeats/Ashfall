@@ -52,3 +52,22 @@ analyzed identically:
 | parentCell offset | 0x40 — 8,924 `[reg+0x40]` reads in the binary (tool 2) + xNVSE header (tool 1) |
 | Opcodes | FNV's GECK/game command tables are RUNTIME-BUILT (no static name→opcode array — the FO3-style scan finds nothing). Values verified via FO3 GECK binary + xNVSE `SetReturnType` (shared gamebryo VM opcodes) |
 | ESM import | FalloutNV.esm + 5 DLCs: 488 weapons (all unique; 14 formIDs shared across masters), 6,452 NPCs, 380,497 refs, 772 factions — cross-verified vs independent python walker. 1 corrupt LAND record (of 33,179 compressed) skipped via `stats.skipped_compressed` |
+
+## Proton runtime (FO3 GOTY, Steam, Fedora 44, test host)
+
+Real-game injection test of `ashfall-bridge` + the new `ashfall-bridge-proxy`
+(dinput8.dll proxy) under Proton Experimental (11.0-100), RX 6700 XT, DXVK 3.
+
+| Check | Result |
+|-------|--------|
+| Fallout3.exe identity | PE32 i386, **SteamStub-packed** (no import table, 5 sections) — cannot run outside Steam; `proton run` directly exits 0 silently |
+| Injection via `WINEDLLOVERRIDES="bridge=n,b"` | **does not work** — overrides only load DLLs something imports; nothing imports `bridge`. README's old fallback path was broken-by-design |
+| Injection via `dinput8.dll` proxy (game imports dinput8, app-dir native wins over builtin) | **works** — bridge DllMain runs in the real game process |
+| Bridge TCP server | `127.0.0.1:1771` LISTENING inside Fallout3.exe (verified in launcher and game processes) |
+| Pipe protocol round trip | wakeup `0x01→0x01` OK; `OP_GET_DEAD` (stub path) → `[03][key][00]` OK — full request/response against the live game process |
+| Real vtable commands at main menu (`OP_IS_MOVING`/`OP_GET_ACTOR_STATE` via `vtable::get_actor_state`) | **crash the game** — no player ref exists at menu (refID 0x14 is garbage) and anim-struct offsets are the still-unverified constants. Repro: broken pipe + process exit on 2nd command |
+| Game stability | launcher auto-runs (FO3 GOTY default target = `Fallout3Launcher.exe`); game stable 70s+ at menu without bridge commands |
+
+Stack for future runtime tests: `cargo build --release --target i686-pc-windows-gnu -p ashfall-bridge-proxy`
+→ copy to game dir as `dinput8.dll` → launch via Steam (DRM) → Enter in launcher.
+Vtable commands need a loaded save (player ref valid) + offset re-verification.

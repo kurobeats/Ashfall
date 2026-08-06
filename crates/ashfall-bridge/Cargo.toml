@@ -9,6 +9,12 @@ edition = "2021"
 [lib]
 crate-type = ["cdylib", "rlib"]  # cdylib produces bridge.dll; rlib needed for tests
 
+[features]
+default = ["dllmain"]
+# bridge.dll ships its own DllMain; the dinput8 proxy links the rlib and
+# defines DllMain itself — disable this feature to avoid duplicate symbol.
+dllmain = []
+
 [dependencies]
 ashfall-core = { path = "../ashfall-core" }
 # Minimal deps — no tokio inside Wine process; use raw Win32 + std::net

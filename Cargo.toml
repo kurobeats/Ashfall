@@ -6,6 +6,7 @@ members = [
     "crates/ashfall-master",
     "crates/ashfall-script",
     "crates/ashfall-bridge",
+    "crates/ashfall-bridge-proxy",
 ]
 resolver = "2"
 

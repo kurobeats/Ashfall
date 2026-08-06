@@ -11,7 +11,7 @@ Linux Host
 │   └── IPC: TCP 127.0.0.1:1771
 └── Proton/Wine
     └── Fallout3.exe
-        └── bridge.dll    (injected via WINEDLLOVERRIDES)
+        └── dinput8.dll proxy (runs bridge init, forwards DInput)
             └── TCP server on 127.0.0.1:1771
 ```
 
@@ -38,41 +38,36 @@ sudo dnf install mingw64-gcc
 # Build native binaries
 cargo build --release
 
-# Build bridge.dll (optional — prebuilt available in CI artifacts)
-cargo build --release --target x86_64-pc-windows-gnu -p ashfall-bridge
+# Build bridge.dll (FOSE/NVSE plugin path — needs an xSE loader)
+cargo build --release --target i686-pc-windows-gnu -p ashfall-bridge
 
-> ⚠️ **32-bit caveat:** FO3/FNV are 32-bit executables, so a 64-bit DLL cannot
-> load into them. The x86_64 target works for compilation/testing today, but
-> real Proton injection will need `rustup target add i686-pc-windows-gnu` and
-> `cargo build --target i686-pc-windows-gnu`. Verify before runtime testing.
+# Build dinput8 proxy (recommended — no FOSE needed, verified under Proton)
+cargo build --release --target i686-pc-windows-gnu -p ashfall-bridge-proxy
 ```
 
-## Proton Setup
+> ⚠️ FO3/FNV are **32-bit** executables, so a 64-bit DLL cannot load into
+> them. Always use the `i686-pc-windows-gnu` target.
 
-### 1. Copy bridge.dll
+## Injection
+
+`WINEDLLOVERRIDES="bridge=n,b"` does **not** load the bridge — DLL overrides
+only apply when something *imports* that DLL, and the game imports nothing
+called `bridge`. Verified against real FO3 GOTY under Proton Experimental.
+
+Use the **dinput8 proxy** instead: the game imports `dinput8.dll`, and a
+native copy in the game dir wins over wine's builtin. `DllMain` runs the
+bridge init; `DirectInput8Create` forwards to wine's builtin dinput8.
 
 ```bash
-# Fallout 3 (Steam)
-FALLOUT3_DIR="$HOME/.steam/steam/steamapps/common/Fallout 3 goty"
-cp target/x86_64-pc-windows-gnu/release/bridge.dll "$FALLOUT3_DIR/"
-
-# Fallout: New Vegas
-FNV_DIR="$HOME/.steam/steam/steamapps/common/Fallout New Vegas"
-cp target/x86_64-pc-windows-gnu/release/bridge.dll "$FNV_DIR/"
+cp target/i686-pc-windows-gnu/release/ashfall_bridge_proxy.dll \
+  "$FALLOUT3_DIR/dinput8.dll"
 ```
 
-### 2. Launch game with DLL override
-
-```bash
-# Steam launch options for Fallout 3:
-#   WINEDLLOVERRIDES="bridge=n,b" %command%
-
-# Or from terminal:
-WINEDLLOVERRIDES="bridge=n,b" \
-  steam steam://rungameid/22370
-```
-
-`bridge=n,b` means: load bridge as **n**ative (not builtin), and load **b**oth native and builtin for other DLLs.
+> ⚠️ The Steam version of Fallout3.exe is **SteamStub-packed** (no import
+> table). It must be launched **through Steam** — running it directly via
+> `proton run` exits silently with code 0. If your game came with a launcher
+> (FO3 GOTY default target is `Fallout3Launcher.exe`), press Enter on it to
+> start the real game.
 
 ### 3. Start Ashfall
 
@@ -132,17 +127,17 @@ Same as desktop. Proton version ≥ 9 recommended. Bridge DLL works identically.
 # On Steam Deck (Desktop Mode terminal):
 # 1. Install Rust + mingw-w64 (pacman)
 # 2. Build as above
-# 3. Copy bridge.dll to game directory on SD card or internal
+# 3. Copy dinput8 proxy (ashfall_bridge_proxy.dll) to game directory on SD card or internal
 # 4. Set launch options in Steam
 # 5. Launch ashfall-client from terminal or add as non-Steam game
 ```
 
 ## Troubleshooting
 
-### bridge.dll doesn't load
-- Check `WINEDLLOVERRIDES` spelling: `bridge=n,b` (comma, no spaces)
-- Verify bridge.dll is in the same directory as Fallout3.exe
-- Run with `WINEDEBUG=+loaddll` to see DLL load logs
+### dinput8 proxy doesn't load
+- Verify `dinput8.dll` (built from `ashfall-bridge-proxy`) is in the same directory as Fallout3.exe
+- Run with `WINEDEBUG=+loaddll` in launch options (`WINEDEBUG=+loaddll %command%`) to see DLL load logs
+- `ss -tlnp | grep 1771` shows the bridge listener once loaded
 
 ### Client can't connect to bridge
 - Ensure game is running and past the main menu
@@ -151,13 +146,16 @@ Same as desktop. Proton version ≥ 9 recommended. Bridge DLL works identically.
 
 ### Game crashes on startup
 - bridge.dll has memory-patching primitives and VTable getters, but `hooks::install()`
-  does not patch any engine addresses yet — hooks are inert until Proton runtime
-  testing confirms the hardcoded FO3/FNV offsets
-- Remove bridge.dll or set `WINEDLLOVERRIDES=""` to bypass
-- Check Proton logs: `PROTON_LOG=1 %command%`
+  does not patch any engine addresses yet — hooks are inert
+- **VTable getter commands (OP_GET_POS/GET_ACTOR_STATE/IS_MOVING etc.) crash the game
+  before a save is loaded** — no player ref exists at the main menu (refID 0x14 is
+  garbage) and anim-struct offsets are still unverified. Use stub-path commands
+  (OP_GET_DEAD, OP_GET_ACTOR_VALUE at menu) or test with a loaded save
+- Remove dinput8.dll to bypass entirely
+- Check Proton logs: `PROTON_LOG=1 %command%` as a launch option
 
-### Build fails for x86_64-pc-windows-gnu
-- Install MinGW-w64: `sudo apt install mingw-w64`
+### Build fails for i686-pc-windows-gnu
+- Install MinGW-w64: `sudo apt install mingw-w64` / `sudo dnf install mingw64-gcc`
 - Or skip bridge build and use stub mode: set `mode = stub` in client config
 - Stub mode returns canned responses — enough for client/server development
 

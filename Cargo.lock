@@ -288,6 +288,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "ashfall-bridge-proxy"
+version = "0.1.0"
+dependencies = [
+ "ashfall-bridge",
+ "windows-sys 0.52.0",
+]
+
+[[package]]
 name = "ashfall-client"
 version = "0.1.0"
 dependencies = [

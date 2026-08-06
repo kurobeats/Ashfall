@@ -28,9 +28,22 @@ use std::sync::atomic::{AtomicBool, Ordering};
 static RUNNING: AtomicBool = AtomicBool::new(true);
 static INITIALIZED: AtomicBool = AtomicBool::new(false);
 
+/// One-time init — hooks + TCP server + console defaults.
+/// Called from bridge.dll DllMain (FOSE-less path) or dinput8 proxy DllMain.
+pub fn bridge_init() {
+    if !INITIALIZED.swap(true, Ordering::SeqCst) {
+        hooks::install();
+        std::thread::spawn(|| {
+            network::run_server("127.0.0.1:1771");
+        });
+        console::register_defaults();
+    }
+}
+
 /// DLL entry point — fallback for non-NVSE injection.
 ///
 /// If NVSEPlugin_Load has already run, DllMain is a no-op.
+#[cfg(feature = "dllmain")]
 #[no_mangle]
 pub extern "system" fn DllMain(
     _hinst: *mut std::ffi::c_void,
@@ -43,13 +56,7 @@ pub extern "system" fn DllMain(
     match reason {
         DLL_PROCESS_ATTACH => {
             // Only init if NVSE hasn't already done it
-            if !INITIALIZED.swap(true, Ordering::SeqCst) {
-                hooks::install();
-                std::thread::spawn(|| {
-                    network::run_server("127.0.0.1:1771");
-                });
-                console::register_defaults();
-            }
+            bridge_init();
             1 // success
         }
         DLL_PROCESS_DETACH => {

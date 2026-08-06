@@ -1,0 +1,22 @@
+[package]
+name = "ashfall-bridge-proxy"
+version = "0.1.0"
+edition = "2021"
+
+# dinput8.dll proxy — the classic no-FOSE injection for FO3/FNV.
+# The game imports dinput8.dll; a native copy in the game dir wins over
+# wine's builtin, so our DllMain runs bridge init while DirectInput8Create
+# forwards to the real (wine builtin) dinput8.
+#
+# Build: cargo build --release --target i686-pc-windows-gnu -p ashfall-bridge-proxy
+# Ship: copy target/i686-pc-windows-gnu/release/ashfall_bridge_proxy.dll \
+#         "$FALLOUT3_DIR/dinput8.dll"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+ashfall-bridge = { path = "../ashfall-bridge", default-features = false }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-sys = { version = "0.52", features = ["Win32_System_LibraryLoader"] }
