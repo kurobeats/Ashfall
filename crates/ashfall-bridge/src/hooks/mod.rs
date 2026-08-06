@@ -38,7 +38,7 @@ static GAME_ENGINE: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::n
 // ═══════════════════════════════════════════════════════════════
 // Engine detection
 //
-// Verdict from real-binary analysis (analysis host, GOG
+// Verdict from real-binary analysis (a Linux analysis host, GOG
 // Fallout3.exe 1.7.0.3, md5 7691d7180f225ee8e876358d170ecc93): the CRC
 // constants below match NO computable hash of the real exe (whole-file
 // CRC32 = 0x425A8C16; no chunk/CRC-variant matches). FOSE/NVSE never use

@@ -1,7 +1,7 @@
 # Reverse-engineering verification scripts
 
 Run against the real game binaries (Fallout3.exe / GECK.exe, v1.7.0.3 GOG) on
-a Linux host with radare2 — see analysis host (`~/Downloads/fallout3/app`).
+a Linux host with radare2 — see a Linux analysis host (`~/Downloads/fallout3/app`).
 
 Every hardcoded constant in `ashfall-bridge` was verified with **two
 independent tools**:
@@ -53,7 +53,7 @@ analyzed identically:
 | Opcodes | FNV's GECK/game command tables are RUNTIME-BUILT (no static name→opcode array — the FO3-style scan finds nothing). Values verified via FO3 GECK binary + xNVSE `SetReturnType` (shared gamebryo VM opcodes) |
 | ESM import | FalloutNV.esm + 5 DLCs: 488 weapons (all unique; 14 formIDs shared across masters), 6,452 NPCs, 380,497 refs, 772 factions — cross-verified vs independent python walker. 1 corrupt LAND record (of 33,179 compressed) skipped via `stats.skipped_compressed` |
 
-## Proton runtime (FO3 GOTY, Steam, Fedora 44, test host)
+## Proton runtime (FO3 GOTY, Steam, Fedora 44)
 
 Real-game injection test of `ashfall-bridge` + the new `ashfall-bridge-proxy`
 (dinput8.dll proxy) under Proton Experimental (11.0-100), RX 6700 XT, DXVK 3.
@@ -72,7 +72,7 @@ Stack for future runtime tests: `cargo build --release --target i686-pc-windows-
 → copy to game dir as `dinput8.dll` → launch via Steam (DRM) → Enter in launcher.
 Vtable commands need a loaded save (player ref valid) + offset re-verification.
 
-## Steam FO3 GOTY (test host) — address table MISMATCH, 2026-08-06
+## Steam FO3 GOTY — address table MISMATCH, 2026-08-06
 
 The GOG 1.7.0.3-verified address table does **not** apply to the Steam build:
 
@@ -108,7 +108,7 @@ Steam puts the prefix under the **game library**'s compatdata, not
 `~/.local/share/Steam`:
 
 ```
-/home/user/.local/share/.games/SteamLibrary/steamapps/compatdata/22370/
+$HOME/.local/share/.games/SteamLibrary/steamapps/compatdata/22370/
   pfx/drive_c/users/steamuser/Documents/My Games/Fallout3/Saves/   <- .fos files
 ```
 

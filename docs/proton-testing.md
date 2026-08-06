@@ -1,7 +1,7 @@
 # Proton runtime testing — Fallout 3
 
 Status of the bridge inside the real game (FO3 GOTY, Steam, Proton
-Experimental, verified 2026-08-06 on test host — see
+Experimental, verified 2026-08-06 against the real game — see
 [scripts/re/README.md](../scripts/re/README.md) for the result matrix).
 
 ## What works

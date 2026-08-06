@@ -797,8 +797,8 @@ mod process_tests {
     #[test]
     fn test_exe_base_name() {
         assert_eq!(exe_base_name(r"C:\Games\Fallout 3\Fallout3.exe"), Some("Fallout3.exe"));
-        assert_eq!(exe_base_name("Z:\\home\\ants\\game\\FalloutNV.exe"), Some("FalloutNV.exe"));
-        assert_eq!(exe_base_name("/home/user/loader.exe"), Some("loader.exe"));
+        assert_eq!(exe_base_name("Z:\\games\\FalloutNV.exe"), Some("FalloutNV.exe"));
+        assert_eq!(exe_base_name("/opt/loader.exe"), Some("loader.exe"));
         assert_eq!(exe_base_name(""), None);
         assert_eq!(exe_base_name("noslash"), Some("noslash"));
     }

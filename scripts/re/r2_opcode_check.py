@@ -1,9 +1,9 @@
 # TOOL 2: opcode verification via radare2 (search + memory dump).
 # The reads (string search, pointer search, entry dump, name dump) are all
 # performed by r2; python only generates commands and parses output.
-import subprocess, re, struct
+import os, subprocess, re, struct
 
-GECK = "/home/user/Downloads/fallout3/app/GECK.exe"
+GECK = os.environ.get("GECK_EXE", os.path.expanduser("~/Downloads/fallout3/app/GECK.exe"))
 
 va = {"PlaceAtMe": "0x00d4ad2c", "AddItem": "0x00d4afbc", "RemoveItem": "0x00d4aa78",
       "EquipItem": "0x00d49dac", "UnequipItem": "0x00d49d94", "ForceActorValue": "0x00d49a08",
