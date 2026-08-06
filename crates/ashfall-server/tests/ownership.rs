@@ -262,3 +262,40 @@ fn test_hit_attacker_spoof_rejected() {
     };
     assert!(handle_actor_hit(&registry, &sess, &hit).is_none(), "spoofed attacker rejected");
 }
+
+// ═══════════════════════════════════════════════════════════════
+// Weather/global packets must update the authoritative server state
+// (previously relayed raw — server state desynced from clients)
+// ═══════════════════════════════════════════════════════════════
+
+use ashfall_server::dispatch::Dispatcher;
+
+#[test]
+fn test_client_weather_updates_authoritative_state() {
+    let dispatcher = Dispatcher::new();
+    let mut sess = Session::new(
+        NetworkID::new(7),
+        SocketAddr::from(([127, 0, 0, 1], 3007)),
+        "weather-tester".into(),
+    );
+    sess.player_id = Some(NetworkID::new(7));
+
+    let result = dispatcher.dispatch(&mut sess, Pkt::GameWeather { weather: 0x00012345 });
+    assert!(!result.broadcasts.is_empty(), "weather change relayed");
+    assert_eq!(dispatcher.weather.get(), 0x00012345, "authoritative weather updated");
+}
+
+#[test]
+fn test_client_global_updates_authoritative_state() {
+    let dispatcher = Dispatcher::new();
+    let mut sess = Session::new(
+        NetworkID::new(8),
+        SocketAddr::from(([127, 0, 0, 1], 3008)),
+        "global-tester".into(),
+    );
+    sess.player_id = Some(NetworkID::new(8));
+
+    let result = dispatcher.dispatch(&mut sess, Pkt::GameGlobal { global: 0x100, value: 42 });
+    assert!(!result.broadcasts.is_empty(), "global change relayed");
+    assert_eq!(dispatcher.globals.get(0x100), Some(42), "authoritative global updated");
+}

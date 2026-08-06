@@ -328,10 +328,21 @@ impl Dispatcher {
             | Packet::DoorState { .. }
             | Packet::TerminalState { .. }
             | Packet::ItemListNew { .. }
-            | Packet::GameWeather { .. }
-            | Packet::GameGlobal { .. }
-            | Packet::GameBase { .. }
             => {
+                DispatchResult::new().broadcast(packet)
+            }
+
+            // ═══ Weather / globals — update authoritative state, then relay ═══
+            // (previously relayed raw, so server state never matched clients)
+            Packet::GameWeather { weather } => {
+                let pkt = game::handle_weather(&self.weather, weather);
+                DispatchResult::new().broadcast(pkt)
+            }
+            Packet::GameGlobal { global, value } => {
+                let pkt = game::handle_global(&self.globals, global, value);
+                DispatchResult::new().broadcast(pkt)
+            }
+            Packet::GameBase { .. } => {
                 DispatchResult::new().broadcast(packet)
             }
 
