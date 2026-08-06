@@ -54,7 +54,7 @@ Client connects to `127.0.0.1:1770`. Stub mode sends canned data — enough to v
 ## What's Left
 
 - **Co-op game mode content** — the full script stack now works (host functions, callbacks, real WASM builds); next is writing actual game modes: co-op quest logic, NPC AI behaviors, custom rules on top of the freeroam example.
-- **Proton runtime testing** — inject bridge.dll into actual FO3/FNV under Proton, verify VTable hooks fire correctly (vtable index offsets + anim struct fields are the only unverified constants left; game files + wine host are ready).
+- **Proton runtime testing** — inject the dinput8 proxy into actual FO3 under Proton, verify VTable hooks fire correctly (vtable index offsets + anim struct fields are the only unverified constants left; injection + pipe protocol already verified — see [docs/proton-testing.md](./docs/proton-testing.md)).
 - **Proton integration testing** — end-to-end test with real Fallout running under Proton/Wine.
 - **Windows native client** — currently Linux-only. Bridge DLL already cross-compiles for Windows.
 - **Client world renderer** — the GUI layer renders server-authored windows, but there is no 3D/2D world view yet; remote objects are listed with interpolated positions. `on_actor_punch` has no wire source (no Punch packet).
