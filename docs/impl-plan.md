@@ -208,6 +208,16 @@ PRs within a phase often parallelizable unless noted.
 
 ### What Still Needs Runtime Testing
 - [ ] **VTable patch verification** — inject bridge.dll into actual FO3/FNV under Proton, verify hook fires
+      (vtable INDEX offsets — GET_POS idx 12, GET_LOCKED idx 40, GET_BASE_FORM idx 4, ACTOR_ANIM_DATA
+      idx 121 — and the anim-struct field offsets are only verifiable at runtime; statically verifiable
+      constants are all r2-checked: see below)
+- [x] **Opcode table verification — DONE (r2 on GECK.exe command table, 2026-08-06)** — 4 of the 15
+      delegated opcodes were wrong (PlaceAtMe 0x1007→0x1025, SetStage 0x101B→0x1039, SetAlert
+      0x101E→0x105A, Activate 0x100C→0x100D — each would have hijacked a different command); 11
+      verified correct. Cross-checked with xNVSE SetReturnType (0x1025 = PlaceAtMe).
+- [x] **Field offsets verification — DONE (xFOSE/xNVSE STATIC_ASSERT layouts, 2026-08-06)** —
+      get_parent_cell was reading rotZ (+0x28/+0x2C); now parentCell FO3 0x3C / FNV 0x40.
+      get_cell read cell refID at +0x14; now TESForm::refID +0x0C. Pos/angle now FNV-aware.
 - [x] **Wine runtime verification — DONE (2026-08-06, wine 11, no game)** — the
       bridge now cross-compiles to i686-pc-windows-gnu (first time ever; needed
       Win32_Foundation + Win32_System_LibraryLoader features) and runs under
