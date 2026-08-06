@@ -35,17 +35,38 @@ pub enum GameEngine {
 
 static GAME_ENGINE: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(2); // Unknown
 
-pub fn detect_engine(crc: u32) -> GameEngine {
-    // ponytail: CRC-based detection at bridge init
-    if crc == 0x00E59528 { // FALLOUT3_EN_VER17
-        GAME_ENGINE.store(0, Ordering::SeqCst);
-        GameEngine::Fallout3
-    } else if crc == 0x0206FEC7 { // FNV_EN_VER14
-        GAME_ENGINE.store(1, Ordering::SeqCst);
-        GameEngine::FalloutNV
-    } else {
-        GameEngine::Unknown
-    }
+// ═══════════════════════════════════════════════════════════════
+// Engine detection
+//
+// Verdict from real-binary analysis (analysis host, GOG
+// Fallout3.exe 1.7.0.3, md5 7691d7180f225ee8e876358d170ecc93): the CRC
+// constants below match NO computable hash of the real exe (whole-file
+// CRC32 = 0x425A8C16; no chunk/CRC-variant matches). FOSE/NVSE never use
+// CRC detection — they compile per-version with `#if FALLOUT_VERSION`.
+// The `crc` parameter is therefore ignored until a real signature scheme
+// (e.g. reading the exe's VS_VERSION_INFO at runtime) replaces it.
+pub fn detect_engine(_crc: u32) -> GameEngine {
+    GameEngine::Unknown
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Verified FO3 1.7.0.3 address table (xFOSE fose.h FALLOUT_VERSION_1_7
+// block, cross-checked against the real GOG exe — 0x455190 confirmed as
+// the hot form-lookup with 884 direct call sites)
+pub mod fo3_17 {
+    /// `TESForm* LookupFormByID(u32)` — verified.
+    pub const LOOKUP_FORM_BY_ID: usize = 0x0045_5190;
+    /// Script-VM argument extraction (opcode interception entry).
+    pub const EXTRACT_ARGS: usize = 0x0051_7950;
+    /// `void* CreateFormInstance(...)`.
+    pub const CREATE_FORM_INSTANCE: usize = 0x0043_CDA0;
+    /// `ConsoleManager* ConsoleManager_GetSingleton(bool)` — console hooks.
+    pub const CONSOLE_MANAGER_GET_SINGLETON: usize = 0x0062_B5D0;
+    /// `TESForm::FormHeap_Allocate/Free`.
+    pub const FORM_HEAP_ALLOCATE: usize = 0x0040_1000;
+    pub const FORM_HEAP_FREE: usize = 0x0040_1010;
+    /// `DataHandler**` global.
+    pub const DATA_HANDLER: usize = 0x0106_CDCC;
 }
 
 pub fn is_fnv() -> bool {
