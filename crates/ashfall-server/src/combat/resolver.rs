@@ -1,11 +1,51 @@
 //! Combat resolver — server-authoritative hit validation + damage application.
 
+use ashfall_core::id::NetworkID;
 use ashfall_core::math::distance;
 use ashfall_core::protocol::{self, Packet};
 use crate::combat::DamageFormula;
-use crate::world::objects::Actor;
+use crate::world::objects::{Actor, Player};
 use crate::world::registry::ObjectRegistry;
 use std::sync::Arc;
+
+/// Read-only actor access covering both Actor and Player entities
+/// (Player wraps an Actor by composition, not inheritance).
+fn with_actor(
+    registry: &ObjectRegistry,
+    id: NetworkID,
+    f: impl FnOnce(&Actor),
+) -> Option<()> {
+    let arc = registry.get(id)?;
+    let guard = arc.read();
+    if let Some(a) = guard.as_any().downcast_ref::<Actor>() {
+        f(a);
+        return Some(());
+    }
+    if let Some(p) = guard.as_any().downcast_ref::<Player>() {
+        f(&p.actor);
+        return Some(());
+    }
+    None
+}
+
+/// Mutable actor access covering both Actor and Player entities.
+fn with_actor_mut(
+    registry: &ObjectRegistry,
+    id: NetworkID,
+    f: impl FnOnce(&mut Actor),
+) -> Option<()> {
+    let arc = registry.get(id)?;
+    let mut guard = arc.write();
+    if let Some(a) = guard.as_any_mut().downcast_mut::<Actor>() {
+        f(a);
+        return Some(());
+    }
+    if let Some(p) = guard.as_any_mut().downcast_mut::<Player>() {
+        f(&mut p.actor);
+        return Some(());
+    }
+    None
+}
 
 /// Server-side combat resolution.
 pub struct CombatResolver;
@@ -24,26 +64,29 @@ impl CombatResolver {
             _ => return None,
         };
 
-        // Validate target exists and is alive
-        let target_actor = registry.get_typed::<Actor>(target_id)?;
-        if target_actor.dead {
+        // Validate target exists and is alive (Actor or Player)
+        let mut target_dead = true;
+        let mut target_health = 0.0f32;
+        with_actor(registry, target_id, |a| {
+            target_dead = a.dead;
+            target_health = a.get_value(0x14);
+        })?;
+        if target_dead {
             return None;
         }
 
-        // Validate attacker exists
-        let _attacker_actor = registry.get_typed::<Actor>(attacker_id)?;
+        // Validate attacker exists (Actor or Player)
+        let mut attacker_exists = false;
+        with_actor(registry, attacker_id, |_| attacker_exists = true);
+        if !attacker_exists {
+            return None;
+        }
 
         // Validate distance (anti-teleport-hack)
-        let target_arc = registry.get(target_id)?;
-        let target_pos = {
-            let guard = target_arc.read();
-            guard.as_any().downcast_ref::<Actor>()?.object.net_pos
-        };
-        let attacker_arc = registry.get(attacker_id)?;
-        let attacker_pos = {
-            let guard = attacker_arc.read();
-            guard.as_any().downcast_ref::<Actor>()?.object.net_pos
-        };
+        let mut target_pos = [0.0; 3];
+        with_actor(registry, target_id, |a| target_pos = a.container.object.net_pos)?;
+        let mut attacker_pos = [0.0; 3];
+        with_actor(registry, attacker_id, |a| attacker_pos = a.container.object.net_pos)?;
 
         let dist = distance(target_pos, attacker_pos);
         let max_range = 5000.0; // ponytail: generous max weapon range
@@ -52,25 +95,21 @@ impl CombatResolver {
             return None;
         }
 
-        // Calculate damage
+        // Calculate damage (DR/DT from the target's stored actor values)
         let limb_mult = DamageFormula::limb_multiplier(limb);
-        let dr = Self::get_actor_dr(&target_actor);
-        let dt = Self::get_actor_dt(&target_actor); // 0 for FO3
+        let mut dr = 0.0f32;
+        let mut dt = 0.0f32;
+        with_actor(registry, target_id, |a| {
+            dr = Self::get_actor_dr(a);
+            dt = Self::get_actor_dt(a); // 0 for FO3
+        });
         let crit_mult = if flags & protocol::HIT_FLAG_CRITICAL != 0 { 1.5 } else { 1.0 };
 
         let final_damage = DamageFormula::calculate(base_damage, limb_mult, dr, dt, crit_mult);
 
         // Apply damage to target's health (actor value index 0x14 = health)
-        let current_health = target_actor.get_value(0x14);
-        let new_health = (current_health - final_damage).max(0.0);
-
-        // Update actor value in registry
-        if let Some(arc) = registry.get(target_id) {
-            let mut guard = arc.write();
-            if let Some(actor) = guard.as_any_mut().downcast_mut::<Actor>() {
-                actor.set_value(0x14, new_health, false);
-            }
-        }
+        let new_health = (target_health - final_damage).max(0.0);
+        with_actor_mut(registry, target_id, |a| a.set_value(0x14, new_health, false));
 
         // Check for death
         let mut packets = vec![
@@ -92,14 +131,11 @@ impl CombatResolver {
             };
 
             // Mark actor as dead
-            if let Some(arc) = registry.get(target_id) {
-                let mut guard = arc.write();
-                if let Some(actor) = guard.as_any_mut().downcast_mut::<Actor>() {
-                    actor.dead = true;
-                    actor.death_limbs = 0x1F; // all limbs damaged
-                    actor.death_cause = 1; // killed by weapon
-                }
-            }
+            with_actor_mut(registry, target_id, |a| {
+                a.dead = true;
+                a.death_limbs = 0x1F; // all limbs damaged
+                a.death_cause = 1; // killed by weapon
+            });
 
             packets.push(Packet::ActorDeathExt {
                 id: target_id,

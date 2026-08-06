@@ -171,3 +171,94 @@ fn test_player_invalid_pos_rejected() {
     let pkt = object::handle_update_pos(&registry, &sess, player_id, [f32::NAN, 0.0, 0.0]);
     assert!(pkt.is_none(), "NaN position rejected");
 }
+
+// ═══════════════════════════════════════════════════════════════
+// Combat — players can deal and take damage; attacker spoof rejected
+// ═══════════════════════════════════════════════════════════════
+
+use ashfall_server::handlers::combat::handle_actor_hit;
+use ashfall_core::protocol::Packet as Pkt;
+
+fn player_at(id: u64, health: f32, pos: [f32; 3]) -> Player {
+    let mut p = Player::new(NetworkID::new(id), 0x14, 0x07, 5);
+    p.actor.set_value(0x14, health, false);
+    p.actor.container.object.game_pos = pos;
+    p.actor.container.object.net_pos = pos;
+    p
+}
+
+#[test]
+fn test_pvp_damage_resolves() {
+    let registry = Arc::new(ObjectRegistry::new());
+    let attacker = NetworkID::new(1);
+    let target = NetworkID::new(2);
+    registry.insert(player_at(1, 100.0, [0.0, 0.0, 0.0]));
+    registry.insert(player_at(2, 100.0, [5.0, 0.0, 0.0]));
+
+    let sess = session(1, Some(attacker));
+    let hit = Pkt::ActorHit {
+        target,
+        attacker,
+        limb: 0,
+        base_damage: 25.0,
+        flags: 0,
+        weapon_id: 0,
+        projectile: 0,
+    };
+    let packets = handle_actor_hit(&registry, &sess, &hit).expect("hit resolves");
+    assert!(packets.iter().any(|p| matches!(p, Pkt::ActorDamaged { target: t, final_damage, .. } if *t == target && *final_damage > 0.0)));
+
+    // Target health reduced by 25
+    let arc = registry.get(target).unwrap();
+    let guard = arc.read();
+    let target_player = guard.as_any().downcast_ref::<Player>().unwrap();
+    assert!((target_player.actor.get_value(0x14) - 75.0).abs() < 0.01);
+}
+
+#[test]
+fn test_pvp_lethal_hit_kills() {
+    let registry = Arc::new(ObjectRegistry::new());
+    let attacker = NetworkID::new(1);
+    let target = NetworkID::new(2);
+    registry.insert(player_at(1, 100.0, [0.0, 0.0, 0.0]));
+    registry.insert(player_at(2, 30.0, [5.0, 0.0, 0.0]));
+
+    let sess = session(1, Some(attacker));
+    let hit = Pkt::ActorHit {
+        target,
+        attacker,
+        limb: 0,
+        base_damage: 50.0,
+        flags: 0,
+        weapon_id: 0,
+        projectile: 0,
+    };
+    let packets = handle_actor_hit(&registry, &sess, &hit).expect("hit resolves");
+    assert!(packets.iter().any(|p| matches!(p, Pkt::ActorDeathExt { id, .. } if *id == target)));
+
+    let arc = registry.get(target).unwrap();
+    let guard = arc.read();
+    let target_player = guard.as_any().downcast_ref::<Player>().unwrap();
+    assert!(target_player.actor.dead, "lethal hit marks target dead");
+}
+
+#[test]
+fn test_hit_attacker_spoof_rejected() {
+    let registry = Arc::new(ObjectRegistry::new());
+    let target = NetworkID::new(2);
+    registry.insert(player_at(1, 100.0, [0.0, 0.0, 0.0]));
+    registry.insert(player_at(2, 100.0, [5.0, 0.0, 0.0]));
+
+    // Session owns player 1, but the packet claims player 3 attacked — framing.
+    let sess = session(1, Some(NetworkID::new(1)));
+    let hit = Pkt::ActorHit {
+        target,
+        attacker: NetworkID::new(3),
+        limb: 0,
+        base_damage: 50.0,
+        flags: 0,
+        weapon_id: 0,
+        projectile: 0,
+    };
+    assert!(handle_actor_hit(&registry, &sess, &hit).is_none(), "spoofed attacker rejected");
+}

@@ -190,7 +190,7 @@ impl Dispatcher {
 
             // ═══ Combat ═══
             Packet::ActorHit { .. } => {
-                match combat::handle_actor_hit(&self.registry, &packet) {
+                match combat::handle_actor_hit(&self.registry, session, &packet) {
                     Some(pkts) => {
                         let mut result = DispatchResult::new();
                         for p in pkts { result = result.broadcast(p); }
