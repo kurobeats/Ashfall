@@ -85,10 +85,18 @@ impl Database {
         let containers = self.load_all_containers();
         tracing::info!("  {} containers", containers.len());
 
-        // Quest stages
+        // Quest stages — the quest_stages table (populated by the ESM import)
+        // holds the KNOWN stages per quest, not current progress. With no save
+        // system, every quest starts unstarted (stage 0); the bridge/game
+        // reports advances at runtime.
         let quest_stages = self.load_quest_stages();
-        for qs in &quest_stages { quests.set_stage(qs.quest_id, qs.stage); }
-        tracing::info!("  {} quest stages", quest_stages.len());
+        let mut quest_ids: Vec<u32> = quest_stages.iter().map(|qs| qs.quest_id).collect();
+        quest_ids.sort_unstable();
+        quest_ids.dedup();
+        for quest_id in &quest_ids {
+            quests.set_stage(*quest_id, 0);
+        }
+        tracing::info!("  {} quests (stage 0)", quest_ids.len());
 
         // Dialogue flags
         let flags = self.load_dialogue_flags();

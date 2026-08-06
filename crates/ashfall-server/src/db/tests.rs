@@ -90,5 +90,24 @@ fn test_startup_load_integration() {
     let quests = crate::quest::QuestManager::new();
     let mut factions = crate::ai::factions::FactionMatrix::new();
     db.startup_load(&quests, &mut factions);
-    assert_eq!(quests.get_stage(0xABCD), 42);
+    // The quest_stages table lists KNOWN stages, not current progress — with
+    // no save system every quest starts unstarted (stage 0).
+    assert_eq!(quests.get_stage(0xABCD), 0);
+}
+
+#[test]
+fn test_startup_load_quest_stages_start_at_zero() {
+    // Multiple known stages for one quest (as the ESM import produces) must
+    // NOT leave the quest at its final stage at boot.
+    let db = super::Database::open_in_memory().unwrap();
+    for stage in [0u16, 10, 20, 100] {
+        db.conn()
+            .execute("INSERT INTO quest_stages VALUES (0x6136D, ?1)", [stage])
+            .unwrap();
+    }
+
+    let quests = crate::quest::QuestManager::new();
+    let mut factions = crate::ai::factions::FactionMatrix::new();
+    db.startup_load(&quests, &mut factions);
+    assert_eq!(quests.get_stage(0x6136D), 0, "quest starts unstarted, not at stage 100");
 }

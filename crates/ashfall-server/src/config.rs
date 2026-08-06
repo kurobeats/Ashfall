@@ -89,10 +89,19 @@ impl ServerConfig {
 
         match std::fs::read_to_string(&expanded) {
             Ok(content) => {
-                let config: ServerConfig = toml::from_str(&content)
-                    .or_else(|_| Self::parse_ini(&content))
-                    .unwrap_or_default();
-                Ok(config)
+                let toml_result: Result<ServerConfig, _> = toml::from_str(&content);
+                let ini_result = Self::parse_ini(&content);
+                match toml_result.or(ini_result) {
+                    Ok(config) => Ok(config),
+                    Err(_) => {
+                        // Do NOT silently fall back to defaults — the user's
+                        // config exists but is unreadable (bad TOML/ini).
+                        tracing::warn!(
+                            "Config at {expanded} failed to parse (invalid TOML/ini); using defaults"
+                        );
+                        Ok(ServerConfig::default())
+                    }
+                }
             }
             Err(_) => {
                 tracing::warn!("No config found at {expanded}, using defaults");

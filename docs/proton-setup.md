@@ -93,15 +93,15 @@ Client config (`~/.config/ashfall/client.ini`):
 
 ```ini
 [general]
-name = Wanderer
-master = 127.0.0.1     ; or public master server
+name = "Wanderer"
+master = "127.0.0.1"     ; or public master server
 
 [ipc]
-mode = proton           ; proton | native | stub
+mode = "proton"           ; proton | native | stub
 port = 1771             ; bridge.dll TCP port
 
 [server]
-address = 127.0.0.1
+address = "127.0.0.1"
 port = 1770
 ```
 
@@ -109,17 +109,20 @@ Server config (`~/.config/ashfall/server.ini`):
 
 ```ini
 [server]
-host = 0.0.0.0
+host = "0.0.0.0"
 port = 1770
 connections = 4
-announce = 127.0.0.1    ; master server address
+announce = "127.0.0.1"    ; master server address
 
 [scripts]
-path = ./scripts
+path = "./scripts"
 
 [database]
-path = ./data/fallout3.sqlite3
+path = "./data/fallout3.sqlite3"
 ```
+
+> ⚠️ Strings must be double-quoted (valid TOML). Unquoted values silently
+> fail parsing and the server falls back to defaults (warns in the log).
 
 ## Steam Deck
 
