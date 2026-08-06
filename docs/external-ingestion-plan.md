@@ -29,9 +29,19 @@
 
 ## Priority 0 — Bugs & Duplicates (Fix Now)
 
-### 1. Fix `NVSEPlugin_Load` signature — `plugin.rs`
-**Problem:** Takes `*const c_void`. Real NVSE passes `NVSEInterface*` with SafeWrite/trampoline bootstrap functions.
-**Fix:** Change to `*const NVSEInterface`, expose SafeWrite via interface.
+### 1. Fix `NVSEPlugin_Load` signature — `plugin.rs`  ✅ DONE (superseded 2026-08-06)
+**Problem:** Takes `*const c_void`. Real NVSE passes `NVSEInterface*`.
+**Fix:** Change to `*const NVSEInterface`.
+
+> ⚠️ **Correction (verified against xFOSE/xNVSE PluginAPI.h, 2026-08-06):** the
+> original premise — "NVSEInterface carries SafeWrite/trampoline bootstrap
+> functions" — is FALSE. The real interface is version fields + RegisterCommand,
+> SetOpcodeBase, QueryInterface, GetPluginHandle, RegisterTypedCommand,
+> GetRuntimeDirectory, isNogore. The first implementation mirrored the wrong
+> layout (every field after nvse_version read garbage) and used a 264-byte
+> inline-array PluginInfo (real: 12 bytes, `const char*` name). All corrected in
+> `bc841b4`/`f92f9fe`; FOSEPlugin_* exports added (FOSE loads FO3 plugins by the
+> FOSEPlugin_ name).
 ```rust
 #[repr(C)]
 pub struct NVSEInterface {
