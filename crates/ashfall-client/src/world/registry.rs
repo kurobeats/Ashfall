@@ -46,13 +46,15 @@ pub enum ClientObject {
 
 /// Client-side object registry.
 /// Client-side object cache — populated by server packets, read by the
-/// renderer once engine IPC lands.
-/// ponytail: several fields are written but not yet read (no renderer).
-#[allow(dead_code)]
+/// renderer.
 pub struct ClientRegistry {
     pub objects: HashMap<NetworkID, ClientObject>,
+    /// Written by packets; read once per-cell rendering lands.
+    #[allow(dead_code)]
     pub cell_objects: HashMap<u32, Vec<NetworkID>>,
+    #[allow(dead_code)]
     pub weather: u32,
+    #[allow(dead_code)]
     pub globals: HashMap<u32, i32>,
     last_positions: HashMap<NetworkID, ([f32; 3], std::time::Instant)>,
 }
@@ -144,6 +146,23 @@ impl ClientRegistry {
 
     pub fn object_count(&self) -> usize { self.objects.len() }
 
+    /// Interpolated position of an object: blended between the last two
+    /// received updates (100ms window), falling back to the raw position.
+    pub fn interpolated_pos(&self, id: NetworkID) -> Option<[f32; 3]> {
+        let pos = match self.objects.get(&id) {
+            Some(ClientObject::Object { pos: p, .. })
+            | Some(ClientObject::Actor { pos: p, .. })
+            | Some(ClientObject::Player { pos: p, .. }) => Some(*p),
+            _ => None,
+        }?;
+        if let Some((last, at)) = self.last_positions.get(&id) {
+            let elapsed = at.elapsed().as_millis() as f32;
+            let alpha = crate::world::state::interpolation_alpha(elapsed);
+            return Some(crate::world::state::interpolate_position(*last, pos, alpha));
+        }
+        Some(pos)
+    }
+
     fn update_pos(&mut self, id: NetworkID, pos: [f32; 3]) {
         let old = match self.objects.get(&id) {
             Some(ClientObject::Object { pos: p, .. }) | Some(ClientObject::Actor { pos: p, .. }) | Some(ClientObject::Player { pos: p, .. }) => Some(*p),
@@ -161,4 +180,39 @@ impl ClientRegistry {
 
 impl Default for ClientRegistry {
     fn default() -> Self { Self::new() }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::world::state::{interpolate_position, interpolation_alpha};
+    use ashfall_core::protocol::Packet;
+
+    #[test]
+    fn test_interpolation_wiring() {
+        let mut reg = ClientRegistry::new();
+        let id = NetworkID::new(7);
+        // ObjectNew at [0,0,0], then UpdatePos to [100,0,0]
+        reg.apply_packet(&Packet::ObjectNew {
+            id, ref_id: 0x100, base_id: 0x200, name: "x".into(),
+            game_pos: [0.0, 0.0, 0.0], net_pos: [0.0, 0.0, 0.0],
+            angle: [0.0; 3], scale: 1.0, cell: 1, enabled: true, lock: 0, owner: 0,
+        });
+        reg.apply_packet(&Packet::UpdatePos { id, pos: [100.0, 0.0, 0.0] });
+
+        // Immediately after the update, interpolation is ~at the old position
+        let p = reg.interpolated_pos(id).unwrap();
+        assert!(p[0] < 100.0, "interpolated between old and new, got x={}", p[0]);
+        // Raw position is the new one
+        match reg.objects.get(&id).unwrap() {
+            ClientObject::Object { pos, .. } => assert_eq!(*pos, [100.0, 0.0, 0.0]),
+            _ => panic!("expected object"),
+        }
+    }
+
+    #[test]
+    fn test_interp_helpers() {
+        assert_eq!(interpolate_position([0.0, 0.0, 0.0], [10.0, 0.0, 0.0], 0.25), [2.5, 0.0, 0.0]);
+        assert_eq!(interpolation_alpha(100.0), 1.0);
+    }
 }

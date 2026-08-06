@@ -171,6 +171,13 @@ pub fn vaultfunction_index(opcode: u16) -> u16 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
+
+    /// The handler table is a global — serialize the tests that touch it.
+    static OP_LOCK: Mutex<()> = Mutex::new(());
+    fn lock_ops() -> std::sync::MutexGuard<'static, ()> {
+        OP_LOCK.lock().unwrap_or_else(|e| e.into_inner())
+    }
 
     fn test_handler(_opcode: u16, _params: &[u32]) -> OpcodeAction {
         OpcodeAction::Block
@@ -178,6 +185,7 @@ mod tests {
 
     #[test]
     fn test_register_and_intercept() {
+        let _guard = lock_ops();
         register_handler(0x1007, test_handler);
         assert!(has_handler(0x1007));
 
@@ -200,6 +208,7 @@ mod tests {
 
     #[test]
     fn test_handler_count() {
+    let _guard = lock_ops();
         let before = handler_count();
         register_handler(0xAAAA, test_handler);
         assert_eq!(handler_count(), before + 1);
@@ -209,6 +218,7 @@ mod tests {
 
     #[test]
     fn test_register_defaults() {
+    let _guard = lock_ops();
         register_defaults();
         assert!(handler_count() >= 10);
     }

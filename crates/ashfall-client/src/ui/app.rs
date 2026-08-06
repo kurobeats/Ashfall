@@ -70,6 +70,18 @@ impl eframe::App for AshfallApp {
                     ui.separator();
                     // Server-authored GUI (windows/buttons/edits/lists)
                     crate::ui::widgets::render_server_gui(ui, &mut game.gui);
+                    ui.separator();
+                    // Remote objects with interpolated positions
+                    ui.collapsing(format!("Objects ({})", game.registry.object_count()), |ui| {
+                        let ids: Vec<ashfall_core::id::NetworkID> =
+                            game.registry.get_objects().map(|(id, _)| *id).collect();
+                        for id in ids {
+                            if let Some(pos) = game.registry.interpolated_pos(id) {
+                                let p = format!("({:.1}, {:.1}, {:.1})", pos[0], pos[1], pos[2]);
+                                ui.label(format!("{id} @ {p}"));
+                            }
+                        }
+                    });
                 });
 
                 // Chat
