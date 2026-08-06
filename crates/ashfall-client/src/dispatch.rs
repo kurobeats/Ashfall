@@ -32,6 +32,11 @@ pub fn dispatch(game: &mut Game, packet: &Packet) {
         Packet::PlayerNew { id, .. } => {
             if game.local_player_id.is_none() { game.local_player_id = Some(*id); }
         }
-        _ => {}
+        // Server-authored GUI packets → GuiState
+        _ => {
+            if game.gui.apply_packet(packet) {
+                return;
+            }
+        }
     }
 }

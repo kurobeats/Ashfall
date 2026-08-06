@@ -22,7 +22,7 @@ impl AshfallApp {
 
 impl eframe::App for AshfallApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        if let Ok(game) = self.game.lock() {
+        if let Ok(mut game) = self.game.lock() {
             let connected =
                 matches!(game.state, crate::game::ClientState::InGame);
 
@@ -67,6 +67,9 @@ impl eframe::App for AshfallApp {
                     if let Some(ref id) = game.local_player_id {
                         ui.label(format!("Player ID: {id}"));
                     }
+                    ui.separator();
+                    // Server-authored GUI (windows/buttons/edits/lists)
+                    crate::ui::widgets::render_server_gui(ui, &mut game.gui);
                 });
 
                 // Chat

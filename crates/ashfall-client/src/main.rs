@@ -38,6 +38,8 @@ impl eframe::App for AppState {
                     if let Ok(packets) = rt.block_on(game.poll()) {
                         for pkt in packets { game.handle_packet(pkt); }
                     }
+                    // Flush server-GUI clicks back to the server
+                    let _ = rt.block_on(game.flush_gui_clicks());
                 }
             }
         }

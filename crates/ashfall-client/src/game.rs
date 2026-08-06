@@ -5,6 +5,7 @@ use ashfall_core::protocol::Packet;
 use crate::config::ClientConfig;
 use crate::dispatch;
 use crate::network::ClientNetwork;
+use crate::ui::widgets::GuiState;
 use crate::world::registry::ClientRegistry;
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -36,6 +37,7 @@ pub struct Game {
     pub hardcore_hunger: f32,
     pub hardcore_thirst: f32,
     pub hardcore_sleep: f32,
+    pub gui: GuiState,
 }
 
 impl Game {
@@ -54,6 +56,7 @@ impl Game {
             hardcore_hunger: 0.0,
             hardcore_thirst: 0.0,
             hardcore_sleep: 0.0,
+            gui: GuiState::new(),
         }
     }
 
@@ -90,5 +93,15 @@ impl Game {
     pub async fn send_chat(&mut self, message: String) -> anyhow::Result<()> {
         self.chat_messages.push((self.config.name.clone(), message.clone()));
         self.send_reliable(Packet::GameChat { message }).await
+    }
+
+    /// Send any server-GUI widget clicks queued by the renderer.
+    pub async fn flush_gui_clicks(&mut self) -> anyhow::Result<()> {
+        let clicks: Vec<ashfall_core::id::NetworkID> =
+            std::mem::take(&mut self.gui.pending_clicks);
+        for id in clicks {
+            self.send_reliable(Packet::UpdateWindowClick { id }).await?;
+        }
+        Ok(())
     }
 }
