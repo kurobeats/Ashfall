@@ -1,115 +1,112 @@
 //! NVSE/FOSE plugin interface — exports and registration.
 //!
-//! Called by NVSE/FOSE when the bridge DLL is loaded as a script extender plugin.
-//! Fallback: if loaded via Wine DLL override (non-NVSE), DllMain handles init.
+//! Called by NVSE/FOSE when the bridge DLL is loaded as a script extender
+//! plugin. Fallback: if loaded via Wine DLL override (non-NVSE), DllMain
+//! handles init.
+//!
+//! Layouts and signatures VERIFIED against xNVSE/xFOSE PluginAPI.h
+//! (2026-08-06): the interface carries RegisterCommand/SetOpcodeBase/
+//! QueryInterface/etc. — NOT SafeWrite helpers (the earlier "simplified
+//! layout" with SafeWrite fields was wrong and would have read garbage
+//! offsets). PluginInfo.name is a `const char*`, not an inline array.
 
+use std::ffi::{c_char, c_void};
 use std::sync::{LazyLock, Mutex};
 
-/// PluginInfo struct — matches NVSE/FOSE PluginInfo layout.
-/// Size: info_version(u32=4) + name([u8;256]=256) + version(u32=4) = 264 bytes.
+/// PluginInfo struct — matches FOSE/NVSE PluginInfo layout exactly
+/// (xFOSE/xNVSE PluginAPI.h): infoVersion(u32) + name(const char*) + version(u32).
 #[repr(C)]
 pub struct PluginInfo {
     pub info_version: u32,
-    pub name: [u8; 256],
+    pub name: *const c_char,
     pub version: u32,
 }
 
 impl PluginInfo {
     pub fn new(name: &str, version: u32) -> Self {
-        let mut info = PluginInfo {
+        // ponytail: leak a static buffer — the engine reads the pointer
+        // only during Query, and the process lives as long as the game.
+        let cstr = std::ffi::CString::new(name).unwrap_or_default();
+        let ptr = cstr.into_raw();
+        PluginInfo {
             info_version: 1,
-            name: [0u8; 256],
+            name: ptr,
             version,
-        };
-        let bytes = name.as_bytes();
-        let len = bytes.len().min(255);
-        info.name[..len].copy_from_slice(&bytes[..len]);
-        if len < 256 {
-            info.name[len] = 0;
         }
-        info
     }
 
-    pub fn name_str(&self) -> &str {
-        let end = self.name.iter().position(|&b| b == 0).unwrap_or(256);
-        std::str::from_utf8(&self.name[..end]).unwrap_or("")
+    pub fn name_str(&self) -> String {
+        if self.name.is_null() {
+            return String::new();
+        }
+        unsafe { std::ffi::CStr::from_ptr(self.name) }
+            .to_string_lossy()
+            .into_owned()
     }
 }
 
-/// Event listener callback type used by `NVSEInterface::register_listener`.
-pub type EventListener = unsafe extern "C" fn(event_type: u32, event_data: *const std::ffi::c_void) -> u32;
-
-/// NVSE bootstrap interface passed to `NVSEPlugin_Load`.
+/// The FOSE/NVSE bootstrap interface (layout per xFOSE FOSEInterface /
+/// xNVSE NVSEInterface, both identical for the first 11 fields).
 ///
-/// Real NVSE provides SafeWrite/trampoline helpers for patching. We snapshot
-/// the interface at load time so hooks can use the engine's own helpers
-/// instead of reimplementing VirtualProtect logic.
-/// ponytail: simplified layout — verify against xNVSE NVSEInterface.h when
-/// Proton testing begins.
+/// Only read during `Query`/`Load`; the bridge never calls back into it —
+/// the fields are kept so the snapshot matches the engine's layout.
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct NVSEInterface {
-    pub interface_version: u32,
-    pub get_plugin_info: unsafe extern "C" fn() -> *mut PluginInfo,
-    pub query_interface: unsafe extern "C" fn(id: u32) -> *mut std::ffi::c_void,
-    pub register_listener: unsafe extern "C" fn(*mut NVSEInterface, *const u8, EventListener),
-    pub dispatch_message: unsafe extern "C" fn(
-        *mut NVSEInterface,
-        *const u8,
-        *const u8,
-        *mut u8,
-        u32,
-        *const u8,
-    ) -> bool,
-    pub safe_write8: unsafe extern "C" fn(u32, u32),
-    pub safe_write16: unsafe extern "C" fn(u32, u32),
-    pub safe_write32: unsafe extern "C" fn(u32, u32),
-    pub safe_write_buf: unsafe extern "C" fn(u32, *mut u8, u32),
-    pub write_rel_jump: unsafe extern "C" fn(u32, u32) -> *mut u8,
-    pub write_rel_call: unsafe extern "C" fn(u32, u32) -> *mut u8,
+    pub nvse_version: u32,       // 0x00
+    pub runtime_version: u32,    // 0x04
+    pub editor_version: u32,     // 0x08
+    pub is_editor: u32,          // 0x0C
+    pub register_command: unsafe extern "C" fn(*mut c_void) -> bool,       // 0x10
+    pub set_opcode_base: unsafe extern "C" fn(u32),                        // 0x14
+    pub query_interface: unsafe extern "C" fn(u32) -> *mut c_void,         // 0x18
+    pub get_plugin_handle: unsafe extern "C" fn() -> u32,                  // 0x1C
+    pub register_typed_command: unsafe extern "C" fn(*mut c_void, u32) -> bool, // 0x20
+    pub get_runtime_directory: unsafe extern "C" fn() -> *const c_char,    // 0x24
+    pub is_nogore: u32,          // 0x28
 }
 
-/// Snapshot of the NVSE interface passed at load time, if any.
-static NVSE_INTERFACE: LazyLock<Mutex<Option<NVSEInterface>>> = LazyLock::new(|| Mutex::new(None));
+/// Snapshot of the engine interface passed at load time, if any.
+static ENGINE_INTERFACE: LazyLock<Mutex<Option<NVSEInterface>>> = LazyLock::new(|| Mutex::new(None));
 
-/// Return the NVSE interface captured during `NVSEPlugin_Load`, if any.
+/// Return the engine interface captured during `NVSEPlugin_Load`, if any.
 pub fn nvse_interface() -> Option<NVSEInterface> {
-    *NVSE_INTERFACE.lock().unwrap()
+    *ENGINE_INTERFACE.lock().unwrap()
 }
 
 /// Plugin interface version constant.
 const PLUGIN_INTERFACE_VERSION: u32 = 1;
 
-/// Called by NVSE/FOSE to query plugin info.
-/// Returns true if the requested interface version is supported (>= 1, so
-/// forward-compatible with xNVSE v6+ interface bumps).
-#[no_mangle]
-pub extern "C" fn NVSEPlugin_Query(
-    interface_version: u32,
-    info: *mut PluginInfo,
-    _message: *mut u8,
-) -> bool {
-    if interface_version < PLUGIN_INTERFACE_VERSION {
+/// Core Query body — shared by the NVSE- and FOSE-named exports.
+unsafe fn plugin_query(nvse: *const NVSEInterface, info: *mut PluginInfo) -> bool {
+    // Forward-compatible: accept any engine interface >= our minimum.
+    if !nvse.is_null() && (*nvse).nvse_version < PLUGIN_INTERFACE_VERSION {
         return false;
     }
     if !info.is_null() {
-        unsafe {
-            *info = PluginInfo::new("Ashfall Bridge", 1);
-        }
+        *info = PluginInfo::new("Ashfall Bridge", 1);
     }
     true
 }
 
-/// Called by NVSE/FOSE to load the plugin.
-/// `nvse_interface` carries SafeWrite/trampoline helpers (null when loaded
-/// without NVSE, e.g. plain Wine DLL override).
-/// Returns true on success.
+/// Called by NVSE to query plugin info.
 #[no_mangle]
-pub extern "C" fn NVSEPlugin_Load(nvse_interface: *const NVSEInterface) -> bool {
-    // Snapshot the interface (copied — NVSE keeps the original alive).
-    if !nvse_interface.is_null() {
+pub unsafe extern "C" fn NVSEPlugin_Query(nvse: *const NVSEInterface, info: *mut PluginInfo) -> bool {
+    plugin_query(nvse, info)
+}
+
+/// Called by FOSE/xFOSE to query plugin info (FO3 — the same interface).
+#[no_mangle]
+pub unsafe extern "C" fn FOSEPlugin_Query(nvse: *const NVSEInterface, info: *mut PluginInfo) -> bool {
+    plugin_query(nvse, info)
+}
+
+/// Core Load body — shared by the NVSE- and FOSE-named exports.
+fn plugin_load(nvse: *const NVSEInterface) -> bool {
+    // Snapshot the interface (copied — the engine keeps the original alive).
+    if !nvse.is_null() {
         unsafe {
-            *NVSE_INTERFACE.lock().unwrap() = Some(*nvse_interface);
+            *ENGINE_INTERFACE.lock().unwrap() = Some(*nvse);
         }
     }
 
@@ -128,4 +125,16 @@ pub extern "C" fn NVSEPlugin_Load(nvse_interface: *const NVSEInterface) -> bool 
     crate::console::register_defaults();
 
     true
+}
+
+/// Called by NVSE to load the plugin.
+#[no_mangle]
+pub extern "C" fn NVSEPlugin_Load(nvse: *const NVSEInterface) -> bool {
+    plugin_load(nvse)
+}
+
+/// Called by FOSE/xFOSE to load the plugin (FO3).
+#[no_mangle]
+pub extern "C" fn FOSEPlugin_Load(nvse: *const NVSEInterface) -> bool {
+    plugin_load(nvse)
 }
