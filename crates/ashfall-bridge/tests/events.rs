@@ -7,6 +7,14 @@ use ashfall_bridge::events::{
 };
 use ashfall_bridge::hooks;
 use std::ffi::c_void;
+use std::sync::Mutex;
+
+/// The sink registry + static counters are global — serializes the tests
+/// that touch them (the frame tests are independent and lock-free).
+static SINK_LOCK: Mutex<()> = Mutex::new(());
+fn lock_sinks() -> std::sync::MutexGuard<'static, ()> {
+    SINK_LOCK.lock().unwrap_or_else(|e| e.into_inner())
+}
 
 // Global counters for extern "C" callbacks — callbacks MUST NOT panic.
 static mut CALLBACK_HIT_FIRED: u32 = 0;
@@ -49,6 +57,7 @@ fn reset_counters() {
 
 #[test]
 fn test_event_sink_registration() {
+    let _guard = lock_sinks();
     events::unregister_event_sink(EVENT_ON_HIT, hit_sink);
     assert!(!events::has_event_sinks(EVENT_ON_HIT));
 
@@ -61,6 +70,7 @@ fn test_event_sink_registration() {
 
 #[test]
 fn test_event_sink_dispatch_passes_struct() {
+    let _guard = lock_sinks();
     events::unregister_event_sink(EVENT_ON_HIT, hit_sink);
     reset_counters();
 
@@ -86,6 +96,7 @@ fn test_event_sink_dispatch_passes_struct() {
 
 #[test]
 fn test_event_sink_multiple_sinks_per_type() {
+    let _guard = lock_sinks();
     events::unregister_event_sink(EVENT_ON_HIT, hit_sink);
     events::unregister_event_sink(EVENT_ON_HIT, death_sink);
     reset_counters();
@@ -105,6 +116,7 @@ fn test_event_sink_multiple_sinks_per_type() {
 
 #[test]
 fn test_event_sink_unknown_type_and_empty() {
+    let _guard = lock_sinks();
     // Unknown type: no sinks, dispatch returns 0
     assert!(!events::has_event_sinks(99));
     let count = events::dispatch_event(99, std::ptr::null());
@@ -113,6 +125,7 @@ fn test_event_sink_unknown_type_and_empty() {
 
 #[test]
 fn test_event_sink_multiple_types() {
+    let _guard = lock_sinks();
     events::unregister_event_sink(EVENT_ON_HIT, hit_sink);
     events::unregister_event_sink(EVENT_ON_DEATH, death_sink);
 

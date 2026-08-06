@@ -84,12 +84,50 @@ pub unsafe fn write_field<T>(obj: *mut u8, offset: usize, value: T) {
 // FormID resolution (FOSE LOOKUP_FORM pattern)
 // ═══════════════════════════════════════════════════════════════
 
-/// Hardcoded address of `LookupFormByID` in FO3 1.7.0.3 EN.
+/// Hardcoded address of `LookupFormByID` in FO3 1.7.0.3 EN (verified against
+/// the real GOG exe + xFOSE fose.h FALLOUT_VERSION_1_7 block).
 /// FNV equivalent: different address, detected at runtime.
-/// ponytail: only referenced on the Windows target (in-process patching);
-/// the non-Windows cfg path returns early.
 #[allow(dead_code)]
 const LOOKUP_FORM_FO3: usize = 0x00455190;
+
+/// Whether the host process is a known game exe. The hardcoded FO3/FNV
+/// addresses are only valid inside Fallout3.exe/FalloutNV.exe — calling them
+/// from any other process (e.g. a wine test harness, or a debugger) faults.
+static GAME_PROCESS: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+
+/// Extract the executable file name from a full path (testable, no Win32).
+pub fn exe_base_name(path: &str) -> Option<&str> {
+    let name = path.rsplit(['/', '\\']).next().filter(|s| !s.is_empty())?;
+    Some(name)
+}
+
+pub fn is_game_process() -> bool {
+    *GAME_PROCESS.get_or_init(|| {
+        #[cfg(target_os = "windows")]
+        {
+            use std::ffi::OsString;
+            use std::os::windows::ffi::OsStringExt;
+            use windows_sys::Win32::System::LibraryLoader::GetModuleFileNameW;
+            let mut buf = [0u16; 260];
+            let n = unsafe {
+                GetModuleFileNameW(0, buf.as_mut_ptr(), buf.len() as u32)
+            };
+            if n == 0 {
+                return false;
+            }
+            let name = OsString::from_wide(&buf[..n as usize])
+                .to_string_lossy()
+                .to_lowercase();
+            let base = exe_base_name(&name).unwrap_or("");
+            base == "fallout3.exe" || base == "falloutnv.exe"
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            let _ = exe_base_name;
+            false
+        }
+    })
+}
 
 /// Resolve a FormID to a memory pointer. Returns null if form not loaded.
 ///
@@ -104,6 +142,11 @@ pub unsafe fn lookup_form_by_id(form_id: u32) -> *mut u8 {
 
     #[cfg(target_os = "windows")]
     {
+        // Never touch game memory from a non-game process (wine harnesses,
+        // tests) — the hardcoded address is only valid inside the game.
+        if !is_game_process() {
+            return std::ptr::null_mut();
+        }
         let addr: usize = LOOKUP_FORM_FO3;
         let fn_ptr: unsafe extern "system" fn(u32) -> *mut u8 =
             std::mem::transmute(addr as *const ());
@@ -726,5 +769,19 @@ mod tests {
         assert_eq!(AV_HEALTH, 0x14);
         assert_eq!(AV_DAMAGE_THRESHOLD, 0x2A);
         assert_eq!(AV_SLEEP, 0x2D);
+    }
+}
+
+#[cfg(test)]
+mod process_tests {
+    use super::exe_base_name;
+
+    #[test]
+    fn test_exe_base_name() {
+        assert_eq!(exe_base_name(r"C:\Games\Fallout 3\Fallout3.exe"), Some("Fallout3.exe"));
+        assert_eq!(exe_base_name("Z:\\home\\ants\\game\\FalloutNV.exe"), Some("FalloutNV.exe"));
+        assert_eq!(exe_base_name("/home/user/loader.exe"), Some("loader.exe"));
+        assert_eq!(exe_base_name(""), None);
+        assert_eq!(exe_base_name("noslash"), Some("noslash"));
     }
 }
