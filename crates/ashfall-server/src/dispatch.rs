@@ -132,7 +132,7 @@ impl Dispatcher {
                 }
             }
             Packet::UpdateItemCount { id, count, silent } => {
-                match item::handle_item_count(&self.registry, id, count, silent) {
+                match item::handle_item_count(&self.registry, session, id, count, silent) {
                     Some(pkt) => {
                         if silent { DispatchResult::new().response(pkt) }
                         else { DispatchResult::new().broadcast(pkt) }
@@ -141,13 +141,13 @@ impl Dispatcher {
                 }
             }
             Packet::UpdateItemCondition { id, condition, health } => {
-                match item::handle_item_condition(&self.registry, id, condition, health) {
+                match item::handle_item_condition(&self.registry, session, id, condition, health) {
                     Some(pkt) => DispatchResult::new().broadcast(pkt),
                     None => DispatchResult::new(),
                 }
             }
             Packet::UpdateItemEquipped { id, equipped, silent, stick } => {
-                match item::handle_item_equipped(&self.registry, id, equipped, silent, stick) {
+                match item::handle_item_equipped(&self.registry, session, id, equipped, silent, stick) {
                     Some(pkt) => {
                         if silent { DispatchResult::new().response(pkt) }
                         else { DispatchResult::new().broadcast(pkt) }

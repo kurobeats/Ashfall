@@ -9,7 +9,7 @@
 use ashfall_core::id::NetworkID;
 use ashfall_server::handlers::{actor, object, physics};
 use ashfall_server::session::Session;
-use ashfall_server::world::objects::{Actor, Object, Player};
+use ashfall_server::world::objects::{Actor, Container, Item, Object, Player};
 use ashfall_server::world::registry::ObjectRegistry;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -298,4 +298,78 @@ fn test_client_global_updates_authoritative_state() {
     let result = dispatcher.dispatch(&mut sess, Pkt::GameGlobal { global: 0x100, value: 42 });
     assert!(!result.broadcasts.is_empty(), "global change relayed");
     assert_eq!(dispatcher.globals.get(0x100), Some(42), "authoritative global updated");
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Item ownership — only the owning player may mutate inventory state
+// ═══════════════════════════════════════════════════════════════
+
+use ashfall_server::handlers::item;
+
+#[test]
+fn test_own_item_count_accepted() {
+    let registry = Arc::new(ObjectRegistry::new());
+    let player_id = registry.allocate_id();
+    registry.insert(Player::new(player_id, 0x14, 0x07, 5));
+    let item_id = registry.allocate_id();
+    registry.insert(Item::new(item_id, 0x10, 0x999, player_id));
+
+    let sess = session(1, Some(player_id));
+    let pkt = item::handle_item_count(&registry, &sess, item_id, 5, false);
+    assert!(pkt.is_some(), "own item count accepted");
+    let arc = registry.get(item_id).unwrap();
+    let guard = arc.read();
+    assert_eq!(guard.as_any().downcast_ref::<Item>().unwrap().count, 5);
+}
+
+#[test]
+fn test_foreign_item_count_rejected() {
+    let registry = Arc::new(ObjectRegistry::new());
+    let player_a = registry.allocate_id();
+    let player_b = registry.allocate_id();
+    registry.insert(Player::new(player_a, 0x14, 0x07, 5));
+    registry.insert(Player::new(player_b, 0x14, 0x07, 5));
+    // Item owned by player B (container = B)
+    let item_id = registry.allocate_id();
+    registry.insert(Item::new(item_id, 0x10, 0x999, player_b));
+
+    // A tries to inflate B's item
+    let sess_a = session(1, Some(player_a));
+    let pkt = item::handle_item_count(&registry, &sess_a, item_id, 9999, false);
+    assert!(pkt.is_none(), "foreign item count rejected");
+    let arc = registry.get(item_id).unwrap();
+    let guard = arc.read();
+    assert_eq!(guard.as_any().downcast_ref::<Item>().unwrap().count, 1, "count untouched");
+}
+
+#[test]
+fn test_world_container_item_rejected() {
+    // Items in world containers (not owned by any player) are server-managed.
+    let registry = Arc::new(ObjectRegistry::new());
+    let player_id = registry.allocate_id();
+    registry.insert(Player::new(player_id, 0x14, 0x07, 5));
+    let cont_id = registry.allocate_id();
+    registry.insert(Container::new(cont_id, 0x100, 0x200, 0));
+    let item_id = registry.allocate_id();
+    registry.insert(Item::new(item_id, 0x10, 0x999, cont_id));
+
+    let sess = session(1, Some(player_id));
+    let pkt = item::handle_item_count(&registry, &sess, item_id, 5, false);
+    assert!(pkt.is_none(), "world-container item is server-managed");
+}
+
+#[test]
+fn test_own_equip_accepted() {
+    let registry = Arc::new(ObjectRegistry::new());
+    let player_id = registry.allocate_id();
+    registry.insert(Player::new(player_id, 0x14, 0x07, 5));
+    let item_id = registry.allocate_id();
+    registry.insert(Item::new(item_id, 0x10, 0x999, player_id));
+
+    let sess = session(1, Some(player_id));
+    let pkt = item::handle_item_equipped(&registry, &sess, item_id, true, false, false);
+    assert!(pkt.is_some(), "own equip accepted");
+    let arc = registry.get(item_id).unwrap();
+    let guard = arc.read();
+    assert!(guard.as_any().downcast_ref::<Item>().unwrap().equipped);
 }
