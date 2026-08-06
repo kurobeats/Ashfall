@@ -393,6 +393,121 @@ impl ScriptEngine {
         }
     }
 
+    /// Ask scripts whether a combat hit may resolve. Any module returning 0
+    /// blocks the hit (on_hit: target, attacker, limb, damage).
+    pub fn dispatch_hit(&mut self, target: u64, attacker: u64, limb: u8, damage: f32) -> bool {
+        if self.instances.is_empty() {
+            return true;
+        }
+        for inst in &mut self.instances {
+            let f = inst
+                .instance
+                .get_typed_func::<(i64, i64, i32, f32), i32>(&mut inst.store, "on_hit")
+                .ok();
+            if let Some(f) = f {
+                let r = f
+                    .call(&mut inst.store, (target as i64, attacker as i64, limb as i32, damage))
+                    .unwrap_or(1);
+                if r == 0 {
+                    return false;
+                }
+            }
+        }
+        true
+    }
+
+    /// Notify scripts an item was equipped/unequipped (on_equip: actor, item, equipped).
+    pub fn notify_equip(&mut self, actor: u64, item: u64, equipped: bool) {
+        for inst in &mut self.instances {
+            let f = inst
+                .instance
+                .get_typed_func::<(i64, i64, i32), ()>(&mut inst.store, "on_equip")
+                .ok();
+            if let Some(f) = f {
+                let _ = f.call(&mut inst.store, (actor as i64, item as i64, equipped as i32));
+            }
+        }
+    }
+
+    /// Notify scripts an item's count changed (on_item_count_change: item, count).
+    pub fn notify_item_count(&mut self, item: u64, count: u32) {
+        for inst in &mut self.instances {
+            let f = inst
+                .instance
+                .get_typed_func::<(i64, i32), ()>(&mut inst.store, "on_item_count_change")
+                .ok();
+            if let Some(f) = f {
+                let _ = f.call(&mut inst.store, (item as i64, count as i32));
+            }
+        }
+    }
+
+    /// Notify scripts an object was activated (on_activate: ref_id, actor).
+    pub fn notify_activate(&mut self, ref_id: u32, actor: u64) {
+        for inst in &mut self.instances {
+            let f = inst
+                .instance
+                .get_typed_func::<(i32, i64), ()>(&mut inst.store, "on_activate")
+                .ok();
+            if let Some(f) = f {
+                let _ = f.call(&mut inst.store, (ref_id as i32, actor as i64));
+            }
+        }
+    }
+
+    /// Notify scripts an object changed cells (on_cell_change: object, cell).
+    pub fn notify_cell_change(&mut self, object: u64, cell: u32) {
+        for inst in &mut self.instances {
+            let f = inst
+                .instance
+                .get_typed_func::<(i64, i32), ()>(&mut inst.store, "on_cell_change")
+                .ok();
+            if let Some(f) = f {
+                let _ = f.call(&mut inst.store, (object as i64, cell as i32));
+            }
+        }
+    }
+
+    /// Notify scripts an object was created (on_create: object).
+    pub fn notify_create(&mut self, object: u64) {
+        for inst in &mut self.instances {
+            inst.call_notify_void("on_create", object);
+        }
+    }
+
+    /// Notify scripts an object was destroyed (on_destroy: object).
+    pub fn notify_destroy(&mut self, object: u64) {
+        for inst in &mut self.instances {
+            inst.call_notify_void("on_destroy", object);
+        }
+    }
+
+    /// Notify scripts a GUI window was clicked (on_window_click: player, window).
+    pub fn notify_window_click(&mut self, player: u64, window: u64) {
+        for inst in &mut self.instances {
+            let f = inst
+                .instance
+                .get_typed_func::<(i64, i64), ()>(&mut inst.store, "on_window_click")
+                .ok();
+            if let Some(f) = f {
+                let _ = f.call(&mut inst.store, (player as i64, window as i64));
+            }
+        }
+    }
+
+    /// Notify scripts a GUI window returned (on_window_return: player, window).
+    pub fn notify_window_return(&mut self, player: u64, window: u64) {
+        for inst in &mut self.instances {
+            let f = inst
+                .instance
+                .get_typed_func::<(i64, i64), ()>(&mut inst.store, "on_window_return")
+                .ok();
+            if let Some(f) = f {
+                let _ = f.call(&mut inst.store, (player as i64, window as i64));
+            }
+        }
+    }
+
     /// Notify scripts the game clock changed.
     pub fn notify_game_time(&mut self, time: GameTime) {
         let f = |inst: &mut WasmInstance| {

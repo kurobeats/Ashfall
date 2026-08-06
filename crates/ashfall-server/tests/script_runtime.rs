@@ -97,6 +97,30 @@ const TEST_MODE: &str = r#"
   (func (export "on_quest_stage") (param $quest i32) (param $stage i32)
     (call $set_flag (i32.const 55) (i32.const 1)))
 
+  ;; on_hit: block hits dealing > 100 damage, mirror others into flag 66
+  (func (export "on_hit") (param $t i64) (param $a i64) (param $limb i32) (param $dmg f32) (result i32)
+    (if (f32.gt (local.get $dmg) (f32.const 100))
+      (then (return (i32.const 0))))
+    (call $set_flag (i32.const 66) (i32.const 1))
+    (i32.const 1))
+
+  ;; on_equip / on_item_count_change / on_activate / on_cell_change /
+  ;; on_window_click / on_create / on_destroy: mirror into flags 67..73
+  (func (export "on_equip") (param $a i64) (param $i i64) (param $e i32)
+    (call $set_flag (i32.const 67) (i32.const 1)))
+  (func (export "on_item_count_change") (param $i i64) (param $c i32)
+    (call $set_flag (i32.const 68) (i32.const 1)))
+  (func (export "on_activate") (param $ref i32) (param $a i64)
+    (call $set_flag (i32.const 69) (i32.const 1)))
+  (func (export "on_cell_change") (param $o i64) (param $c i32)
+    (call $set_flag (i32.const 70) (i32.const 1)))
+  (func (export "on_window_click") (param $p i64) (param $w i64)
+    (call $set_flag (i32.const 71) (i32.const 1)))
+  (func (export "on_create") (param $o i64)
+    (call $set_flag (i32.const 72) (i32.const 1)))
+  (func (export "on_destroy") (param $o i64)
+    (call $set_flag (i32.const 73) (i32.const 1)))
+
   ;; Timer callback: swap the weather
   (func (export "tick_cb") (param $id i32)
     (call $set_weather (i32.const 0x00007777)))
@@ -452,4 +476,37 @@ fn test_gui_widget_host_functions() {
         )),
         "set_window_text emitted an update"
     );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Newly-wired callbacks: on_hit gate + notifications
+// ═══════════════════════════════════════════════════════════════
+
+#[test]
+fn test_hit_gate_dispatch() {
+    let state = new_state();
+    let mut engine = boot_with(state.clone());
+    assert!(engine.dispatch_hit(10, 20, 0, 50.0), "normal hit allowed");
+    assert!(state.quests.get_flag(66), "on_hit fired for allowed hit");
+    assert!(!engine.dispatch_hit(10, 20, 0, 500.0), "over-100 damage blocked");
+}
+
+#[test]
+fn test_notify_callbacks_wired() {
+    let state = new_state();
+    let mut engine = boot_with(state.clone());
+    engine.notify_equip(1, 2, true);
+    engine.notify_item_count(2, 5);
+    engine.notify_activate(0x1234, 7);
+    engine.notify_cell_change(9, 0xCAFE);
+    engine.notify_window_click(3, 4);
+    engine.notify_create(100);
+    engine.notify_destroy(101);
+    assert!(state.quests.get_flag(67), "on_equip fired");
+    assert!(state.quests.get_flag(68), "on_item_count_change fired");
+    assert!(state.quests.get_flag(69), "on_activate fired");
+    assert!(state.quests.get_flag(70), "on_cell_change fired");
+    assert!(state.quests.get_flag(71), "on_window_click fired");
+    assert!(state.quests.get_flag(72), "on_create fired");
+    assert!(state.quests.get_flag(73), "on_destroy fired");
 }

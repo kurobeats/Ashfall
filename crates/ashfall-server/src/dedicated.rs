@@ -295,7 +295,7 @@ impl DedicatedServer {
         // targets — DashMap locks are not reentrant, and holding the guard
         // across `self.sessions.iter()` deadlocks on every broadcast (chat,
         // positions, quests) once two players are connected.
-        let (responses, broadcasts, disconnect) = {
+        let (responses, broadcasts, disconnect, cell_before, cell_after) = {
             let mut session = match self.sessions.get_mut(&addr) {
                 Some(s) => s,
                 None => return,
@@ -310,9 +310,87 @@ impl DedicatedServer {
                 }
             }
 
+            // Script hit gate: on_hit may block combat resolution.
+            if let Packet::ActorHit { target, attacker, limb, base_damage, .. } = &packet {
+                if !self.script_engine.dispatch_hit(
+                    target.as_u64(),
+                    attacker.as_u64(),
+                    *limb,
+                    *base_damage,
+                ) {
+                    tracing::info!("Script blocked hit from {player_id}");
+                    return;
+                }
+            }
+
+            let cell_before = session.cell_context[4];
             let result = self.dispatcher.dispatch(&mut session, packet);
-            (result.responses, result.broadcasts, result.disconnect)
+            let cell_after = session.cell_context[4];
+            (result.responses, result.broadcasts, result.disconnect, cell_before, cell_after)
         }; // session guard released here
+
+        // Script notifications from the dispatched packets (create/destroy,
+        // equip, item count, activate, GUI clicks, death).
+        for pkt in responses.iter().chain(broadcasts.iter()) {
+            match pkt {
+                Packet::ObjectNew { id, .. } => self.script_engine.notify_create(id.as_u64()),
+                Packet::ObjectRemove { id, .. } => self.script_engine.notify_destroy(id.as_u64()),
+                Packet::UpdateItemEquipped { id, equipped, .. } => {
+                    // The item's owning container is its `container` field.
+                    let owner = self
+                        .dispatcher
+                        .registry
+                        .get(*id)
+                        .and_then(|arc| {
+                            let guard = arc.read();
+                            guard
+                                .as_any()
+                                .downcast_ref::<crate::world::objects::Item>()
+                                .map(|i| i.container.as_u64())
+                        })
+                        .unwrap_or(0);
+                    self.script_engine.notify_equip(owner, id.as_u64(), *equipped);
+                }
+                Packet::UpdateItemCount { id, count, .. } => {
+                    self.script_engine.notify_item_count(id.as_u64(), *count);
+                }
+                Packet::UpdateActivate { id, actor } => {
+                    // id here is the ref being activated; actor is the activator.
+                    self.script_engine.notify_activate(id.as_u64() as u32, actor.as_u64());
+                }
+                Packet::UpdateWindowClick { id } => {
+                    let pid = self
+                        .sessions
+                        .get(&addr)
+                        .and_then(|s| s.value().player_id)
+                        .map(|p| p.as_u64())
+                        .unwrap_or(0);
+                    self.script_engine.notify_window_click(pid, id.as_u64());
+                }
+                Packet::UpdateWindowReturn { id } => {
+                    let pid = self
+                        .sessions
+                        .get(&addr)
+                        .and_then(|s| s.value().player_id)
+                        .map(|p| p.as_u64())
+                        .unwrap_or(0);
+                    self.script_engine.notify_window_return(pid, id.as_u64());
+                }
+                // Death handled below (needs limbs/cause from the packet).
+                _ => {}
+            }
+        }
+
+        // on_cell_change when the player's center cell moved
+        if cell_before != cell_after {
+            let player_id = self
+                .sessions
+                .get(&addr)
+                .and_then(|s| s.value().player_id)
+                .map(|p| p.as_u64())
+                .unwrap_or(0);
+            self.script_engine.notify_cell_change(player_id, cell_after);
+        }
 
         // Script on_actor_death notification for combat-resolved deaths
         for pkt in responses.iter().chain(broadcasts.iter()) {

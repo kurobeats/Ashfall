@@ -8,6 +8,7 @@
 //! Note: DedicatedServer is not `Send` (parking_lot guards across awaits), so
 //! the server future runs on the test's current thread via `tokio::select!`.
 
+use ashfall_core::id::NetworkID;
 use ashfall_core::protocol::transport::CHANNEL_RELIABLE_FLAG;
 use ashfall_core::protocol::Packet;
 use ashfall_server::config::{DatabaseSection, ScriptSection, ServerConfig, ServerSection};
@@ -41,6 +42,12 @@ const E2E_MODE: &str = r#"
 
   (func (export "on_spawn") (param $pid i64)
     (call $chat (local.get $pid) (i32.const 4096) (i32.const 18)))
+
+  ;; on_hit: block hits dealing more than 100 damage
+  (func (export "on_hit") (param $t i64) (param $a i64) (param $limb i32) (param $dmg f32) (result i32)
+    (if (f32.gt (local.get $dmg) (f32.const 100))
+      (then (return (i32.const 0))))
+    (i32.const 1))
 )
 "#;
 
@@ -294,6 +301,71 @@ async fn test_script_world_and_spawn_effects_on_wire() {
         assert!(saw_load, "alice gets GameLoad");
         assert!(saw_weather, "script-set weather (0x12345) reached the client");
         assert!(saw_welcome, "on_spawn chat effect delivered to the client");
+    };
+
+    run_with_server(server, client).await;
+}
+
+#[tokio::test]
+async fn test_script_hit_gate_on_wire() {
+    let config = test_config().await;
+    let port = config.server.port;
+    let server = DedicatedServer::new(config).await.expect("server boots");
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    let client = async {
+        let mut sock = TestClient::connect(port).await;
+        sock.send_reliable(&Packet::GameAuth {
+            name: "alice".into(),
+            password: String::new(),
+        })
+        .await;
+
+        // Reach InGame (GameLoad), then send a hit with damage > 100 —
+        // the script's on_hit must block it (no ActorDamaged echoes back).
+        let mut ready = false;
+        for _ in 0..12 {
+            if let Some(pkt) = sock.recv_packet().await {
+                if matches!(pkt, Packet::GameLoad) {
+                    ready = true;
+                    break;
+                }
+            }
+        }
+        assert!(ready, "alice reached GameLoad");
+
+        // The player's own id comes from PlayerNew
+        let mut my_id = 0u64;
+        for _ in 0..8 {
+            if let Some(Packet::PlayerNew { id, .. }) = sock.recv_packet().await {
+                my_id = id.as_u64();
+                break;
+            }
+        }
+        assert_ne!(my_id, 0, "got PlayerNew with our id");
+
+        sock.send_reliable(&Packet::ActorHit {
+            target: NetworkID::new(my_id),
+            attacker: NetworkID::new(my_id),
+            limb: 0,
+            base_damage: 500.0, // > 100 → script blocks
+            flags: 0,
+            weapon_id: 0,
+            projectile: 0,
+        })
+        .await;
+
+        // No ActorDamaged must come back (blocked); the channel stays usable.
+        let mut saw_damaged = false;
+        for _ in 0..8 {
+            if let Some(pkt) = sock.recv_packet().await {
+                if matches!(pkt, Packet::ActorDamaged { .. }) {
+                    saw_damaged = true;
+                    break;
+                }
+            }
+        }
+        assert!(!saw_damaged, "script on_hit blocked the >100 damage hit");
     };
 
     run_with_server(server, client).await;
