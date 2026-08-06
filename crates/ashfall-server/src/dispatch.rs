@@ -379,6 +379,8 @@ impl Dispatcher {
             | Packet::UpdateListItemSelected { .. }
             | Packet::UpdateListItemText { .. }
             | Packet::EditNew { .. }
+            | Packet::ButtonNew { .. }
+            | Packet::TextNew { .. }
             | Packet::CheckboxNew { .. }
             | Packet::RadioButtonNew { .. }
             | Packet::ListNew { .. }

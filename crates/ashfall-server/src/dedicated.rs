@@ -221,6 +221,17 @@ impl DedicatedServer {
                         self.disconnect(addr).await;
                     }
                 }
+                ScriptEffect::BroadcastPacket(pkt) => {
+                    let addrs: Vec<SocketAddr> = self
+                        .sessions
+                        .iter()
+                        .filter(|e| e.value().is_ingame())
+                        .map(|e| *e.key())
+                        .collect();
+                    for addr in addrs {
+                        let _ = self.network.send_reliable(addr, &pkt).await;
+                    }
+                }
             }
         }
     }

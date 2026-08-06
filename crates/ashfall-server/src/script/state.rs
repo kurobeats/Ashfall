@@ -23,11 +23,16 @@ impl Default for GameTime {
 #[derive(Clone, Default)]
 pub struct GameTimeState {
     time: Arc<Mutex<GameTime>>,
+    time_scale: Arc<Mutex<f32>>,
 }
 
 impl GameTimeState {
     pub fn new(time: GameTime) -> Self {
-        Self { time: Arc::new(Mutex::new(time)) }
+        Self {
+            time: Arc::new(Mutex::new(time)),
+            // ponytail: Fallout default time scale 30 (game seconds per real second)
+            time_scale: Arc::new(Mutex::new(30.0)),
+        }
     }
 
     pub fn get(&self) -> GameTime {
@@ -37,10 +42,18 @@ impl GameTimeState {
     pub fn set(&self, time: GameTime) {
         *self.time.lock() = time;
     }
+
+    pub fn get_scale(&self) -> f32 {
+        *self.time_scale.lock()
+    }
+
+    pub fn set_scale(&self, scale: f32) {
+        *self.time_scale.lock() = scale.clamp(0.0, 1000.0);
+    }
 }
 
 /// Side effect a WASM script queues; the server drains the queue each tick.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ScriptEffect {
     /// Send a chat message to one player (by NetworkID).
     PrivateChat { player_id: u64, message: String },
@@ -48,6 +61,8 @@ pub enum ScriptEffect {
     BroadcastChat { message: String },
     /// Disconnect a player (by NetworkID).
     Kick { player_id: u64 },
+    /// Relay an arbitrary packet to every ingame player (GUI widgets, etc.).
+    BroadcastPacket(ashfall_core::protocol::Packet),
 }
 
 /// Drainable effect queue shared between WASM instances and the server loop.

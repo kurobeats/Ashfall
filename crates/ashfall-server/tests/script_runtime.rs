@@ -27,6 +27,18 @@ const TEST_MODE: &str = r#"
   (import "env" "chat_message" (func $chat (param i64 i32 i32)))
   (import "env" "create_timer" (func $create_timer (param i32 i32 i32 i32) (result i32)))
   (import "env" "get_current_players" (func $get_players (result i32)))
+  (import "env" "create_item" (func $create_item (param i32 i32 i64) (result i64)))
+  (import "env" "add_item" (func $add_item (param i64 i64)))
+  (import "env" "remove_item" (func $remove_item (param i64)))
+  (import "env" "equip_item" (func $equip_item (param i64 i64)))
+  (import "env" "get_item_count" (func $get_item_count (param i64) (result i32)))
+  (import "env" "set_time_scale" (func $set_scale (param f32)))
+  (import "env" "get_damage_resistance" (func $get_dr (param i64) (result f32)))
+  (import "env" "get_damage_threshold" (func $get_dt (param i64) (result f32)))
+  (import "env" "set_server_name" (func $set_name (param i32 i32)))
+  (import "env" "get_config_int" (func $get_cfg (param i32 i32) (result i32)))
+  (import "env" "create_window" (func $create_window (param i64 i32 i32) (result i64)))
+  (import "env" "set_window_text" (func $set_win_text (param i64 i32 i32)))
   (import "env" "create_object" (func $create_object (param i32 i32 i32) (result i64)))
   (import "env" "create_actor" (func $create_actor (param i32 i32 i32) (result i64)))
   (import "env" "set_pos" (func $set_pos (param i64 f32 f32 f32)))
@@ -39,8 +51,13 @@ const TEST_MODE: &str = r#"
   (global $players (mut i32) (i32.const 0))
   (global $obj_id (mut i64) (i64.const 0))
   (global $actor_id (mut i64) (i64.const 0))
+  (global $item_id (mut i64) (i64.const 0))
+  (global $cfg_max (mut i32) (i32.const 0))
   (data (i32.const 2048) "tick_cb")
   (data (i32.const 4096) "Hello from script!")
+  (data (i32.const 8192) "My Server")
+  (data (i32.const 8208) "max_players")
+  (data (i32.const 8224) "Test Window")
 
   ;; Boot: set weather + clock, arm a repeating 5ms timer
   (func (export "on_server_init")
@@ -119,6 +136,43 @@ const TEST_MODE: &str = r#"
 
   (func (export "get_actor_hp") (result f32)
     (call $get_av (global.get $actor_id) (i32.const 0x14)))
+
+  ;; Item + inventory ops
+  (func (export "item_work")
+    (global.set $item_id
+      (call $create_item (i32.const 0x10) (i32.const 0x999) (global.get $actor_id)))
+    (call $add_item (global.get $item_id) (global.get $actor_id))
+    (call $equip_item (global.get $actor_id) (global.get $item_id)))
+
+  (func (export "get_item_id") (result i64)
+    (global.get $item_id))
+
+  (func (export "item_count") (result i32)
+    (call $get_item_count (global.get $item_id)))
+
+  (func (export "drop_item")
+    (call $remove_item (global.get $item_id)))
+
+  ;; Combat values
+  (func (export "get_dr") (result f32)
+    (call $get_dr (global.get $actor_id)))
+  (func (export "get_dt") (result f32)
+    (call $get_dt (global.get $actor_id)))
+
+  ;; Server meta
+  (func (export "name_server")
+    (call $set_name (i32.const 8192) (i32.const 9)))
+  (func (export "read_max_players")
+    (global.set $cfg_max (call $get_cfg (i32.const 8208) (i32.const 11))))
+  (func (export "get_cfg_max") (result i32)
+    (global.get $cfg_max))
+  (func (export "speed_up_time")
+    (call $set_scale (f32.const 100)))
+
+  ;; GUI
+  (func (export "make_window")
+    (global.set $obj_id (call $create_window (i64.const 0) (i32.const 8224) (i32.const 11)))
+    (call $set_win_text (global.get $obj_id) (i32.const 8224) (i32.const 11)))
 )
 "#;
 
@@ -294,4 +348,108 @@ fn test_object_actor_crud_host_functions() {
         .expect("spawned actor is an Actor");
     assert!(actor.dead, "kill_actor marked the actor dead");
     assert_eq!(actor.values.get(&0x14), Some(&75.5), "set_actor_value stored");
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Real item / combat / server-meta / GUI host functions
+// ═══════════════════════════════════════════════════════════════
+
+use ashfall_server::world::objects::{Actor, Item};
+
+#[test]
+fn test_item_host_functions() {
+    let state = new_state();
+    let mut engine = boot_with(state.clone());
+    assert!(engine.call_export_void("spawn_work", &[]));
+    assert!(engine.call_export_void("item_work", &[]), "item_work runs");
+
+    let item_id = NetworkID::new(engine.call_export_i64("get_item_id", &[]).unwrap() as u64);
+    assert_eq!(engine.call_export_i32("item_count", &[]), Some(1), "get_item_count reads state (Item::new count=1)");
+
+    // Host-side: the item is linked into the actor's container and equipped
+    let actor_id = NetworkID::new(engine.call_export_i64("get_actor_id", &[]).unwrap() as u64);
+    let arc = state.registry.get(actor_id).expect("actor exists");
+    let guard = arc.read();
+    let actor = guard.as_any().downcast_ref::<Actor>().unwrap();
+    assert!(actor.container.items.contains(&item_id), "item linked into actor container");
+    drop(guard);
+
+    let arc = state.registry.get(item_id).expect("item in registry");
+    let guard = arc.read();
+    let item = guard.as_any().downcast_ref::<Item>().unwrap();
+    assert!(item.equipped, "equip_item marked item equipped");
+    assert_eq!(item.container, actor_id, "item container set to actor");
+    drop(guard);
+
+    // remove_item destroys the item + unlinks it
+    assert!(engine.call_export_void("drop_item", &[]));
+    assert!(state.registry.get(item_id).is_none(), "remove_item destroyed item");
+    let arc = state.registry.get(actor_id).unwrap();
+    let guard = arc.read();
+    let actor = guard.as_any().downcast_ref::<Actor>().unwrap();
+    assert!(!actor.container.items.contains(&item_id), "item unlinked from container");
+}
+
+#[test]
+fn test_combat_value_host_functions() {
+    let state = new_state();
+    let mut engine = boot_with(state.clone());
+    assert!(engine.call_export_void("spawn_work", &[]));
+    // Set the actor's DR (0x29) and DT (0x2A) values, then read them back
+    let actor_id = engine.call_export_i64("get_actor_id", &[]).unwrap();
+    // set_actor_value via the module: reuse the existing $set_av import through
+    // the exported spawn path is not exposed — call the host fn directly.
+    let arc = state.registry.get(NetworkID::new(actor_id as u64)).unwrap();
+    {
+        let mut guard = arc.write();
+        let actor = guard.as_any_mut().downcast_mut::<Actor>().unwrap();
+        actor.set_value(0x29, 0.5, false);
+        actor.set_value(0x2A, 4.0, false);
+    }
+    assert_eq!(engine.call_export_f32("get_dr", &[]), Some(0.5), "get_damage_resistance reads value");
+    assert_eq!(engine.call_export_f32("get_dt", &[]), Some(4.0), "get_damage_threshold reads value");
+}
+
+#[test]
+fn test_server_meta_host_functions() {
+    let state = new_state();
+    let mut engine = boot_with(state.clone());
+    assert!(engine.call_export_void("name_server", &[]));
+    assert_eq!(*state.server_name.lock().unwrap(), "My Server", "set_server_name stored");
+
+    assert!(engine.call_export_void("read_max_players", &[]));
+    assert_eq!(engine.call_export_i32("get_cfg_max", &[]), Some(4), "get_config_int(max_players)");
+}
+
+#[test]
+fn test_time_scale_host_function() {
+    let state = new_state();
+    let mut engine = boot_with(state.clone());
+    assert!(engine.call_export_void("speed_up_time", &[]));
+    assert_eq!(state.game_time.get_scale(), 100.0, "set_time_scale stored");
+}
+
+#[test]
+fn test_gui_widget_host_functions() {
+    let state = new_state();
+    let mut engine = boot_with(state.clone());
+    assert!(engine.call_export_void("make_window", &[]), "make_window runs");
+
+    let effects = engine.drain_effects();
+    assert!(
+        effects.iter().any(|e| matches!(
+            e,
+            ScriptEffect::BroadcastPacket(ashfall_core::protocol::Packet::WindowNew { label, .. })
+                if label == "Test Window"
+        )),
+        "create_window emitted a WindowNew broadcast: {effects:?}"
+    );
+    assert!(
+        effects.iter().any(|e| matches!(
+            e,
+            ScriptEffect::BroadcastPacket(ashfall_core::protocol::Packet::UpdateWindowText { text, .. })
+                if text == "Test Window"
+        )),
+        "set_window_text emitted an update"
+    );
 }
