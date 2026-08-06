@@ -888,15 +888,20 @@ pub struct ScriptEngine {
 // back to permissive defaults in callbacks.rs.
 ```
 
-**Host functions** (51) exposed to WASM — real: `set_game_weather`,
+**Host functions** (51) exposed to WASM — ALL real (2026-08-06): `set_game_weather`,
 `get_game_weather`, `set_game_time`, `get_quest_stage`, `set_quest_stage`,
 `get_dialogue_flag`, `set_dialogue_flag`, `chat_message`, `ui_message`, `kick`,
 `create_timer`, `kill_timer`, `get_current_players`, `get_max_players`,
 `timestamp`, `host_log`, `debug_log`, `create_object`, `destroy_object`,
 `get_pos_x/y/z`, `set_pos`, `create_actor`, `get_actor_value`,
-`set_actor_value`, `kill_actor`, `create_item`. Still stubs: item stack ops,
-GUI window widgets, combat DR/DT, `get_config_int`. ABI: `u64` ids cross as
-`i64`, strings as `(ptr, len)` into linear memory (see scripts/freeroam/src/lib.rs).
+`set_actor_value`, `kill_actor`, `create_item`, `add_item`, `remove_item`,
+`equip_item`, `get_item_count`, `get_damage_resistance`, `get_damage_threshold`,
+`set_server_name`, `get_config_int`, `set_time_scale`, and the GUI widget set
+(`create_window`/`create_button`/`create_text`/`create_edit`/`create_checkbox`/
+`create_radiobutton`/`create_list`/`add_list_item`/`remove_list_item`/
+`destroy_window`/`set_window_*`) — widget calls emit real packets via the
+`ScriptEffect::BroadcastPacket` effect queue. ABI: `u64` ids cross as `i64`,
+strings as `(ptr, len)` into linear memory (see scripts/freeroam/src/lib.rs).
 
 WASM modules use `ashfall-script` SDK crate which provides typed wrappers around host imports.
 
@@ -1201,6 +1206,10 @@ ponytail: skip initial; simple full state per update. Add delta compression when
 ### 8.4 Interpolation
 
 Client interpolates between last two known positions for remote objects. Linear lerp over tick interval. No extrapolation — if update missed, hold last position.
+
+> ⚠️ Status (2026-08-06): `interpolate_position` in `world/state.rs` is defined
+> but NOT yet wired into the render loop — the client displays last-received
+> positions directly. Wiring is on the roadmap.
 
 ```rust
 fn interpolate_position(last: [f32; 3], current: [f32; 3], t: f32) -> [f32; 3] {
