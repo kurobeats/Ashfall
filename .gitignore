@@ -26,3 +26,5 @@ target
 data/*
 # ...except the vendored NVMP server-mod ESPs (reference import corpus)
 !data/plugins/
+# ...and this directory's own README
+!data/README.md

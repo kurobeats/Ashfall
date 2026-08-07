@@ -139,7 +139,7 @@ announce = "127.0.0.1"    ; master server address
 path = "./scripts"
 
 [database]
-path = "./data/fallout3.sqlite3"
+path = "./data/fallout3/fallout3.sqlite3"
 ```
 
 > ⚠️ Strings must be double-quoted (valid TOML). Unquoted values silently

@@ -14,7 +14,7 @@ independent third source. The dumps have two quirks this script handles:
    (cross-DLC disambiguation), which is expected, not an error.
 
 Usage:
-    python3 scripts/verify-esm-dumps.py --dumps /path/to/data3 --db data/fallout3.sqlite3
+    python3 scripts/verify-esm-dumps.py --dumps /path/to/data3 --db data/fallout3/fallout3.sqlite3
 
 Exits non-zero if any dump form is missing from the DB.
 """

@@ -28,8 +28,8 @@ struct Cli {
     #[arg(long, default_value = "fo3")]
     import_game: String,
 
-    /// Database path for --import-esm. Defaults to ./data/fallout3.sqlite3.
-    #[arg(long, default_value = "./data/fallout3.sqlite3")]
+    /// Database path for --import-esm. Defaults to ./data/fallout3/fallout3.sqlite3.
+    #[arg(long, default_value = "./data/fallout3/fallout3.sqlite3")]
     import_db: String,
 
     /// Load-order index byte for --import-esm (0 = base/no remap, 1-5 = DLC).

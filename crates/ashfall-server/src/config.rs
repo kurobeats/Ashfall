@@ -57,7 +57,7 @@ fn default_connections() -> usize { 4 }
 fn default_announce() -> String { "127.0.0.1".into() }
 fn default_game_type() -> String { "fo3".into() }
 fn default_scripts_path() -> PathBuf { PathBuf::from("./scripts") }
-fn default_db_path() -> PathBuf { PathBuf::from("./data/fallout3.sqlite3") }
+fn default_db_path() -> PathBuf { PathBuf::from("./data/fallout3/fallout3.sqlite3") }
 fn default_tick_rate() -> u32 { 30 }
 fn default_time_scale() -> f32 { 30.0 }
 
