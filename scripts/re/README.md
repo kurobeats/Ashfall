@@ -154,3 +154,54 @@ ESM import updated with the real files: FO3 = 124,540 records / 299 weapons /
 recovering the 14-formID cross-master collisions. One GRA quirk: 95 refs
 authored at hi=0 are genuine base overrides (correct); 1 ref authored at
 hi=2 collides with HonestHearts (1 row in 427k).
+
+## Steam build runtime re-derivation (2026-08-07, live on tetsuo)
+
+Full pipeline exercised against the real Steam FO3 GOTY (post-2023 build,
+exe md5 `8a3adab8...`) under Proton Experimental:
+
+1. **Deploy**: `ashfall_bridge_proxy.dll` → game dir as `dinput8.dll`;
+   launch via `steam steam://rungameid/22370`, xdotool Return on the
+   launcher; bridge binds `127.0.0.1:1771` (retry loop added — the launcher
+   holds the port until it spawns the game).
+2. **Probe**: `python3 scripts/re/bridge_probe.py --action probe` — 16 bytes
+   at each classic address. Confirmed 0x455190 = FPU garbage in Steam
+   (build mismatch, as documented).
+3. **Dump**: `--action dump` — new PE-header-based `dump_image()` (reads
+   e_lfanew → SizeOfImage directly; `/proc/self/maps` fails inside
+   pressure-vessel). Two runs byte-identical in code — stable.
+4. **Derive**: call-count histogram + structural disassembly vs the GOG
+   binary. ⚠️ The first histogram pass had a +0xC00 offset bug (dump offset
+   = VA − 0x400000, NOT PE roff math) — caught by direct byte-pattern
+   search for the prologue (`55 8b ec 53 56 57 8b 3d 84 4b 22 01`).
+
+**Steam table** (in `hooks::mod.rs::fo3_steam_17`):
+
+| Function | Steam addr | Confidence |
+|---|---|---|
+| `LookupFormByID` | 0x711EF0 (form map global 0x1224B84) | high — prologue byte-match, 880+ call sites, structure identical to GOG |
+| `ExtractArgs` | 0x787530 | medium — ~431 call sites (GOG 434) |
+| `ConsoleManager::GetSingleton` | 0x788B30 | medium — 33 call sites |
+
+Auto-selected at runtime: `vtable::fo3_lookup_addr()` reads each candidate's
+prologue (`51 8b 0d` = GOG/classic, `55 8b ec 53` = Steam).
+
+**Calling conventions — two live-found bugs:**
+- `LookupFormByID` is **cdecl** (plain `ret` epilogue in both builds) — the
+  bridge called it stdcall → 4-byte stack imbalance → crash. Fixed.
+- Gamebryo **vtable methods are thiscall** (this in ECX, callee cleans) —
+  the bridge used `extern "system"` (stdcall). Fixed with inline-asm thiscall
+  shims (`vcall_0..vcall_3`, `scripts/re/thiscall_test.rs` validates them
+  under wine).
+
+**Live results (loaded save, Steam build):**
+- `OP_GET_POS` → real coords `(42878.5, -72844.4, 11118.6)` ✓ field reads
+- `OP_GET_ANGLE`, `OP_GET_PARENT_CELL` ✓ field reads
+- `OP_GET_DEAD` stub ✓, form probe: lookup returns a real object with a real
+  vtable (all entries .text pointers) ✓
+- **Blocked**: vtable-call getters (`get_base`, `get_actor_value`, ...).
+  The Steam TESObjectREFR vtable layout differs from the xFOSE assumption
+  at index 4 (holds a destructor with `ret $0x4` + delete-flag arg, not a
+  no-arg GetBaseForm) — calling it corrupts the stack. Next: locate the
+  real GetBaseForm slot (or the baseForm field) via the object-field probe
+  (`OP_PROBE_FORM` dumps obj fields; player base form = 0x707).

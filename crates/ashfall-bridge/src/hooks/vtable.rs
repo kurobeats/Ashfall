@@ -49,19 +49,143 @@ pub unsafe fn vtable_entry<T>(object: *mut u8, index: usize) -> Option<T> {
 }
 
 /// Call a C++ virtual method at vtable[index] with no arguments beyond `this`.
-/// On Windows ABI (x86 thiscall / x86_64): `this` goes in ECX/RCX.
-/// `extern "system"` = Windows ABI.
+///
+/// Gamebryo vtable methods are **thiscall** on x86 (this in ECX, stack args
+/// right-to-left, callee cleans) — `extern "system"` (stdcall) would leave
+/// `this` on the stack and the callee would read a garbage ECX, faulting.
+/// The inline-asm shims below implement thiscall for i686; on x86_64 the
+/// Windows ABI passes `this` in RCX anyway (vcall via `extern "system"`).
+#[cfg(target_arch = "x86")]
+pub unsafe fn vcall_0<R: Copy>(obj: *mut u8, index: usize) -> R {
+    let fn_ptr: usize = vtable_entry(obj, index).expect("vcall_0: null vtable entry");
+    let mut ret: usize = 0;
+    core::arch::asm!(
+        "mov ecx, {this}",
+        "call eax",
+        "mov edi, eax",
+        "mov {ret}, edi",
+        inout("eax") fn_ptr => _,
+        this = in(reg) obj as usize,
+        ret = out(reg) ret,
+        out("ecx") _, out("edx") _, out("edi") _,
+    );
+    std::mem::transmute_copy(&ret)
+}
+
+/// Call a C++ virtual method at vtable[index] with one argument + `this`.
+/// thiscall: argument pushed, `this` in ECX, callee cleans.
+#[cfg(target_arch = "x86")]
+pub unsafe fn vcall_1<T: Copy, R: Copy>(obj: *mut u8, index: usize, a1: T) -> R {
+    let fn_ptr: usize = vtable_entry(obj, index).expect("vcall_1: null vtable entry");
+    let arg: usize = std::mem::transmute_copy(&a1);
+    let mut ret: usize = 0;
+    core::arch::asm!(
+        "mov ecx, {this}",
+        "push {arg}",
+        "call eax",
+        "mov edi, eax",
+        "mov {ret}, edi",
+        inout("eax") fn_ptr => _,
+        this = in(reg) obj as usize,
+        arg = in(reg) arg,
+        ret = out(reg) ret,
+        out("ecx") _, out("edx") _, out("edi") _,
+    );
+    std::mem::transmute_copy(&ret)
+}
+
+/// thiscall with two stack arguments (callee cleans both).
+#[cfg(target_arch = "x86")]
+pub unsafe fn vcall_2<T1: Copy, T2: Copy, R: Copy>(obj: *mut u8, index: usize, a1: T1, a2: T2) -> R {
+    let fn_ptr: usize = vtable_entry(obj, index).expect("vcall_2: null vtable entry");
+    let arg1: usize = std::mem::transmute_copy(&a1);
+    let arg2: usize = std::mem::transmute_copy(&a2);
+    let mut ret: usize = 0;
+    core::arch::asm!(
+        "mov ecx, {this}",
+        "push {arg2}",
+        "push {arg1}",
+        "call eax",
+        "mov edi, eax",
+        "mov {ret}, edi",
+        inout("eax") fn_ptr => _,
+        this = in(reg) obj as usize,
+        arg1 = in(reg) arg1,
+        arg2 = in(reg) arg2,
+        ret = out(reg) ret,
+        out("ecx") _, out("edx") _, out("edi") _,
+    );
+    std::mem::transmute_copy(&ret)
+}
+
+/// thiscall with three stack arguments (callee cleans all).
+#[cfg(target_arch = "x86")]
+pub unsafe fn vcall_3<T1: Copy, T2: Copy, T3: Copy, R: Copy>(
+    obj: *mut u8,
+    index: usize,
+    a1: T1,
+    a2: T2,
+    a3: T3,
+) -> R {
+    let fn_ptr: usize = vtable_entry(obj, index).expect("vcall_3: null vtable entry");
+    let arg1: usize = std::mem::transmute_copy(&a1);
+    let arg2: usize = std::mem::transmute_copy(&a2);
+    let arg3: usize = std::mem::transmute_copy(&a3);
+    let mut ret: usize = 0;
+    core::arch::asm!(
+        "mov ecx, {this}",
+        "push {arg3}",
+        "push {arg2}",
+        "push {arg1}",
+        "call eax",
+        "mov edi, eax",
+        "mov {ret}, edi",
+        inout("eax") fn_ptr => _,
+        this = in(reg) obj as usize,
+        arg1 = in(reg) arg1,
+        arg2 = in(reg) arg2,
+        arg3 = in(reg) arg3,
+        ret = out(reg) ret,
+        out("ecx") _, out("edx") _, out("edi") _,
+    );
+    std::mem::transmute_copy(&ret)
+}
+
+/// Non-x86 (x86_64 / tests): Windows x64 ABI passes `this` in RCX — plain
+/// `extern "system"` calls are correct there.
+#[cfg(not(target_arch = "x86"))]
 pub unsafe fn vcall_0<R: Copy>(obj: *mut u8, index: usize) -> R {
     let fn_ptr: unsafe extern "system" fn(*mut u8) -> R =
         vtable_entry(obj, index).expect("vcall_0: null vtable entry");
     fn_ptr(obj)
 }
 
-/// Call a C++ virtual method at vtable[index] with one argument + `this`.
+/// Non-x86 fallback (x86_64 / tests) — see [`vcall_0`].
+#[cfg(not(target_arch = "x86"))]
 pub unsafe fn vcall_1<T: Copy, R: Copy>(obj: *mut u8, index: usize, a1: T) -> R {
     let fn_ptr: unsafe extern "system" fn(*mut u8, T) -> R =
         vtable_entry(obj, index).expect("vcall_1: null vtable entry");
     fn_ptr(obj, a1)
+}
+
+#[cfg(not(target_arch = "x86"))]
+pub unsafe fn vcall_2<T1: Copy, T2: Copy, R: Copy>(obj: *mut u8, index: usize, a1: T1, a2: T2) -> R {
+    let fn_ptr: unsafe extern "system" fn(*mut u8, T1, T2) -> R =
+        vtable_entry(obj, index).expect("vcall_2: null vtable entry");
+    fn_ptr(obj, a1, a2)
+}
+
+#[cfg(not(target_arch = "x86"))]
+pub unsafe fn vcall_3<T1: Copy, T2: Copy, T3: Copy, R: Copy>(
+    obj: *mut u8,
+    index: usize,
+    a1: T1,
+    a2: T2,
+    a3: T3,
+) -> R {
+    let fn_ptr: unsafe extern "system" fn(*mut u8, T1, T2, T3) -> R =
+        vtable_entry(obj, index).expect("vcall_3: null vtable entry");
+    fn_ptr(obj, a1, a2, a3)
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -87,8 +211,53 @@ pub unsafe fn write_field<T>(obj: *mut u8, offset: usize, value: T) {
 /// Hardcoded address of `LookupFormByID` in FO3 1.7.0.3 EN (verified against
 /// the real GOG exe + xFOSE fose.h FALLOUT_VERSION_1_7 block).
 /// FNV equivalent: different address, detected at runtime.
+///
+/// The post-2023 Steam build recompiled the engine — the function moved to
+/// 0x712AF0 (derived 2026-08-07 from a live image dump; see
+/// docs/proton-testing.md). [`fo3_lookup_addr`] picks the right one by
+/// reading each candidate's prologue in-process.
 #[allow(dead_code)]
 const LOOKUP_FORM_FO3: usize = 0x00455190;
+
+/// Classic/GOG 1.7.0.3: `push ecx; mov <form-map-global>,%ecx`
+const LOOKUP_FORM_FO3_GOG: usize = 0x0045_5190;
+/// Steam (post-2023): `push ebp; mov ebp,esp; push ebx; push esi; push edi; mov <global>,%edi`
+const LOOKUP_FORM_FO3_STEAM: usize = 0x0071_1EF0;
+
+/// Which FO3 build is running — picked once, by prologue signature.
+static FO3_LOOKUP_ADDR: std::sync::OnceLock<usize> = std::sync::OnceLock::new();
+
+/// Resolve the LookupFormByID address for the running build.
+///
+/// Reads the first bytes of each candidate in the live process: the GOG
+/// build has the classic table (0x455190 = `51 8b 0d`), the Steam build has
+/// FPU garbage there and the function at 0x712AF0 (`55 8b ec 53`). On
+/// non-Windows (tests/harnesses) or when neither matches, falls back to the
+/// classic table.
+pub fn fo3_lookup_addr() -> usize {
+    *FO3_LOOKUP_ADDR.get_or_init(|| {
+        #[cfg(target_os = "windows")]
+        {
+            unsafe fn rd4(addr: usize) -> [u8; 4] {
+                let p = addr as *const u8;
+                [p.read(), p.add(1).read(), p.add(2).read(), p.add(3).read()]
+            }
+            // GOG/classic prologue: push ecx; mov <global>,%ecx
+            if unsafe { rd4(LOOKUP_FORM_FO3_GOG) } == [0x51, 0x8B, 0x0D, 0x14] {
+                return LOOKUP_FORM_FO3_GOG;
+            }
+            // Steam post-2023 prologue: push ebp; mov ebp,esp; push ebx
+            if unsafe { rd4(LOOKUP_FORM_FO3_STEAM) } == [0x55, 0x8B, 0xEC, 0x53] {
+                return LOOKUP_FORM_FO3_STEAM;
+            }
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            let _ = (LOOKUP_FORM_FO3_GOG, LOOKUP_FORM_FO3_STEAM);
+        }
+        LOOKUP_FORM_FO3_GOG
+    })
+}
 
 /// Whether the host process is a known game exe. The hardcoded FO3/FNV
 /// addresses are only valid inside Fallout3.exe/FalloutNV.exe — calling them
@@ -147,8 +316,12 @@ pub unsafe fn lookup_form_by_id(form_id: u32) -> *mut u8 {
         if !is_game_process() {
             return std::ptr::null_mut();
         }
-        let addr: usize = LOOKUP_FORM_FO3;
-        let fn_ptr: unsafe extern "system" fn(u32) -> *mut u8 =
+        let addr: usize = fo3_lookup_addr();
+        // FO3 LookupFormByID is __cdecl (plain `ret`, verified in both the
+        // GOG and Steam builds' epilogues) — `extern "system"` would be
+        // stdcall on x86 and leave the stack 4 bytes imbalanced after the
+        // call, corrupting the caller's frame (crash on return).
+        let fn_ptr: unsafe extern "cdecl" fn(u32) -> *mut u8 =
             std::mem::transmute(addr as *const ());
         fn_ptr(form_id)
     }
@@ -287,11 +460,8 @@ pub unsafe fn get_actor_value(ref_id: u32, index: u8) -> f32 {
         return 0.0;
     }
 
-    // Try VTable call: Actor::GetActorValue(index) → f32
-    match vtable_entry::<unsafe extern "system" fn(*mut u8, u8) -> f32>(obj, VTBL_ACTOR_GET_VALUE) {
-        Some(get_av) => get_av(obj, index),
-        None => 0.0, // ponytail: raw offset unknown for actor values, VTable needed
-    }
+    // Try VTable call: Actor::GetActorValue(index) → f32 (thiscall)
+    vcall_1::<u8, f32>(obj, VTBL_ACTOR_GET_VALUE, index)
 }
 
 /// Read base actor value by index.
@@ -302,10 +472,7 @@ pub unsafe fn get_actor_base_value(ref_id: u32, index: u8) -> f32 {
         return 0.0;
     }
 
-    match vtable_entry::<unsafe extern "system" fn(*mut u8, u8) -> f32>(obj, VTBL_ACTOR_GET_BASE_VALUE) {
-        Some(get_bav) => get_bav(obj, index),
-        None => 0.0,
-    }
+    vcall_1::<u8, f32>(obj, VTBL_ACTOR_GET_BASE_VALUE, index)
 }
 
 /// Read the refID (FormID) of a TESObjectREFR.
@@ -358,9 +525,8 @@ pub unsafe fn set_actor_value(ref_id: u32, index: u8, value: f32) {
     }
 
     const VTBL_ACTOR_SET_VALUE: usize = vtable_index(0x6C); // index 27 (x86, estimated)
-    if let Some(set_av) = vtable_entry::<unsafe extern "system" fn(*mut u8, u8, f32)>(obj, VTBL_ACTOR_SET_VALUE) {
-        set_av(obj, index, value);
-    }
+    // thiscall: SetActorValue(this, index, value), callee cleans both args.
+    let _: u32 = vcall_2::<u8, f32, u32>(obj, VTBL_ACTOR_SET_VALUE, index, value);
 }
 
 /// Read cell of a reference.
@@ -488,25 +654,20 @@ pub unsafe fn get_name_from_obj(obj: *mut u8) -> String {
     if obj.is_null() {
         return "unnamed".into();
     }
-    // Use vtable_entry + match: partially patched vtables (null slots) during
-    // runtime hooking must degrade to "unnamed", not panic.
-    let base_form: *mut u8 = match vtable_entry::<unsafe extern "system" fn(*mut u8) -> *mut u8>(
-        obj,
-        VTBL_REF_GET_BASE_FORM,
-    ) {
-        Some(f) => f(obj),
-        None => return "unnamed".into(),
-    };
+    // Use vcall_0 (thiscall) with a null-entry guard: partially patched
+    // vtables (null slots) during runtime hooking degrade to "unnamed",
+    // not panic.
+    if vtable_entry::<usize>(obj, VTBL_REF_GET_BASE_FORM).is_none() {
+        return "unnamed".into();
+    }
+    let base_form: *mut u8 = vcall_0(obj, VTBL_REF_GET_BASE_FORM);
     if base_form.is_null() {
         return "unnamed".into();
     }
-    let name_ptr: *const i8 = match vtable_entry::<unsafe extern "system" fn(*mut u8) -> *const i8>(
-        base_form,
-        VTBL_FORM_GET_FULL_NAME,
-    ) {
-        Some(f) => f(base_form),
-        None => return "unnamed".into(),
-    };
+    if vtable_entry::<usize>(base_form, VTBL_FORM_GET_FULL_NAME).is_none() {
+        return "unnamed".into();
+    }
+    let name_ptr: *const i8 = vcall_0(base_form, VTBL_FORM_GET_FULL_NAME);
     if name_ptr.is_null() {
         return "unnamed".into();
     }

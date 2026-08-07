@@ -72,6 +72,28 @@ pub mod fo3_17 {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// Steam FO3 (post-2023 update) — re-derived 2026-08-07 from a live image
+// dump (bridge OP_DUMP_IMAGE on the running Steam build, md5 8a3adab8).
+// The 2023 update recompiled the engine: .text grew 10MB → 11.6MB and
+// function addresses shifted (0x455190 now holds FPU garbage). Addresses
+// were located by call-count fingerprinting + structural disassembly
+// against the GOG binary (see docs/proton-testing.md).
+pub mod fo3_steam_17 {
+    /// `TESForm* LookupFormByID(u32)` — high confidence: 880+ call sites
+    /// (GOG: 880), identical structure (loads form-map global 0x1224B84,
+    /// tests, calls a helper). Selected automatically by
+    /// `vtable::fo3_lookup_addr()`.
+    pub const LOOKUP_FORM_BY_ID: usize = 0x0071_1EF0;
+    /// Form-map global used by the Steam lookup (NiTPointerMap<TESForm>**).
+    pub const FORM_MAP: usize = 0x0122_4B84;
+    /// Script-VM argument extraction — medium confidence: ~431 call sites
+    /// (GOG: 434), matching structure (arg null-check + early exit).
+    pub const EXTRACT_ARGS: usize = 0x0078_7530;
+    /// Console manager — medium confidence: 33 call sites (GOG: 33).
+    pub const CONSOLE_MANAGER_GET_SINGLETON: usize = 0x0078_8B30;
+}
+
+// ═══════════════════════════════════════════════════════════════
 // Verified FNV 1.4.0.525 address table (xNVSE GameAPI.cpp RUNTIME block,
 // cross-checked against the real GOG FalloutNV.exe — 32-bit PE,
 // md5 0f374bae0d6c34b754d3a487d49486ba, crc32 0x881FDAF8)
@@ -682,37 +704,37 @@ pub fn read_bytes(_addr: usize, _len: usize) -> Vec<u8> {
     vec![]
 }
 
-/// Stream this process's unpacked image — via wine's `/proc/self/maps`
-/// (exposed as Z:\proc\self\maps), which needs no PE-header guessing and
-/// works even for SteamStub-packed images whose headers stay packed.
+/// Stream this process's unpacked image. Reads the PE header directly
+/// (image base 0x400000 → e_lfanew → SizeOfImage) and copies the whole
+/// image — no /proc/self/maps dependency (that fails inside Proton's
+/// pressure-vessel container). Works for SteamStub-unpacked images because
+/// the unpacker restores the PE in place.
 /// Response: [PIPE_OP_RETURN_BIG][size:4][bytes] or [0x05][err:u32].
 #[cfg(target_os = "windows")]
 pub fn dump_image() -> Vec<u8> {
     const BASE: usize = 0x0040_0000;
-    const CAP: usize = 0x1000_0000; // 256MB ceiling
+    const CAP: usize = 0x2000_0000; // 512MB ceiling
 
-    let maps = std::fs::read_to_string(r"Z:\proc\self\maps").unwrap_or_default();
-    let mut range: Option<(usize, usize)> = None;
-    for line in maps.lines() {
-        let mut it = line.split_whitespace();
-        let Some(addr) = it.next() else { continue };
-        let Some((lo_s, hi_s)) = addr.split_once('-') else { continue };
-        let (Ok(lo), Ok(hi)) = (usize::from_str_radix(lo_s, 16), usize::from_str_radix(hi_s, 16)) else { continue };
-        let Some(perms) = it.next() else { continue };
-        // the mapping containing the image base, readable
-        if lo <= BASE && BASE < hi && perms.contains('r') {
-            range = Some((lo, hi));
-            break;
-        }
+    unsafe fn rd32(addr: usize) -> u32 {
+        *(addr as *const u32)
     }
-    let Some((lo, hi)) = range else {
-        return vec![0x05, 1, 0, 0, 0]; // no image mapping found
-    };
-    let len = (hi - lo).min(CAP);
-    let src = unsafe { std::slice::from_raw_parts(lo as *const u8, len) };
-    let mut out = Vec::with_capacity(5 + len);
+    unsafe fn rd16(addr: usize) -> u16 {
+        *(addr as *const u16)
+    }
+
+    let e_lfanew = unsafe { rd32(BASE + 0x3C) } as usize;
+    // Sanity: "PE\0\0" signature at BASE + e_lfanew.
+    if e_lfanew == 0 || e_lfanew > 0x1000 || unsafe { rd16(BASE + e_lfanew) } != 0x4550 {
+        return vec![0x05, 1, 0, 0, 0]; // no valid PE header
+    }
+    let size_of_image = unsafe { rd32(BASE + e_lfanew + 0x50) } as usize;
+    if size_of_image == 0 || size_of_image > CAP {
+        return vec![0x05, 2, 0, 0, 0]; // absurd SizeOfImage
+    }
+    let src = unsafe { std::slice::from_raw_parts(BASE as *const u8, size_of_image) };
+    let mut out = Vec::with_capacity(5 + size_of_image);
     out.push(0x04); // PIPE_OP_RETURN_BIG
-    out.extend_from_slice(&(len as u32).to_le_bytes());
+    out.extend_from_slice(&(size_of_image as u32).to_le_bytes());
     out.extend_from_slice(src);
     out
 }

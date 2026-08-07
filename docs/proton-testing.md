@@ -126,3 +126,43 @@ debug-only and safe (reads, no execution). **Everything else in `commands.rs`
 either stubs (returns zeros) or hits a vtable call — check the
 `crate::hooks::` call in the dispatch arm before sending it. vtable-path
 commands crash the Steam build regardless of save state.**
+
+## Steam build — live re-derivation progress (2026-08-07, tetsuo)
+
+Full runtime pipeline exercised against the real Steam FO3 GOTY (post-2023
+build, exe md5 `8a3adab8...`) under Proton Experimental:
+
+- **Injection** ✓ — dinput8 proxy loads, bridge TCP on 127.0.0.1:1771
+  (added a bind retry: the launcher holds the port until it spawns the game).
+- **Dump** ✓ — `dump_image()` now reads the PE header directly (e_lfanew →
+  SizeOfImage); `/proc/self/maps` fails inside pressure-vessel. Two runs
+  byte-identical in code.
+- **Steam table derived** ✓ — `LookupFormByID` = 0x711EF0, form-map global
+  0x1224B84 (prologue byte-match `55 8b ec 53 56 57 8b 3d 84 4b 22 01`,
+  880+ call sites, structure identical to GOG). Auto-selected at runtime by
+  `vtable::fo3_lookup_addr()` (reads 0x455190: `51 8b 0d` = GOG, else
+  checks 0x711EF0: `55 8b ec 53` = Steam).
+- **Convention bugs found + fixed**:
+  1. `LookupFormByID` is **cdecl** (plain `ret` in both builds' epilogues) —
+     was called stdcall → 4-byte stack imbalance → crash on return. Fixed.
+  2. Gamebryo vtable methods are **thiscall** (this in ECX, callee cleans) —
+     `extern "system"` (stdcall) was used → garbage ECX. Fixed with
+     inline-asm thiscall shims `vcall_0..vcall_3` (i686), validated by
+     `scripts/re/thiscall_test.rs` under wine (PASS).
+- **Live with a loaded save**: `OP_GET_POS` → (42878.5, -72844.4, 11118.6),
+  `OP_GET_ANGLE` → (6.3, 0.0, 186.9), parent cell read, form probe shows a
+  real object (0x0303A6F4) with a real vtable (0xF93958, all entries .text).
+- **Blocked**: vtable-call getters (`get_base`, `get_actor_value`, `is_moving`).
+  The Steam TESObjectREFR vtable layout differs from the xFOSE assumption:
+  index 4 holds a destructor (`ret $0x4`, delete-flag arg) not a no-arg
+  GetBaseForm; calling it corrupts the stack (game dies). The object-field
+  probe (`OP_PROBE_FORM` dumps obj fields) is in place — next: scan the
+  object fields for a pointer to the player base form (FO3 base form
+  ID 0x707) to find the baseForm field, and map the real GetBaseForm slot
+  in the Steam vtable.
+
+Commands that work on the Steam build now: OP_GET_DEAD (stub), OP_GET_POS,
+OP_GET_ANGLE, OP_GET_PARENT_CELL, OP_PROBE_CODE, OP_PROBE_FORM, OP_DUMP_IMAGE.
+Do NOT send vtable-call commands (OP_GET_BASE, OP_GET_ACTOR_STATE,
+OP_GET_ACTOR_VALUE, OP_IS_MOVING) until the GetBaseForm slot is re-derived —
+they crash the game (reproduced twice).

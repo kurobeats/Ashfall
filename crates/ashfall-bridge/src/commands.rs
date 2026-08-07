@@ -60,6 +60,8 @@ pub mod opcodes {
     pub const OP_PROBE_SAVES: u32          = 0x00FE;
     /// Temporary debug: dump unpacked image (SteamStub analysis).
     pub const OP_DUMP_IMAGE: u32           = 0x00FC;
+    /// Temporary debug: read-only form probe (lookup + vtable, no calls).
+    pub const OP_PROBE_FORM: u32           = 0x00FB;
     /// Temporary debug: 16 bytes at each hardcoded engine address.
     pub const OP_PROBE_CODE: u32           = 0x00FD;
 }
@@ -443,18 +445,46 @@ pub fn execute(func: u32, params: &[u8]) -> Vec<u8> {
         OP_DUMP_IMAGE => {
             crate::hooks::dump_image()
         }
+        // Read-only form probe: [obj:4][vtable:4][vtable dwords x16][pos x12]
+        // then [obj fields x64 dwords] — no vtable CALLS, isolates lookup/
+        // object vs vtable-call crashes.
+        OP_PROBE_FORM => {
+            let Some(ref_id) = read_u32(params, 0) else { return vec![] };
+            unsafe fn rd_u32(addr: usize) -> u32 {
+                if addr == 0 { return 0; }
+                (addr as *const u32).read()
+            }
+            let obj = unsafe { crate::hooks::vtable::lookup_form_by_id(ref_id) } as usize;
+            let vtable = unsafe { rd_u32(obj) } as usize;
+            let mut out = Vec::new();
+            out.extend_from_slice(&(obj as u32).to_le_bytes());
+            out.extend_from_slice(&(vtable as u32).to_le_bytes());
+            for i in 0..16 {
+                out.extend_from_slice(&unsafe { rd_u32(vtable + i * 4) }.to_le_bytes());
+            }
+            for o in [0x2Cu32, 0x30, 0x34] {
+                out.extend_from_slice(&unsafe { rd_u32(obj + o as usize) }.to_le_bytes());
+            }
+            // Object fields 0..63 (dwords) — for locating the baseForm field.
+            for i in 0..64 {
+                out.extend_from_slice(&unsafe { rd_u32(obj + i * 4) }.to_le_bytes());
+            }
+            out
+        }
         OP_PROBE_CODE => {
-            const ADDRS: [usize; 10] = [
-                0x0045_5190, // fo3 LOOKUP_FORM_BY_ID
-                0x0051_7950, // fo3 EXTRACT_ARGS
-                0x0043_CDA0, // fo3 CREATE_FORM_INSTANCE
-                0x0062_B5D0, // fo3 CONSOLE_MANAGER_GET_SINGLETON
-                0x0040_1000, // fo3 FORM_HEAP_ALLOCATE
-                0x0040_1010, // fo3 FORM_HEAP_FREE
-                0x0106_CDCC, // fo3 DATA_HANDLER
+            const ADDRS: [usize; 12] = [
+                0x0045_5190, // fo3 LOOKUP_FORM_BY_ID (GOG/classic)
+                0x0071_1EF0, // fo3 LOOKUP_FORM_BY_ID (Steam post-2023)
+                0x0051_7950, // fo3 EXTRACT_ARGS (GOG)
+                0x0078_7530, // fo3 EXTRACT_ARGS (Steam)
+                0x0043_CDA0, // fo3 CREATE_FORM_INSTANCE (GOG)
+                0x0062_B5D0, // fo3 CONSOLE_MANAGER_GET_SINGLETON (GOG)
+                0x0078_8B30, // fo3 CONSOLE_MANAGER_GET_SINGLETON (Steam)
+                0x0040_1000, // fo3 FORM_HEAP_ALLOCATE (GOG)
+                0x0040_1010, // fo3 FORM_HEAP_FREE (GOG)
+                0x0122_4B84, // Steam form-map global (data)
+                0x0106_CDCC, // fo3 DATA_HANDLER (GOG)
                 0x0040_0000, // image base
-                0x0040_003C, // e_lfanew (PE header offset)
-                0x0040_0000, // dup, sanity
             ];
             let mut out = Vec::new();
             for a in ADDRS {

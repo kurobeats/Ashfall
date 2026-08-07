@@ -52,14 +52,25 @@ const PIPE_LENGTH: usize = 2048;
 
 /// Run the TCP server loop. Blocks until shutdown signaled.
 pub fn run_server(addr: &str) {
-    let listener = match TcpListener::bind(addr) {
-        Ok(l) => l,
-        Err(e) => {
-            // ponytail: log to file; no console in DLL context
-            let _ = e;
-            return;
+    // The FO3 GOTY launcher holds 1771 while it spawns the game; the game's
+    // bridge would lose the bind if it starts first. Retry for ~30s so the
+    // game process wins the port once the launcher exits.
+    let mut listener: Option<TcpListener> = None;
+    for attempt in 0..60 {
+        match TcpListener::bind(addr) {
+            Ok(l) => {
+                listener = Some(l);
+                break;
+            }
+            Err(_) => {
+                if attempt == 59 {
+                    return;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(500));
+            }
         }
-    };
+    }
+    let listener = listener.expect("bind retried 60x");
 
     // Accept one connection (single client)
     for stream in listener.incoming() {
