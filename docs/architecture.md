@@ -51,8 +51,17 @@ ashfall/
 │   │           │                       #   (pos, angle, actor state, cell, enabled,
 │   │           │                       #   name, lock, parent cell, combat target)
 │   │           ├── detour.rs           # Trampoline-based function detour
-│   │           └── opcode.rs           # Direct-indexed GECK opcode interception
-│   │                                   #   (PlaceAtMe, AddItem, EquipItem, Kill, Lock)
+│   │           ├── opcode.rs           # Direct-indexed GECK opcode interception
+│   │           │                       #   (PlaceAtMe, AddItem, EquipItem, Kill, Lock)
+│   │           ├── vaultmp.rs          # Classic FO3 multiplayer patch table
+│   │           │                       #   (35 addrs) + 34 byte-exact detour
+│   │           │                       #   recipes (respawn, AI pause, race match,
+│   │           │                       #   fire/activate/PlaceAtMe interception)
+│   │           └── animation.rs        # Remote-actor PlayGroup state machine
+│   │                                   #   (vaultmp net_SetActorState semantics)
+│   │
+│   ├── ashfall-bridge-proxy/           # dinput8.dll proxy — runs bridge init
+│   │                                   #   in the game process, forwards DInput
 │   │
 │   ├── ashfall-server/                 # Dedicated server binary
 │   │   ├── Cargo.toml
@@ -251,10 +260,24 @@ Native Linux binary (`ashfall-client`), egui GUI. Communicates with:
 - **Server** via UDP (same as original).
 - **Game engine** via TCP loopback → bridge DLL inside Proton.
 
-### 2.3 Game Bridge (bridge.dll)
+### 2.3 Game Bridge (bridge.dll + dinput8 proxy)
 
-Cross-compiled Windows PE DLL (MinGW-w64 target `x86_64-pc-windows-gnu`). Injected into Fallout3.exe under Proton via Wine DLL override (`WINEDLLOVERRIDES="bridge=n,b"`). Responsibilities:
+Cross-compiled Windows PE DLLs (MinGW-w64 target `i686-pc-windows-gnu` — FO3/FNV
+are 32-bit). The game is injected two ways:
+
+- **dinput8 proxy (recommended, verified under Proton)** — `ashfall-bridge-proxy`
+  ships as `dinput8.dll` in the game dir; the game imports dinput8 so a native
+  copy wins over wine's builtin. Its `DllMain` runs the bridge init, and
+  `DirectInput8Create` forwards to wine's builtin dinput8.
+- **FOSE/NVSE plugin** — `ashfall-bridge` exports the FOSEPlugin_/NVSEPlugin_
+  ABI for xSE loaders.
+
+Responsibilities:
 - Hook Gamebryo engine functions (VTable patching, same technique as original vaultmpdll).
+- Apply multiplayer behavior patches (`hooks::vaultmp`): respawn disable, AI pause,
+  race matching, fire/activate/PlaceAtMe interception — byte-exact recipes from
+  vaultmp, valid for the classic FO3 build (which the GOG exe matches).
+- Drive remote-actor animations (`hooks::animation`): actor-state → PlayGroup opcodes.
 - Expose TCP server on `127.0.0.1:1771` (loopback-only, no external exposure).
 - Encode/decode pipe protocol (same opcodes: `PIPE_OP_COMMAND`, `PIPE_OP_RETURN`, etc.).
 - Communicate with native `ashfall-client` over TCP.
@@ -280,20 +303,21 @@ TCP loopback is the default. Unix sockets only used when the bridge runs nativel
 | `ashfall-server` | `x86_64-unknown-linux-gnu` | Native, also `aarch64` |
 | `ashfall-master` | `x86_64-unknown-linux-gnu` | Native |
 | `ashfall-client` | `x86_64-unknown-linux-gnu` | Native |
-| `bridge.dll` | `x86_64-pc-windows-gnu` | Cross-compiled via `cargo-xwin` or MinGW |
+| `ashfall-bridge.dll` | `i686-pc-windows-gnu` | 32-bit — FO3/FNV are i386 PEs |
+| `ashfall_bridge_proxy.dll` | `i686-pc-windows-gnu` | ships as `dinput8.dll` |
 
-Bridge built with: `cargo build --target x86_64-pc-windows-gnu -p ashfall-bridge`
+Bridge built with: `cargo build --release --target i686-pc-windows-gnu -p ashfall-bridge -p ashfall-bridge-proxy`
 
 ### 2.6 Proton Setup
 
 ```bash
-# 1. Copy bridge.dll to game directory
-cp target/x86_64-pc-windows-gnu/debug/bridge.dll \
-   "$STEAM_LIBRARY/steamapps/common/Fallout 3/"
+# 1. Copy the dinput8 proxy into the game directory (native copy wins over
+#    wine's builtin dinput8; DllMain runs the bridge init)
+cp target/i686-pc-windows-gnu/release/ashfall_bridge_proxy.dll \
+   "$GAME_DIR/dinput8.dll"
 
-# 2. Launch with DLL override
-WINEDLLOVERRIDES="bridge=n,b" \
-  steam steam://rungameid/22370
+# 2. Launch the game (Steam build: through Steam — SteamStub DRM; GOG build:
+#    DRM-free, run directly — and it matches the classic address table)
 
 # 3. Start Ashfall client (native)
 cargo run -p ashfall-client
@@ -1228,8 +1252,12 @@ Direct port of the same schema, populated two ways:
 1. **Startup** — `Database::startup_load()` loads records, weapons, NPCs,
    items, containers, quest stages, dialogue flags, and factions into memory.
 2. **ESM import tool** — `ashfall-server --import-esm <file> --import-game fo3|fnv
-   --import-db <path>` parses plugin files with the native TES4 parser
-   (`db/esm_import.rs`) and fills all 17 tables. Runs at tool-time, not startup.
+   --import-db <path> [--import-index N]` parses plugin files with the native
+   TES4 parser (`db/esm_import.rs`) and fills all 17 tables in one SQLite
+   transaction. `--import-index` assigns the load-order byte for DLC esms
+   (their placeholder formIDs all collide at 0x01 otherwise). Runs at
+   tool-time, not startup. Both games fully imported + verified against the
+   vaultmp dump corpus (`scripts/verify-esm-dumps.py`).
 
 ```sql
 CREATE TABLE IF NOT EXISTS records (
@@ -1478,5 +1506,5 @@ pub struct MasterServer {
 3. **ObjectRegistry contention**: DashMap reads are lock-free, but write contention around cell changes could be an issue. Mitigation: batch cell changes.
 4. **IPC game engine bridge**: Depends on bridge.dll running inside Proton. Mitigation: stub mode for development — client runs standalone without game engine. TCP loopback tested and works in Proton 9+.
 5. **Packet ordering**: postcard + UDP means no built-in ordering. Mitigation: reliability layer handles sequence numbers and reordering.
-6. **Proton bridge.dll injection**: Wine DLL override mechanism differs from Windows `CreateRemoteThread` injection. Mitigation: use `WINEDLLOVERRIDES` env var for loading; VTable hooking works the same inside Wine as native Windows.
-7. **Cross-compilation**: bridge.dll built for `x86_64-pc-windows-gnu` requires MinGW-w64 toolchain. Mitigation: CI provides prebuilt DLL; local dev uses stub mode.
+6. **Proton bridge injection**: Wine DLL override only loads DLLs something imports — nothing imports `bridge`, so `WINEDLLOVERRIDES="bridge=n,b"` fails. Mitigation (verified): dinput8 proxy — the game imports dinput8, a native copy in the game dir wins over wine's builtin; `DllMain` runs bridge init and `DirectInput8Create` forwards to the real one. VTable hooking works the same inside Wine as native Windows.
+7. **Cross-compilation**: bridge/proxy built for `i686-pc-windows-gnu` (FO3/FNV are 32-bit) requires MinGW-w64 toolchain. Mitigation: CI provides prebuilt DLL; local dev uses stub mode.

@@ -20,7 +20,7 @@ Linux Host
 ```bash
 # Rust targets
 rustup target add x86_64-unknown-linux-gnu
-rustup target add x86_64-pc-windows-gnu   # for bridge.dll
+rustup target add i686-pc-windows-gnu   # for bridge.dll + dinput8 proxy (32-bit game)
 
 # MinGW cross-compiler (Debian/Ubuntu)
 sudo apt install mingw-w64
@@ -68,6 +68,14 @@ cp target/i686-pc-windows-gnu/release/ashfall_bridge_proxy.dll \
 > `proton run` exits silently with code 0. If your game came with a launcher
 > (FO3 GOTY default target is `Fallout3Launcher.exe`), press Enter on it to
 > start the real game.
+>
+> 💡 **GOG builds are the recommended runtime** (both games, verified
+> 2026-08-07): DRM-free (no SteamStub — run directly, no Steam dependency),
+> and the FO3 GOG exe **is the classic build** the entire address table set
+> + vaultmp recipes were verified against (byte-for-byte at the patch
+> sites). Steam's post-2023 update is the only build that mismatches. GOG
+> FNV 1.4.0.525(a) likewise matches the `fnv_14` table. Extract with
+> `innoextract`, drop the dinput8 proxy in the game dir, run the exe.
 
 ### Save location
 

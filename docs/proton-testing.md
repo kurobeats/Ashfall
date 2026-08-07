@@ -50,12 +50,17 @@ for the Steam build, so the crash is in the lookup, not the missing player.
 
 ## In-game verification plan
 
-1. Launch: Steam → Fallout 3 → launcher → Enter (SteamStub DRM: must go
-   through Steam; launcher is the default target and needs the Play click).
-2. Load any save (player ref 0x14 now valid) — saves live in the game
-   library's compatdata: `~/.local/share/.games/SteamLibrary/steamapps/
-   compatdata/22370/pfx/drive_c/users/steamuser/Documents/My Games/
-   Fallout3/Saves/`.
+1. Launch — GOG build (recommended, DRM-free, table-correct): extract with
+   `innoextract`, drop `ashfall_bridge_proxy.dll` as `dinput8.dll` in the
+   game dir, `WINEDLLOVERRIDES="dinput8=n,b"` or direct run.
+   Steam build: Steam → Fallout 3 → launcher → Enter (SteamStub DRM: must
+   go through Steam; launcher is the default target and needs the Play
+   click — post-2023 build needs table re-derivation first).
+2. Load any save (player ref 0x14 now valid) — GOG saves live in the
+   extracted game's `Documents/My Games/Fallout3/Saves/`; Steam saves in
+   the game library's compatdata:
+   `~/.local/share/.games/SteamLibrary/steamapps/compatdata/22370/pfx/
+   drive_c/users/steamuser/Documents/My Games/Fallout3/Saves/`.
 3. Pipe round trip from the host (python, no tools needed):
 
 ```python
@@ -71,19 +76,25 @@ print("get_pos:", cmd(0x0001))         # vtable — CRASHES until table re-deriv
 s.close()
 ```
 
-4. **First re-verify the constants** (current table is GOG-only): dump the
-   unpacked image via `OP_DUMP_IMAGE` (0xFC), disassemble the raw dump with
-   `i686-w64-mingw32-objdump -b binary -m i386 -D`, find the real
-   `LookupFormByID` (884-call-site fn), then update
+4. **First re-verify the constants** (classic build — verified 2026-08-07
+   for GOG): the GOG exe matches the table statically (883 call sites at
+   0x455190, vaultmp patch sites byte-identical). If running the **Steam
+   post-2023 build**, dump the unpacked image via `OP_DUMP_IMAGE` (0xFC),
+   disassemble the raw dump with `i686-w64-mingw32-objdump -b binary -m i386 -D`,
+   find the real `LookupFormByID` (884-call-site fn), then update
    `hooks/mod.rs::fo3_17`. Only then test getters with a loaded save.
 
-## Constants to verify — GOG-verified only, WRONG for Steam
+## Constants — classic build verified for GOG; Steam (post-2023) differs
 
 All in `crates/ashfall-bridge/src/hooks/vtable.rs` / `mod.rs`. The values
 below were verified statically against the GOG 1.7.0.3 binary (xFOSE
-headers + vaultmp-extended + r2) — the in-process probe shows they do NOT
-hold in the Steam build (see [scripts/re/README.md](../scripts/re/README.md)).
-Re-derive from a dump of the Steam image before trusting any.
+headers + vaultmp-extended + r2 + objdump). **2026-08-07: re-verified on the
+actual GOG download** — call-site counts and patch-site bytes match, so this
+table is correct for the GOG exe (and it is the same build vaultmp used).
+The in-process probe showed the values do NOT hold in the user's **Steam
+build** (post-2023 update) — re-derive from a dump of that image before
+trusting any there (see [scripts/re/README.md](../scripts/re/README.md)).
+GOG is the recommended runtime: DRM-free and table-correct.
 
 | Constant | Value (FO3 1.7) | Source | Verify against |
 |----------|-----------------|--------|----------------|

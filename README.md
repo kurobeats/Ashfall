@@ -3,15 +3,17 @@
 **Rust multiplayer mod for Fallout 3 / Fallout: New Vegas.** Server-authoritative dedicated server with WASM scripting, UDP networking, SQLite persistence, and an egui client browser. Started as a recreation of [vaultmp-extended](https://github.com/massdivide/vaultmp-extended), got bigger, fast.
 
 [![Status](https://img.shields.io/badge/phases-1%E2%80%9310%20complete-brightgreen)](#status)
-[![Tests](https://img.shields.io/badge/tests-382%20passed-brightgreen)](https://github.com/YOUR_ORG/ashfall/actions)
+[![Tests](https://img.shields.io/badge/tests-383%20passed-brightgreen)](https://github.com/YOUR_ORG/ashfall/actions)
 [![License](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
 [![Work in Progress](https://img.shields.io/badge/status-work%20in%20progress-orange)](#whats-left)
 
 > **All 34 items of the external ingestion plan complete** ([docs/external-ingestion-plan.md](./docs/external-ingestion-plan.md)): NVSE plugin interface fixes, real VTable getters, a fully functional reliability layer (ACK/NACK, RTO retransmit, send window, rate limiting, varint framing), an ESM/ESP → SQLite import tool, and a zero-warning build.
 >
-> **Bridge:** full memory patching system (SafeWrite*, VTable access, trampoline detours), GECK opcode interception engine with 11 default handlers, 36 pipe command opcodes, 7 event sink types, 96 tests. Needs Proton runtime testing — see [What's Left](#whats-left).
+> **Bridge:** full memory patching system (SafeWrite*, VTable access, trampoline detours), GECK opcode interception engine with 11 default handlers, 36 pipe command opcodes, 7 event sink types, 110 tests, plus the full classic-FO3 multiplayer patch table + 34 detour recipes (`hooks/vaultmp`) and the remote-actor animation state machine (`hooks/animation`). Needs Proton runtime testing — see [What's Left](#whats-left).
 >
-> **NVMP lineage ingestion** ([vaultmp](https://github.com/foxtacles/vaultmp) + [mojave-online](https://github.com/knork-fork/mojave-online), both MIT): full classic-Steam FO3 multiplayer patch table + 34 byte-exact detour recipes (`hooks/vaultmp`), remote-actor animation state machine (`hooks/animation`, vaultmp `net_SetActorState` semantics), render-behind interpolation buffer with extrapolation (`ashfall-client` `world::state`, mojave-online semantics), 2,580-function GECK script index + host-function roadmap (`docs/geck/`), NVMP server-mod ESPs (`data/plugins/`), and a vaultmp-dump ↔ SQLite cross-checker (`scripts/verify-esm-dumps.py`). 382 tests, zero warnings.
+> **NVMP lineage ingestion** ([vaultmp](https://github.com/foxtacles/vaultmp) + [mojave-online](https://github.com/knork-fork/mojave-online), both MIT): full classic-Steam FO3 multiplayer patch table + 34 byte-exact detour recipes (`hooks/vaultmp`), remote-actor animation state machine (`hooks/animation`, vaultmp `net_SetActorState` semantics), render-behind interpolation buffer with extrapolation (`ashfall-client` `world::state`, mojave-online semantics), 2,580-function GECK script index + host-function roadmap (`docs/geck/`), NVMP server-mod ESPs (`data/plugins/`), and a vaultmp-dump ↔ SQLite cross-checker (`scripts/verify-esm-dumps.py`). 383 tests, zero warnings.
+>
+> **Both games imported + verified against real GOG binaries** (FO3 1.7.0.3, FNV 1.4.0.525(a)): full ESM/DLC → SQLite import (one transaction, ~35s), load-order `--import-index`, dump-corpus verification green, and both address tables re-verified statically on the actual executables — the GOG FO3 exe IS the classic build the tables were made against.
 
 ---
 
@@ -38,7 +40,7 @@ Client connects to `127.0.0.1:1770`. Stub mode sends canned data — enough to v
 
 ## Status
 
-**Phases 1–10 complete. 382 tests, 0 failures. Zero-warning build** (lib + test targets).
+**Phases 1–10 complete. 383 tests, 0 failures. Zero-warning build** (lib + test targets).
 
 | Phase | What's built |
 |-------|-------------|
@@ -51,7 +53,7 @@ Client connects to `127.0.0.1:1770`. Stub mode sends canned data — enough to v
 | 7. Client | UDP networking. Connection flow (auth→load→ingame). Client object registry. Handlers for all packet categories. Background 30Hz poll loop. |
 | 8. Master | UDP server registry. Announce/query/cull lifecycle. Client integration for server browser population. |
 | 9. Security | Anti-cheat validator — position bounds, velocity caps, teleport detection, item count limits, damage bounds, sequence nonces, FormID whitelist. **Handler ownership enforcement**: clients may only mutate their own player object (movement, actor state/value/death, controls, combat hits) and their own inventory items (item→container→player chain); world/NPC objects are server-authoritative. 22 ownership/PvP/item tests. |
-| 10. Bridge | Memory patching system (SafeWrite*, VTable access, trampoline detours). 36 command opcodes (Tier 1-4). GECK opcode interception engine (11 default handlers, direct-indexed static table). Real VTable getters (cell, enabled, name, lock, parent cell, combat target — FO3/FNV aware). 7 event sink types + pipe event frames. 96 tests. **Every hardcoded constant verified against the real GOG 1.7.0.3 binaries with two independent tools** (r2 + python/objdump/headers — see scripts/re/) — 4 wrong opcodes and 2 wrong field offsets were found and fixed; FOSE/NVSE plugin ABI corrected to the real interface layout. Bridge cross-compiles to i686 Windows and runs under wine (TCP pipe protocol round-trip verified, no game needed). |
+| 10. Bridge | Memory patching system (SafeWrite*, VTable access, trampoline detours). 36 command opcodes (Tier 1-4). GECK opcode interception engine (11 default handlers, direct-indexed static table). Real VTable getters (cell, enabled, name, lock, parent cell, combat target — FO3/FNV aware). 7 event sink types + pipe event frames. **110 tests** (incl. vaultmp patch-recipe + animation state machine suites). **Every hardcoded constant verified against the real GOG 1.7.0.3 binaries with two independent tools** (r2 + python/objdump/headers — see scripts/re/) — 4 wrong opcodes and 2 wrong field offsets were found and fixed; FOSE/NVSE plugin ABI corrected to the real interface layout. **Re-verified 2026-08-07 on the actual GOG downloads** (FO3 + FNV exes): call-site counts match (FO3 lookup 883, FNV extract-args 480, ...) — the GOG FO3 exe IS the classic Steam-era build, so the vaultmp recipes apply as-is. Bridge cross-compiles to i686 Windows and runs under wine (TCP pipe protocol round-trip verified, no game needed). |
 
 ## What's Left
 
@@ -80,14 +82,15 @@ git clone https://github.com/YOUR_ORG/ashfall.git
 cd ashfall
 
 cargo build --release
-cargo test --workspace   # 382 tests
+cargo test --workspace   # 383 tests
 ```
 
 Optional: cross-compile bridge DLL for Proton (`sudo apt install mingw-w64`):
 
 ```bash
-rustup target add x86_64-pc-windows-gnu
-cargo build --release --target x86_64-pc-windows-gnu -p ashfall-bridge
+rustup target add i686-pc-windows-gnu
+cargo build --release --target i686-pc-windows-gnu -p ashfall-bridge
+cargo build --release --target i686-pc-windows-gnu -p ashfall-bridge-proxy
 ```
 
 > ⚠️ FO3/FNV are **32-bit** executables — real Proton injection needs

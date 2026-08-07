@@ -51,7 +51,7 @@ analyzed identically:
 | FNV LookupFormByID | no direct function — xNVSE wraps the form-map global `0x11C54C0` (xref-confirmed) |
 | parentCell offset | 0x40 — 8,924 `[reg+0x40]` reads in the binary (tool 2) + xNVSE header (tool 1) |
 | Opcodes | FNV's GECK/game command tables are RUNTIME-BUILT (no static name→opcode array — the FO3-style scan finds nothing). Values verified via FO3 GECK binary + xNVSE `SetReturnType` (shared gamebryo VM opcodes) |
-| ESM import | FalloutNV.esm + 5 DLCs: 488 weapons (all unique; 14 formIDs shared across masters), 6,452 NPCs, 380,497 refs, 772 factions — cross-verified vs independent python walker. 1 corrupt LAND record (of 33,179 compressed) skipped via `stats.skipped_compressed` |
+| ESM import | FalloutNV.esm + 5 DLCs: 488 weapons (all unique; 14 formIDs shared across masters), 6,452 NPCs, 380,497 refs, 772 factions — cross-verified vs independent python walker. 1 corrupt LAND record (of 33,179 compressed) skipped via `stats.skipped_compressed`. **Re-imported 2026-08-07 with `--import-index`: 496 weapons / 6,455 NPCs / 427,089 refs (collision recovery)** |
 
 ## Proton runtime (FO3 GOTY, Steam, Fedora 44)
 
@@ -123,3 +123,34 @@ Dump the unpacked image via `OP_DUMP_IMAGE`, disassemble locally
 (`i686-w64-mingw32-objdump -b binary -m i386 -D` on the raw dump), locate the
 real `LookupFormByID` (884-call-site function), re-derive the address table
 for the Steam build, then re-run the vtable round trip with a loaded save.
+
+## GOG downloads verified (2026-08-07) — classic build resolved
+
+Both games re-downloaded from GOG (innoextract on a separate host) and the
+address tables re-verified **statically on the real executables** — no game
+process needed:
+
+| Check | FO3 1.7.0.3 GOG | FNV 1.4.0.525(a) GOG |
+|---|---|---|
+| exe md5 | `7691d7180f225ee8e876358d170ecc93` (documented ✓) | `0f374bae0d6c34b754d3a487d49486ba` (documented ✓) |
+| `LOOKUP_FORM_BY_ID` 0x455190 | **883 direct call sites** (doc: 884) | — (FNV: form-map global 0x11C54C0, 0 calls as expected) |
+| `EXTRACT_ARGS` | 0x517950 = 434 calls | 0x5ACCB0 = 480 calls |
+| `CREATE_FORM_INSTANCE` | 0x43CDA0 = 7 calls | 0x465110 = 7 calls |
+| `CONSOLE_MANAGER` | 0x62B5D0 = 33 calls | 0x71B160 = 32 calls |
+| `GET_FORM_BY_ID` | — | 0x483A00 = 43 calls |
+
+**Key finding: the GOG FO3 exe IS the classic Steam-era build.** The vaultmp
+patch sites match byte-for-byte: 0x6D5965 already holds vaultmp's restored
+`75 03` (respawn guard), 0xE10FF1 holds the `.txt` tail of `Plugins.txt`
+(vaultmp's `.vmp` patch target), 0x45F704 = `74 2a` (the byte vaultmp
+overwrote with `EB`). The Steam mismatch reported earlier is the
+**post-2023 Steam update**, not GOG. The whole bridge table set + all 34
+vaultmp recipes apply to the GOG exe as-is.
+
+ESM import updated with the real files: FO3 = 124,540 records / 299 weapons /
+3,613 NPCs / 747k refs; FNV = 141,502 records / 496 weapons / 6,455 NPCs /
+427,089 refs / 772 factions. FNV counts now exceed the original run (488 /
+6,452 / 380,497) because `--import-index` assigns distinct load-order bytes,
+recovering the 14-formID cross-master collisions. One GRA quirk: 95 refs
+authored at hi=0 are genuine base overrides (correct); 1 ref authored at
+hi=2 collides with HonestHearts (1 row in 427k).
