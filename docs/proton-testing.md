@@ -18,13 +18,24 @@ Experimental, verified 2026-08-06 against the real game — see
 
 ## Why vtable commands crash (verified 2026-08-06, loaded save)
 
-**The address table was verified against the GOG 1.7.0.3 binary, and the
-Steam build differs.** In-process probe: `LOOKUP_FORM_BY_ID` at 0x455190
+**The classic address table (xFOSE/vaultmp-era) does NOT match the user's
+Steam build.** In-process probe: `LOOKUP_FORM_BY_ID` at 0x455190
 holds FPU-op garbage, not the form lookup. Calling any of these addresses
 (or vtable calls through them) crashes the game — reproduced with a valid
 loaded save (player ref 0x14): `OP_GET_ACTOR_VALUE` killed Fallout3.exe;
 `OP_GET_POS` never ran after that. Probe evidence + constant table:
 [scripts/re/README.md](../scripts/re/README.md) (Steam FO3 GOTY section).
+
+**Update (2026-08-07, GOG download analyzed):** the classic table is NOT
+wrong for GOG. The GOG 1.7.0.3 exe (md5 `7691d7180f225ee8e876358d170ecc93`)
+matches the vaultmp-era patch sites byte-for-byte (0x455190 = 883 call sites;
+0x6D5965 holds vaultmp's restored `75 03`; 0xE10FF1 holds the `Plugins.txt`
+tail; 0x45F704 = `74 2a` as vaultmp patched over). So the Steam build the
+user ran is the post-2023 updated exe, and the GOG exe is the classic build
+this project's whole table set was verified against. If the user's Steam
+build stays updated, re-derive for it; if they run the GOG exe (DRM-free,
+works under Proton), the existing table + `hooks::vaultmp` recipes apply
+as-is.
 
 Until the Steam-build table is re-derived: **do not send vtable-path commands
 (OP_GET_POS/SET_POS/GET_ANGLE/GET_CELL/GET_PARENT_CELL/IS_MOVING/

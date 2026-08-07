@@ -174,9 +174,14 @@ fn sub_u16_at(subs: &[Subrecord], ty: &[u8; 4], offset: usize) -> u16 {
 impl Database {
     /// Import a plugin file into the database (tool-time, not server startup).
     pub fn import_plugin(&self, path: &Path, game: GameId) -> anyhow::Result<EsmImportStats> {
+        self.import_plugin_at(path, game, 0)
+    }
+
+    /// Import with an explicit load-order index — see [`Self::import_plugin_bytes_at`].
+    pub fn import_plugin_at(&self, path: &Path, game: GameId, index: u8) -> anyhow::Result<EsmImportStats> {
         let data = std::fs::read(path)
             .map_err(|e| anyhow::anyhow!("failed to read {}: {e}", path.display()))?;
-        let stats = self.import_plugin_bytes(&data, game)?;
+        let stats = self.import_plugin_bytes_at(&data, game, index)?;
         tracing::info!(
             "Imported {}: {} records, {} weapons, {} npcs, {} items, {} references",
             path.display(),
@@ -191,31 +196,71 @@ impl Database {
 
     /// Import plugin bytes (also used by tests with synthetic plugins).
     pub fn import_plugin_bytes(&self, data: &[u8], game: GameId) -> anyhow::Result<EsmImportStats> {
+        self.import_plugin_bytes_at(data, game, 0)
+    }
+
+    /// Import plugin records, optionally rewriting the load-order index byte.
+    ///
+    /// TES4 files store formIDs with a placeholder mod-index byte (0x01 for a
+    /// plugin whose only master is the base game); the engine rewrites that
+    /// byte at startup according to real load order. Importing several DLC
+    /// esms into one DB without rewriting collides them all at index 0x01
+    /// (the later import silently REPLACEs the earlier). Pass `index` (1–5)
+    /// to assign distinct indices so DLC records stay distinguishable;
+    /// `index = 0` leaves formIDs untouched.
+    pub fn import_plugin_bytes_at(&self, data: &[u8], game: GameId, index: u8) -> anyhow::Result<EsmImportStats> {
         let mut reader = PluginReader::new(data);
         let mut stats = EsmImportStats::default();
 
-        // TES4 file header record — 24-byte record header: type(4) size(4)
-        // flags(4) formID(4) timestamp(4) vcs(2) internal(2) = 4+4+16.
-        if reader.peek_4cc() == Some(*b"TES4") {
-            reader.read(4); // record type
-            let size = reader.read_u32().unwrap_or(0) as usize;
-            reader.read(16); // flags, formID, timestamp, vcs, internal
-            reader.read(size); // header subrecords
-        }
-
-        // Walk top-level groups
-        let mut world_ctx: u32 = 0;
-        let mut cell_ctx: u32 = 0;
-        while !reader.is_empty() {
-            if reader.peek_4cc() != Some(*b"GRUP") {
-                return Err(anyhow::anyhow!(
-                    "malformed plugin: expected GRUP at offset {}",
-                    reader.pos
-                ));
+        // One transaction for the whole plugin: the naive per-record
+        // autocommit fsyncs ~700k times on a real master (measured ~4h for
+        // Fallout3.esm); a single commit takes the same parse to seconds.
+        self.conn().execute_batch("BEGIN IMMEDIATE;")?;
+        let result = (|| -> anyhow::Result<()> {
+            // TES4 file header record — 24-byte record header: type(4) size(4)
+            // flags(4) formID(4) timestamp(4) vcs(2) internal(2) = 4+4+16.
+            if reader.peek_4cc() == Some(*b"TES4") {
+                reader.read(4); // record type
+                let size = reader.read_u32().unwrap_or(0) as usize;
+                reader.read(16); // flags, formID, timestamp, vcs, internal
+                reader.read(size); // header subrecords
             }
-            self.parse_group(&mut reader, game, &mut stats, &mut world_ctx, &mut cell_ctx)?;
+
+            // Walk top-level groups
+            let mut world_ctx: u32 = 0;
+            let mut cell_ctx: u32 = 0;
+            while !reader.is_empty() {
+                if reader.peek_4cc() != Some(*b"GRUP") {
+                    return Err(anyhow::anyhow!(
+                        "malformed plugin: expected GRUP at offset {}",
+                        reader.pos
+                    ));
+                }
+                self.parse_group(&mut reader, game, &mut stats, &mut world_ctx, &mut cell_ctx, index)?;
+            }
+            Ok(())
+        })();
+
+        match result {
+            Ok(()) => {
+                self.conn().execute_batch("COMMIT;")?;
+            }
+            Err(e) => {
+                let _ = self.conn().execute_batch("ROLLBACK;");
+                return Err(e);
+            }
         }
         Ok(stats)
+    }
+
+    /// Remap a formID's placeholder mod-index byte (0x01 → `index`).
+    /// No-op when `index == 0` (base game / tests).
+    fn remap(&self, index: u8, fid: u32) -> u32 {
+        if index != 0 && (fid >> 24) == 0x01 {
+            (fid & 0x00FF_FFFF) | ((index as u32) << 24)
+        } else {
+            fid
+        }
     }
 
     /// Walk one group (recursively for nested groups).
@@ -226,6 +271,7 @@ impl Database {
         stats: &mut EsmImportStats,
         world_ctx: &mut u32,
         cell_ctx: &mut u32,
+        index: u8,
     ) -> anyhow::Result<()> {
         let start = reader.pos;
         reader.read(4); // "GRUP"
@@ -243,19 +289,20 @@ impl Database {
         }
 
         // Group labels carry context: world children → world formID,
-        // cell children → cell formID.
+        // cell children → cell formID. These label the plugin's OWN
+        // WRLD/CELL records, so remap like any other self-formID.
         match group_type {
-            1 => *world_ctx = label,
-            6 | 8 | 10 => *cell_ctx = label,
+            1 => *world_ctx = self.remap(index, label),
+            6 | 8 | 10 => *cell_ctx = self.remap(index, label),
             _ => {}
         }
 
         while reader.pos < end {
             match reader.peek_4cc() {
                 Some(g) if &g == b"GRUP" => {
-                    self.parse_group(reader, game, stats, world_ctx, cell_ctx)?;
+                    self.parse_group(reader, game, stats, world_ctx, cell_ctx, index)?;
                 }
-                Some(_) => self.parse_record(reader, game, stats, *world_ctx, *cell_ctx)?,
+                Some(_) => self.parse_record(reader, game, stats, *world_ctx, *cell_ctx, index)?,
                 None => break,
             }
         }
@@ -271,6 +318,7 @@ impl Database {
         stats: &mut EsmImportStats,
         world_ctx: u32,
         cell_ctx: u32,
+        index: u8,
     ) -> anyhow::Result<()> {
         let rec_type: [u8; 4] = reader
             .read(4)
@@ -279,7 +327,7 @@ impl Database {
             .unwrap();
         let size = reader.read_u32().ok_or_else(|| anyhow::anyhow!("truncated record"))? as usize;
         let flags = reader.read_u32().unwrap_or(0);
-        let form_id = reader.read_u32().unwrap_or(0);
+        let form_id = self.remap(index, reader.read_u32().unwrap_or(0));
         reader.read(8); // timestamp(4) + version control(2) + internal(2)
         let body = reader
             .read(size)
@@ -316,7 +364,7 @@ impl Database {
         };
 
         let subs = parse_subrecords(&body);
-        self.import_record(&rec_type, form_id, &subs, game, stats, world_ctx, cell_ctx);
+        self.import_record(&rec_type, form_id, &subs, game, stats, world_ctx, cell_ctx, index);
         Ok(())
     }
 
@@ -330,6 +378,7 @@ impl Database {
         stats: &mut EsmImportStats,
         world_ctx: u32,
         cell_ctx: u32,
+        index: u8,
     ) {
         match rec_type {
             b"WEAP" => {
@@ -348,7 +397,7 @@ impl Database {
                 let npc = super::npc::Npc {
                     base_id: form_id,
                     name: full_name(subs),
-                    race: sub_u32_at(subs, b"RNAM", 0),
+                    race: self.remap(index, sub_u32_at(subs, b"RNAM", 0)),
                     female: sub_u32_at(subs, b"ACBS", 0) & 0x1 != 0,
                     health: sub_u32_at(subs, b"ACDT", 0),
                     level: sub_u16_at(subs, b"ACDT", 32) as u32,
@@ -429,7 +478,7 @@ impl Database {
             b"REFR" | b"ACHR" | b"ACRE" => {
                 let reference = super::reference::RefData {
                     ref_id: form_id,
-                    base_id: sub_u32_at(subs, b"NAME", 0),
+                    base_id: self.remap(index, sub_u32_at(subs, b"NAME", 0)),
                     cell_id: cell_ctx,
                     object_id: 0,
                 };
@@ -661,6 +710,45 @@ mod tests {
         let truncated = &plugin[..plugin.len() / 2];
         let result = db.import_plugin_bytes(truncated, GameId::Fallout3);
         assert!(result.is_err(), "truncated plugin must fail cleanly");
+    }
+
+    #[test]
+    fn test_import_index_remaps_dlc_formids() {
+        // A DLC-style plugin: own records carry placeholder index 0x01
+        // (single master = base game). With index=3 the records must land at
+        // 0x03xxxxxx, including self-references inside subrecords.
+        let weap_data: Vec<u8> = [10.0f32.to_le_bytes(), 12u32.to_le_bytes(), 5.0f32.to_le_bytes()]
+            .concat();
+        let weap = record(b"WEAP", 0x0100_1000, &[sub(b"FULL", b"DLC Gun\0"), sub(b"DATA", &weap_data)]);
+        let interior_cell = record(b"CELL", 0x0100_1010, &[sub(b"FULL", b"DLC Cell\0")]);
+        let refr_data: Vec<u8> = 0x0100_1000u32.to_le_bytes().to_vec(); // NAME → DLC weapon
+        let refr = record(b"REFR", 0x0100_2001, &[sub(b"NAME", &refr_data), sub(b"DATA", &[0u8; 12])]);
+        let cell_children = group(0x0100_1010u32.to_le_bytes(), 6, &refr);
+
+        let mut plugin = header(2);
+        plugin.extend_from_slice(&group(*b"WEAP", 0, &weap));
+        plugin.extend_from_slice(&group(*b"CELL", 0, &interior_cell));
+        plugin.extend_from_slice(&cell_children);
+
+        let db = Database::open_in_memory().unwrap();
+        let stats = db.import_plugin_bytes_at(&plugin, GameId::Fallout3, 3).unwrap();
+        assert_eq!(stats.weapons, 1);
+        assert_eq!(stats.references, 1);
+
+        // Own record formID remapped 0x01 → 0x03.
+        let weapon = db.get_weapon(0x0300_1000).unwrap();
+        assert_eq!(weapon.name, "DLC Gun");
+        assert!(db.get_weapon(0x0100_1000).is_none(), "placeholder index must not survive");
+
+        // Group label (cell) + subrecord self-reference both remapped.
+        let reference = db.get_reference(0x0300_2001).unwrap();
+        assert_eq!(reference.base_id, 0x0300_1000, "NAME subrecord remapped");
+        assert_eq!(reference.cell_id, 0x0300_1010, "cell-children group label remapped");
+
+        // index=0 (default) leaves formIDs untouched.
+        let db0 = Database::open_in_memory().unwrap();
+        db0.import_plugin_bytes(&plugin, GameId::Fallout3).unwrap();
+        assert!(db0.get_weapon(0x0100_1000).is_some());
     }
 
     #[test]

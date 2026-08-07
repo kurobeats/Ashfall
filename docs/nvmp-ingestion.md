@@ -55,9 +55,11 @@ Import: `ashfall-server --import-esm data/plugins/NVMP-Q.esp --import-game fnv
 
 ### 6. `scripts/verify-esm-dumps.py`
 Cross-checks an imported DB against the vaultmp `other/data3` dumps (FO3 +
-DLC record counts). Known-good dump totals: 301 weapons, 2736 NPC_, 747,790
-REFR+ACHR+ACRE, 30 races, 485 terminals — these match Ashfall's own
-python-walker verification, so a DB that passes the script is correct.
+DLC record counts). Handles dump quirks: zone files overlap (dedupe) and
+placeholder mod indices (compare low-24 bits; DLCs collide at 0x01 in the
+dumps, the DB keeps them distinct via `--import-index`). **Green on the
+real GOG import**: 0 forms missing across weapons (299), refs (639,633),
+races (30), terminals (484); NPC_ dump count fully present + 886 CREA.
 
 ## Not ingested (deliberately)
 - vaultmp `research/formulas` — simplified damage calc; Ashfall's is richer.

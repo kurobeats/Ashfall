@@ -31,6 +31,12 @@ struct Cli {
     /// Database path for --import-esm. Defaults to ./data/fallout3.sqlite3.
     #[arg(long, default_value = "./data/fallout3.sqlite3")]
     import_db: String,
+
+    /// Load-order index byte for --import-esm (0 = base/no remap, 1-5 = DLC).
+    /// Distinct indices keep DLC records from colliding in one DB — the
+    /// engine normally rewrites this byte at startup by real load order.
+    #[arg(long, default_value_t = 0)]
+    import_index: u8,
 }
 
 #[tokio::main]
@@ -45,7 +51,7 @@ async fn main() -> anyhow::Result<()> {
     if let Some(esm_path) = cli.import_esm {
         let game: GameId = cli.import_game.parse()?;
         let db = ashfall_server::db::Database::open(std::path::Path::new(&cli.import_db))?;
-        let stats = db.import_plugin(std::path::Path::new(&esm_path), game)?;
+        let stats = db.import_plugin_at(std::path::Path::new(&esm_path), game, cli.import_index)?;
         tracing::info!(
             "Import complete — {} records, {} weapons, {} npcs, {} items, {} containers, {} references",
             stats.records,
