@@ -67,6 +67,8 @@ Client connects to `127.0.0.1:1770`. Stub mode sends canned data — enough to v
 >
 > ✅ Verification corpus: **green** — `scripts/verify-esm-dumps.py` against the vaultmp `other/data3` dumps: every dump formID present in the DB (0 missing across weapons/refs/races/terminals; NPC_ dump count 2,717 all present + 886 CREA). DLC esms import with `--import-index 1..5` so their placeholder formIDs (all authored at 0x01) don't collide in one DB — the engine normally rewrites that byte by load order at runtime.
 >
+> ✅ New Vegas: **imported + verified** — FalloutNV.esm + 5 story DLC + 4 pre-order packs (GOG 1.4.0.525(a), md5 `0f374bae...`) → `data/falloutnv.sqlite3`: 141,502 records, 496 weapons, 6,455 NPCs, 3,028 items, 772 factions, 427,089 refs. Counts exceed the old documented run (488 weapons / 380,497 refs) because `--import-index` recovers cross-DLC collisions. FNV exe statically verified: `fnv_14` table holds on this binary (EXTRACT_ARGS 0x5ACCB0 = 480 call sites, CREATE_FORM_INSTANCE 7, CONSOLE 32, GET_FORM_BY_ID 43; form map 0x11C54C0 = data global). Quirk: GRA.esm authors some refs at hi=0 (overrides, correct) and one at hi=2 (1-in-427k collision with HonestHearts — acceptable).
+>
 > ✅ ESP import path: **verified** — the four NVMP server-mod ESPs (`data/plugins/`) import cleanly without masters (285/41/54/62 records; overrides only, base stats come from the master ESM).
 
 ---

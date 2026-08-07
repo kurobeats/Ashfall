@@ -66,3 +66,29 @@ races (30), terminals (484); NPC_ dump count fully present + 886 CREA.
 - ClientLauncher EOS auth — Commons Clause, future scope.
 - Mojave-online's protocol (9 messages) — regression vs Ashfall's 140+.
 - `other/data3` raw dumps (72MB) — scripted comparison instead of vendoring.
+
+## Update — real game data imported (2026-08-07)
+
+Both games fully ingested from GOG downloads (innoextract on
+battlecruiser, files in `data/game/` — gitignored):
+
+| | FO3 1.7.0.3 GOG | FNV 1.4.0.525(a) GOG |
+|---|---|---|
+| exe md5 | `7691d718...` (documented build ✓) | `0f374bae...` (documented build ✓) |
+| DB | `data/fallout3.sqlite3` | `data/falloutnv.sqlite3` |
+| records | 124,540 | 141,502 |
+| weapons | 299 | 496 |
+| NPCs | 3,613 | 6,455 |
+| factions | 451 | 772 (matches old docs exactly) |
+| refs | 747k | 427,089 |
+| dump corpus | ✓ 0 missing (verify-esm-dumps.py) | n/a (no FNV dumps) |
+
+Server boots on both (config `[database] path`, `[server] game_type`).
+Static exe verification: FO3 0x455190 = 883 call sites; FNV fnv_14
+functions all hold (480/7/32/43 call sites). The FO3 GOG exe IS the
+classic build the whole address table set was made against — the
+post-2023 Steam update is the only mismatched build.
+
+Known quirk: GRA.esm authors 95 refs at hi=0 (genuine overrides of base
+forms — imported as overrides, correct) and 1 ref at hi=2 (collides with
+HonestHearts' 0x02000801; GRA imported last wins). 1 row in 427k.
