@@ -28,6 +28,11 @@ data/*
 # 2026-08-07 `".` incident where a quoted config path made sqlite create
 # a directory literally named `".` which `git add -A` then committed)
 *.sqlite3*
+# CI workflow is ready but unpushable: the GitHub OAuth token lacks the
+# `workflow` scope (push rejected). Add it via the web UI (paste
+# .github/workflows/ci.yml) or grant the token workflow scope, then
+# un-ignore + push.
+.github/workflows/ci.yml
 # ...except the vendored NVMP server-mod ESPs (reference import corpus)
 !data/plugins/
 # ...and this directory's own README
