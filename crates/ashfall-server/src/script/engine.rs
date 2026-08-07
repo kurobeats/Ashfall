@@ -645,7 +645,20 @@ impl ScriptEngine {
         self.notify_2i64_1i32("on_list_item_select", player, item, selected as u32);
     }
 
-    /// on_actor_fire_weapon(actor, weapon)
+    /// Notify scripts an actor swung unarmed (on_actor_punch: actor, power).
+    pub fn notify_punch(&mut self, actor: u64, power: bool) {
+        for inst in &mut self.instances {
+            let f = inst
+                .instance
+                .get_typed_func::<(i64, i32), ()>(&mut inst.store, "on_actor_punch")
+                .ok();
+            if let Some(f) = f {
+                let _ = f.call(&mut inst.store, (actor as i64, power as i32));
+            }
+        }
+    }
+
+    /// Notify scripts an actor fired a weapon (on_actor_fire_weapon: actor, weapon).
     pub fn notify_fire_weapon(&mut self, actor: u64, weapon: u32) {
         for inst in &mut self.instances {
             let f = inst

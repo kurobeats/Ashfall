@@ -3,7 +3,7 @@
 **Rust multiplayer mod for Fallout 3 / Fallout: New Vegas.** Server-authoritative dedicated server with WASM scripting, UDP networking, SQLite persistence, and an egui client browser. Started as a recreation of [vaultmp-extended](https://github.com/massdivide/vaultmp-extended), got bigger, fast.
 
 [![Status](https://img.shields.io/badge/phases-1%E2%80%9310%20complete-brightgreen)](#status)
-[![Tests](https://img.shields.io/badge/tests-383%20passed-brightgreen)](https://github.com/YOUR_ORG/ashfall/actions)
+[![Tests](https://img.shields.io/badge/tests-396%20passed-brightgreen)](https://github.com/kurobeats/Ashfall/actions)
 [![License](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
 [![Work in Progress](https://img.shields.io/badge/status-work%20in%20progress-orange)](#whats-left)
 
@@ -11,7 +11,9 @@
 >
 > **Bridge:** full memory patching system (SafeWrite*, VTable access, trampoline detours), GECK opcode interception engine with 11 default handlers, 36 pipe command opcodes, 7 event sink types, 110 tests, plus the full classic-FO3 multiplayer patch table + 34 detour recipes (`hooks/vaultmp`) and the remote-actor animation state machine (`hooks/animation`). Needs Proton runtime testing — see [What's Left](#whats-left).
 >
-> **NVMP lineage ingestion** ([vaultmp](https://github.com/foxtacles/vaultmp) + [mojave-online](https://github.com/knork-fork/mojave-online), both MIT): full classic-Steam FO3 multiplayer patch table + 34 byte-exact detour recipes (`hooks/vaultmp`), remote-actor animation state machine (`hooks/animation`, vaultmp `net_SetActorState` semantics), render-behind interpolation buffer with extrapolation (`ashfall-client` `world::state`, mojave-online semantics), 2,580-function GECK script index + host-function roadmap (`docs/geck/`), NVMP server-mod ESPs (`data/plugins/`), and a vaultmp-dump ↔ SQLite cross-checker (`scripts/verify-esm-dumps.py`). 383 tests, zero warnings.
+> **NVMP lineage ingestion** ([vaultmp](https://github.com/foxtacles/vaultmp) + [mojave-online](https://github.com/knork-fork/mojave-online), both MIT): full classic-Steam FO3 multiplayer patch table + 34 byte-exact detour recipes (`hooks/vaultmp`), remote-actor animation state machine (`hooks/animation`, vaultmp `net_SetActorState` semantics), render-behind interpolation buffer with extrapolation (`ashfall-client` `world::state`, mojave-online semantics), 2,580-function GECK script index + host-function roadmap (`docs/geck/`), NVMP server-mod ESPs (`data/plugins/`), and a vaultmp-dump ↔ SQLite cross-checker (`scripts/verify-esm-dumps.py`). 396 tests, zero warnings.
+>
+> **Server hardening + game-mode hooks:** ItemNew is server-authoritative (client minting rejected), item condition capped (anti-cheat), Punch packet wired to `on_actor_punch` with ownership checks, and new WASM host functions (`resurrect_actor`, `lock_object`, `unlock_object`, `set_faction_relation` — shared `FactionMatrix` so script instances see each other). Client gained a top-down world view (interpolated positions projected to a canvas) and the `OP_PLAY_GROUP` IPC constant. CI added (build + test + clippy + i686 Windows cross-build).
 >
 > **Both games imported + verified against real GOG binaries** (FO3 1.7.0.3, FNV 1.4.0.525(a)): full ESM/DLC → SQLite import (one transaction, ~35s), load-order `--import-index`, dump-corpus verification green, and both address tables re-verified statically on the actual executables — the GOG FO3 exe IS the classic build the tables were made against.
 
@@ -40,7 +42,7 @@ Client connects to `127.0.0.1:1770`. Stub mode sends canned data — enough to v
 
 ## Status
 
-**Phases 1–10 complete. 383 tests, 0 failures. Zero-warning build** (lib + test targets).
+**Phases 1–10 complete. 396 tests, 0 failures. Zero-warning build** (lib + test targets).
 
 | Phase | What's built |
 |-------|-------------|
@@ -61,9 +63,9 @@ Client connects to `127.0.0.1:1770`. Stub mode sends canned data — enough to v
 - **Proton runtime testing** — injection + pipe protocol verified in real FO3 GOTY under Proton; **the Steam build's address table differs from the classic one** (in-process probe: 0x455190 is garbage — vtable commands crash the game). **Resolved for GOG**: the downloaded GOG 1.7.0.3 exe (md5 7691d718...) matches the vaultmp classic table byte-for-byte at the patch sites (verified statically, `scripts/re`), so the Steam mismatch is the post-2023 Steam update, not GOG. Next: dump the unpacked image via bridge `OP_DUMP_IMAGE`, re-derive constants for the user's actual build, re-test — see [docs/proton-testing.md](./docs/proton-testing.md).
 - **Proton integration testing** — end-to-end test with real Fallout running under Proton/Wine.
 - **Windows native client** — currently Linux-only. Bridge DLL already cross-compiles for Windows.
-- **Client world renderer** — the GUI layer renders server-authored windows, but there is no 3D/2D world view yet; remote objects are listed with render-behind interpolated positions (67ms delay + 500ms extrapolation, `world::state::InterpBuffer`). `on_actor_punch` has no wire source (no Punch packet).
-- **Bridge animation executor** — `hooks::animation` (remote-actor PlayGroup state machine) is tested and ready; wiring it into the game needs the engine-side PlayGroup dispatcher (classic Steam `0x45F704`, or re-derived per build) and a client→bridge `OP_PLAY_GROUP` pipe command.
-- **Item ownership chain** — item count/condition/equipped handlers cap values but lack the item→container→player authorization chain (client could inflate its own item counts).
+- **Client world renderer** — the GUI layer renders a top-down world view (interpolated positions projected to a canvas, X right / Z up, centered on the local player — `world::view` + `ui/world_view`), but there is no 3D view yet. `on_actor_punch` now has a wire source (Punch packet).
+- **Bridge animation executor** — `hooks::animation` (remote-actor PlayGroup state machine) is tested and ready; the `OP_PLAY_GROUP` pipe command exists on both bridge (0x0028 → `hooks::play_group`) and client IPC. Wiring it into the game needs the engine-side PlayGroup dispatcher (classic Steam `0x45F704`, or re-derived per build) — the GOG build matches the classic table.
+- **Item ownership chain** — items are server-authoritative: client ItemNew rejected, count/condition capped (condition ≤ 100), equipped gated by the item→container→player chain (`handlers/item.rs`).
 
 > ✅ ESM reader tool: **done** — `ashfall-server --import-esm Fallout3.esm --import-game fo3 --import-db data/fallout3/fallout3.sqlite3` populates all 17 tables from plugin files. **Verified against the real game**: base game + all 5 DLC esms (GOG 1.7.0.3, 276MB master) import in **~35s total** — 124,540 records, 299 unique weapons, 3,613 NPCs (NPC_+CREA), 1,317 quests, 451 factions, 747k world references. Import was originally ~4h for the master alone: **per-record autocommit now wrapped in one transaction** (`esm_import.rs`). Requires real-binary fixes: 24-byte record headers, TES4 16-byte tail, and zlib decompression for compressed records (flag 0x00040000, data = [u32 size][zlib]).
 >
@@ -82,7 +84,7 @@ git clone https://github.com/YOUR_ORG/ashfall.git
 cd ashfall
 
 cargo build --release
-cargo test --workspace   # 383 tests
+cargo test --workspace   # 396 tests
 ```
 
 Optional: cross-compile bridge DLL for Proton (`sudo apt install mingw-w64`):

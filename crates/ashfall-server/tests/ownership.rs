@@ -428,3 +428,88 @@ fn test_combat_lag_compensation_uses_old_position() {
         "lag-compensated check uses the attacker's fire-time position"
     );
 }
+
+// ═══════════════════════════════════════════════════════════════
+// Unarmed punch — only the actor's own client may report it, and
+// ItemNew is server-authoritative (clients cannot mint items)
+// ═══════════════════════════════════════════════════════════════
+
+use ashfall_server::handlers::combat::handle_actor_punch;
+
+#[test]
+fn test_own_punch_accepted() {
+    let sess = session(4, Some(NetworkID::new(4)));
+    let pkt = handle_actor_punch(&sess, NetworkID::new(4), true);
+    match pkt {
+        Some(ashfall_core::protocol::Packet::ActorPunch { id, power }) => {
+            assert_eq!(id, NetworkID::new(4));
+            assert!(power, "power flag relayed");
+        }
+        other => panic!("expected ActorPunch relay, got {other:?}"),
+    }
+}
+
+#[test]
+fn test_foreign_punch_rejected() {
+    // A client may not report another actor's punch (anti-framing, same as
+    // ActorHit).
+    let sess = session(4, Some(NetworkID::new(4)));
+    assert!(
+        handle_actor_punch(&sess, NetworkID::new(99), false).is_none(),
+        "foreign punch rejected"
+    );
+    assert!(
+        handle_actor_punch(&sess, NetworkID::new(99), true).is_none(),
+        "foreign power punch rejected"
+    );
+}
+
+#[test]
+fn test_item_new_rejected_from_client() {
+    // Clients never legitimately send ItemNew (server-authoritative item
+    // creation) — accepting it would let anyone mint items.
+    let registry = Arc::new(ObjectRegistry::new());
+    let sess = session(1, Some(NetworkID::new(1)));
+    let pkt = item::handle_item_new(
+        &registry,
+        &sess,
+        &Pkt::ItemNew {
+            id: NetworkID::new(50),
+            ref_id: 0x10,
+            base_id: 0x999,
+            container: NetworkID::new(1),
+            count: 999,
+            condition: 100.0,
+            equipped: false,
+            silent: false,
+            stick: false,
+            scale: 1.0,
+        },
+    );
+    assert!(pkt.is_none(), "client ItemNew rejected");
+    assert!(
+        registry.get(NetworkID::new(50)).is_none(),
+        "no item minted by client packet"
+    );
+}
+
+#[test]
+fn test_item_condition_out_of_range_rejected() {
+    let registry = Arc::new(ObjectRegistry::new());
+    let player_id = registry.allocate_id();
+    registry.insert(Player::new(player_id, 0x14, 0x07, 5));
+    let item_id = registry.allocate_id();
+    registry.insert(Item::new(item_id, 0x10, 0x999, player_id));
+
+    let sess = session(1, Some(player_id));
+    // 150% condition (infinite-repair hack) must be rejected.
+    assert!(
+        item::handle_item_condition(&registry, &sess, item_id, 150.0, 100).is_none(),
+        "condition > 100 rejected"
+    );
+    // Valid condition accepted and applied.
+    assert!(item::handle_item_condition(&registry, &sess, item_id, 75.0, 100).is_some());
+    let arc = registry.get(item_id).unwrap();
+    let guard = arc.read();
+    assert_eq!(guard.as_any().downcast_ref::<Item>().unwrap().condition, 75.0);
+}

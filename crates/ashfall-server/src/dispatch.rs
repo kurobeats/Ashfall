@@ -132,7 +132,7 @@ impl Dispatcher {
 
             // ═══ Item ═══
             Packet::ItemNew { .. } => {
-                match item::handle_item_new(&self.registry, &packet) {
+                match item::handle_item_new(&self.registry, session, &packet) {
                     Some(pkt) => DispatchResult::new().broadcast(pkt),
                     None => DispatchResult::new(),
                 }
@@ -202,6 +202,12 @@ impl Dispatcher {
                         for p in pkts { result = result.broadcast(p); }
                         result
                     }
+                    None => DispatchResult::new(),
+                }
+            }
+            Packet::ActorPunch { id, power } => {
+                match combat::handle_actor_punch(session, id, power) {
+                    Some(pkt) => DispatchResult::new().broadcast(pkt),
                     None => DispatchResult::new(),
                 }
             }

@@ -71,6 +71,17 @@ impl eframe::App for AshfallApp {
                     // Server-authored GUI (windows/buttons/edits/lists)
                     crate::ui::widgets::render_server_gui(ui, &mut game.gui);
                     ui.separator();
+                    // Top-down world view (X right, Z up) centered on the
+                    // local player, remote objects as dots.
+                    let view_size = ui.available_size();
+                    let (rect, _) = ui.allocate_exact_size(view_size, egui::Sense::hover());
+                    crate::ui::world_view::draw_world(
+                        &ui.painter_at(rect),
+                        rect,
+                        &game.registry,
+                        game.local_player_id,
+                    );
+                    ui.separator();
                     // Remote objects with interpolated positions
                     ui.collapsing(format!("Objects ({})", game.registry.object_count()), |ui| {
                         let ids: Vec<ashfall_core::id::NetworkID> =

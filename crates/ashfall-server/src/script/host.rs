@@ -282,6 +282,65 @@ impl HostFunctions {
                 }
             })?;
 
+        // ── Co-op state (revive / locks / faction relations) ──
+        // Each broadcast relays the change to every client.
+        linker.func_wrap("env", "resurrect_actor",
+            |caller: Caller<'_, ScriptState>, id: i64| {
+                let state = caller.data();
+                let nid = NetworkID::new(id as u64);
+                let Some(arc) = state.registry.get(nid) else { return };
+                let mut guard = arc.write();
+                if let Some(actor) = guard.as_any_mut().downcast_mut::<crate::world::objects::Actor>() {
+                    actor.dead = false;
+                }
+                drop(guard);
+                state.effects.push(ScriptEffect::BroadcastPacket(Packet::UpdateActorDead {
+                    id: nid,
+                    dead: false,
+                    limbs: 0,
+                    cause: 0,
+                }));
+            })?;
+        linker.func_wrap("env", "lock_object",
+            |caller: Caller<'_, ScriptState>, id: i64, level: i32| {
+                let state = caller.data();
+                let nid = NetworkID::new(id as u64);
+                let Some(arc) = state.registry.get(nid) else { return };
+                let mut guard = arc.write();
+                if let Some(obj) = guard.as_any_mut().downcast_mut::<crate::world::objects::Object>() {
+                    obj.lock_level = level as u32;
+                }
+                drop(guard);
+                state.effects.push(ScriptEffect::BroadcastPacket(Packet::UpdateLock {
+                    id: nid,
+                    lock: level as u32,
+                }));
+            })?;
+        linker.func_wrap("env", "unlock_object",
+            |caller: Caller<'_, ScriptState>, id: i64| {
+                let state = caller.data();
+                let nid = NetworkID::new(id as u64);
+                let Some(arc) = state.registry.get(nid) else { return };
+                let mut guard = arc.write();
+                if let Some(obj) = guard.as_any_mut().downcast_mut::<crate::world::objects::Object>() {
+                    obj.lock_level = 0;
+                }
+                drop(guard);
+                state.effects.push(ScriptEffect::BroadcastPacket(Packet::UpdateLock {
+                    id: nid,
+                    lock: 0,
+                }));
+            })?;
+        linker.func_wrap("env", "set_faction_relation",
+            |mut caller: Caller<'_, ScriptState>, a: i32, b: i32, hostility: i32| {
+                let h = match hostility {
+                    0 => crate::ai::factions::Hostility::Ally,
+                    1 => crate::ai::factions::Hostility::Neutral,
+                    _ => crate::ai::factions::Hostility::Enemy,
+                };
+                caller.data_mut().factions.set_relation(a as u32, b as u32, h);
+            })?;
+
         // ── Item (real — create/link/destroy/count) ──
         linker.func_wrap("env", "create_item",
             |caller: Caller<'_, ScriptState>, ref_id: i32, base_id: i32, container: i64| -> i64 {

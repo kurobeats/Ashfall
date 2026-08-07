@@ -54,6 +54,12 @@ impl AntiCheat {
         count <= MAX_ITEM_STACK
     }
 
+    /// Validate item condition — item health percent, must be finite and in
+    /// [0, 100]. Rejects NaN/negative/absurd values (infinite-repair hack).
+    pub fn validate_item_condition(condition: f32) -> bool {
+        condition.is_finite() && condition >= 0.0 && condition <= 100.0
+    }
+
     // ── Scale ──
 
     /// Validate scale — within sane bounds.
@@ -144,6 +150,17 @@ mod tests {
     #[test]
     fn test_validate_item_count_rejected() {
         assert!(!AntiCheat::validate_item_count(MAX_ITEM_STACK + 1));
+    }
+
+    #[test]
+    fn test_validate_item_condition_bounds() {
+        assert!(AntiCheat::validate_item_condition(0.0));
+        assert!(AntiCheat::validate_item_condition(50.5));
+        assert!(AntiCheat::validate_item_condition(100.0));
+        assert!(!AntiCheat::validate_item_condition(-0.01));
+        assert!(!AntiCheat::validate_item_condition(100.01));
+        assert!(!AntiCheat::validate_item_condition(f32::NAN));
+        assert!(!AntiCheat::validate_item_condition(f32::INFINITY));
     }
 
     #[test]

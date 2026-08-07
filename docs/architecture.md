@@ -148,16 +148,20 @@ ashfall/
 │   │       │   ├── mod.rs
 │   │       │   ├── registry.rs         # Light client-side object map
 │   │       │   ├── cell.rs             # Cell context tracking
-│   │       │   └── state.rs            # Derived render state
+│   │       │   ├── state.rs            # Render-behind InterpBuffer (67ms delay,
+│   │       │   │                       #   velocity extrapolation, 500ms freeze)
+│   │       │   └── view.rs             # Top-down world projection (pure math)
 │   │       ├── ipc/                    # Bridge to game engine process
 │   │       │   ├── mod.rs
 │   │       │   ├── transport.rs         # TCP/Unix/Stub transport layer
 │   │       │   ├── commands.rs         # Command encoding for game engine
+│   │       │   │                       #   (incl. OP_PLAY_GROUP 0x0028)
 │   │       └── ui/                     # egui-based GUI
 │   │           ├── mod.rs
 │   │           ├── app.rs              # egui app: server browser, connect, chat
 │   │           ├── server_browser.rs   # Master server query, server list
-│   │           └── widgets.rs          # Window, Button, Text, Edit, etc — server-authored GUI
+│   │           ├── widgets.rs          # Window, Button, Text, Edit, etc — server-authored GUI
+│   │           └── world_view.rs       # 2D canvas: interpolated objects as dots
 │   │       └── chat.rs                  # Chat input/output overlay
 │   │
 │   ├── ashfall-master/                 # Master server binary

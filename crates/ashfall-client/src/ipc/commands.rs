@@ -16,6 +16,7 @@ pub const OP_GET_ACTIVATE: u32 = 0x000C;
 pub const OP_FIRE_WEAPON: u32 = 0x000D;
 pub const OP_GET_NAME: u32 = 0x000E;
 pub const OP_SET_NAME: u32 = 0x000F;
+pub const OP_PLAY_GROUP: u32 = 0x0028;
 
 /// A parameter to a game engine command.
 #[derive(Debug, Clone)]

@@ -40,6 +40,23 @@ pub fn handle_actor_hit(
     CombatResolver::resolve_hit(registry, hit)
 }
 
+/// Handle an ActorPunch packet (unarmed swing notification).
+///
+/// Ownership: a client may only report its own punch (same rule as
+/// ActorHit — prevents framing others). No damage is resolved here;
+/// melee damage still flows through ActorHit.
+pub fn handle_actor_punch(session: &Session, id: NetworkID, power: bool) -> Option<Packet> {
+    if Some(id) != session.player_id {
+        tracing::warn!(
+            "Combat: punch rejected from {} — actor {} is not own player",
+            session.player_name,
+            id.as_u64()
+        );
+        return None;
+    }
+    Some(Packet::ActorPunch { id, power })
+}
+
 /// Handle projectile/explosion — relay to all clients.
 pub fn handle_projectile_new(packet: &Packet) -> Option<Packet> {
     Some(packet.clone())

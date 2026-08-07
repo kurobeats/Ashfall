@@ -395,6 +395,9 @@ impl DedicatedServer {
                 Packet::UpdateFireWeapon { id, weapon } => {
                     self.script_engine.notify_fire_weapon(id.as_u64(), *weapon);
                 }
+                Packet::ActorPunch { id, power } => {
+                    self.script_engine.notify_punch(id.as_u64(), *power);
+                }
                 Packet::UpdateItemCondition { id, condition, .. } => {
                     self.script_engine.notify_item_condition(id.as_u64(), *condition);
                 }

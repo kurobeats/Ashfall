@@ -198,6 +198,14 @@ pub enum Packet {
         final_damage: f32,
         flags: u8,
     },
+    /// Client → Server → Clients: unarmed punch swing (wire source for the
+    /// `on_actor_punch` script callback; no damage — melee resolution goes
+    /// through ActorHit).
+    ActorPunch {
+        id: NetworkID,
+        /// True for the power (heavy) punch.
+        power: bool,
+    },
     /// Server → Clients: extended death data.
     ActorDeathExt {
         id: NetworkID,

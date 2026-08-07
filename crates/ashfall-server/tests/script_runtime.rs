@@ -46,6 +46,10 @@ const TEST_MODE: &str = r#"
   (import "env" "set_actor_value" (func $set_av (param i64 i32 f32)))
   (import "env" "get_actor_value" (func $get_av (param i64 i32) (result f32)))
   (import "env" "kill_actor" (func $kill (param i64)))
+  (import "env" "resurrect_actor" (func $resurrect (param i64)))
+  (import "env" "lock_object" (func $lock (param i64 i32)))
+  (import "env" "unlock_object" (func $unlock (param i64)))
+  (import "env" "set_faction_relation" (func $set_rel (param i32 i32 i32)))
 
   (memory (export "memory") 1)
   (global $players (mut i32) (i32.const 0))
@@ -150,6 +154,8 @@ const TEST_MODE: &str = r#"
     (call $set_flag (i32.const 86) (i32.const 1)))
   (func (export "on_lock_change") (param $o i64) (param $a i64) (param $l i32)
     (call $set_flag (i32.const 87) (i32.const 1)))
+  (func (export "on_actor_punch") (param $a i64) (param $p i32)
+    (call $set_flag (i32.const 88) (i32.const 1)))
 
   ;; Timer callback: swap the weather
   (func (export "tick_cb") (param $id i32)
@@ -222,6 +228,13 @@ const TEST_MODE: &str = r#"
     (global.get $cfg_max))
   (func (export "speed_up_time")
     (call $set_scale (f32.const 100)))
+
+  ;; Co-op state round-trip: revive, lock/unlock, faction relations
+  (func (export "coop_work")
+    (call $resurrect (global.get $actor_id))
+    (call $lock (global.get $obj_id) (i32.const 100))
+    (call $unlock (global.get $obj_id))
+    (call $set_rel (i32.const 1) (i32.const 2) (i32.const 2)))
 
   ;; GUI
   (func (export "make_window")
@@ -578,4 +591,66 @@ fn test_remaining_callbacks_wired() {
     ] {
         assert!(state.quests.get_flag(flag), "{name} fired (flag {flag})");
     }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Co-op state host functions — revive, locks, faction relations,
+// and the on_actor_punch wire source
+// ═══════════════════════════════════════════════════════════════
+
+#[test]
+fn test_coop_host_functions_are_real() {
+    let state = new_state();
+    let mut engine = boot_with(state.clone());
+
+    // Spawn an actor + object, kill the actor, then run coop_work.
+    assert!(engine.call_export_void("spawn_work", &[]), "spawn_work runs");
+    let actor_id = NetworkID::new(engine.call_export_i64("get_actor_id", &[]).unwrap() as u64);
+    let obj_id = NetworkID::new(engine.call_export_i64("get_obj_id", &[]).unwrap() as u64);
+    assert!(
+        state.registry.get(actor_id).is_some() && state.registry.get(obj_id).is_some(),
+        "actor and object exist"
+    );
+    {
+        let arc = state.registry.get(actor_id).unwrap();
+        let guard = arc.read();
+        assert!(guard.as_any().downcast_ref::<Actor>().unwrap().dead, "spawn_work killed the actor");
+    }
+
+    assert!(engine.call_export_void("coop_work", &[]), "coop_work runs");
+
+    // resurrect_actor: dead -> alive.
+    {
+        let arc = state.registry.get(actor_id).unwrap();
+        let guard = arc.read();
+        assert!(!guard.as_any().downcast_ref::<Actor>().unwrap().dead, "resurrect_actor revives");
+    }
+
+    // set_faction_relation: (1,2) -> Enemy.
+    assert_eq!(
+        state.factions.get_hostility(1, 2),
+        ashfall_server::ai::factions::Hostility::Enemy,
+        "set_faction_relation is real"
+    );
+
+    // lock_object + unlock_object broadcast UpdateLock effects.
+    let effects = state.effects.drain();
+    let locks: Vec<_> = effects
+        .iter()
+        .filter_map(|e| match e {
+            ScriptEffect::BroadcastPacket(ashfall_core::protocol::Packet::UpdateLock { id, lock }) => {
+                Some((*id, *lock))
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(locks, vec![(obj_id, 100), (obj_id, 0)], "lock then unlock broadcast");
+}
+
+#[test]
+fn test_on_actor_punch_dispatched() {
+    let state = new_state();
+    let mut engine = boot_with(state.clone());
+    engine.notify_punch(7, true);
+    assert!(state.quests.get_flag(88), "on_actor_punch fired (flag 88)");
 }

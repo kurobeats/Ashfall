@@ -22,7 +22,7 @@ game script engine has 2,580 — the SDK is a working subset, not the surface.
 |---|---|---|
 | `get_pos_*` / `set_pos` | `GetPos`, `SetPos` | per-axis host fns; `SetPos` = `MoveTo`-free teleport |
 | `get/set_actor_value` | `GetActorValue` / `SetActorValue` | SetAV writes BASE value — matches vaultmp semantics |
-| `kill_actor` | `Kill` | no `Resurrect` host fn yet |
+| `kill_actor` | `Kill` | `resurrect_actor` added 2026-08-07 |
 | `create_object` / `destroy_object` | `PlaceAtMe` / `RemoveMe` | server-side entity creation (no game-side spawn yet) |
 | `create_item` / `add/remove/equip_item` | `AddItem` / `RemoveItem` / `EquipItem` | |
 | `get/set_quest_stage` | `GetStage` / `SetStage` | `GetStage` = highest completed stage |
@@ -38,6 +38,12 @@ game script engine has 2,580 — the SDK is a working subset, not the surface.
 ## Recommended additions (co-op game-mode value × server data available)
 
 Priority order. Signatures verbatim from `geck_function_index.txt`.
+
+> ✅ **Implemented 2026-08-07**: `lock_object` / `unlock_object` (server-side
+> lock level + `UpdateLock` broadcast), `resurrect_actor` (revives + broadcasts
+> `UpdateActorDead`), and `set_faction_relation` (ally/neutral/enemy on the
+> shared `FactionMatrix` — interior-mutable so all WASM instances observe it).
+> Tested in `tests/script_runtime.rs` (`test_coop_host_functions_are_real`).
 
 ### P1 — lock/door sync (server already tracks lock state in `refs`)
 

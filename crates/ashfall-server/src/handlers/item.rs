@@ -2,11 +2,10 @@
 
 use ashfall_core::id::NetworkID;
 use ashfall_core::protocol::Packet;
+use ashfall_core::types::GameObject;
 use crate::anti_cheat::AntiCheat;
 use crate::session::Session;
-use crate::world::inventory::Inventory;
-use crate::world::objects::{Container, Item, Player};
-use ashfall_core::types::GameObject;
+use crate::world::objects::{Item, Player};
 use crate::world::registry::ObjectRegistry;
 use std::sync::Arc;
 
@@ -27,28 +26,20 @@ fn owned(registry: &Arc<ObjectRegistry>, session: &Session, id: NetworkID) -> bo
     matches!(cguard.as_any().downcast_ref::<Player>(), Some(p) if p.id() == owner)
 }
 
-/// Handle ItemNew.
-pub fn handle_item_new(registry: &Arc<ObjectRegistry>, packet: &Packet) -> Option<Packet> {
-    if let Packet::ItemNew { id, ref_id, base_id, container, count, condition, equipped, silent, stick, scale } = packet {
-        if registry.is_deleted(*id) { return None; }
-        let mut item = Item::new(*id, *ref_id, *base_id, *container);
-        item.count = *count;
-        item.condition = *condition;
-        item.equipped = *equipped;
-        item.silent = *silent;
-        item.stick = *stick;
-        item.scale = *scale;
-
-        if let Some(arc) = registry.get(*container) {
-            let mut guard = arc.write();
-            if let Some(cont) = guard.as_any_mut().downcast_mut::<Container>() {
-                Inventory::add(&mut cont.items, *id);
-            }
-        }
-
-        registry.insert(item);
-        Some(packet.clone())
-    } else { None }
+/// Handle ItemNew — server-authoritative item creation only.
+///
+/// Clients never legitimately send ItemNew (they receive it when the server
+/// spawns inventory); accepting it from a client would let anyone mint items
+/// into arbitrary containers. Reject with a warning.
+pub fn handle_item_new(registry: &Arc<ObjectRegistry>, session: &Session, packet: &Packet) -> Option<Packet> {
+    if let Packet::ItemNew { id, container, .. } = packet {
+        tracing::warn!(
+            "ItemNew rejected from {} (id={id}, container={container}) — server-authoritative creation only",
+            session.player_name
+        );
+    }
+    let _ = registry;
+    None
 }
 
 /// Handle UpdateItemCount.
@@ -73,6 +64,10 @@ pub fn handle_item_count(registry: &Arc<ObjectRegistry>, session: &Session, id: 
 /// Handle UpdateItemCondition.
 pub fn handle_item_condition(registry: &Arc<ObjectRegistry>, session: &Session, id: NetworkID, condition: f32, health: u32) -> Option<Packet> {
     if !owned(registry, session, id) {
+        return None;
+    }
+    if !AntiCheat::validate_item_condition(condition) {
+        tracing::warn!("AntiCheat: item condition rejected — {condition}");
         return None;
     }
     if let Some(arc) = registry.get(id) {
