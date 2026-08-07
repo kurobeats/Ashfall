@@ -24,6 +24,10 @@ target
 .pi-subagents/
 # Runtime data (server database, logs)
 data/*
+# Belt: never track sqlite databases anywhere (derived game data + the
+# 2026-08-07 `".` incident where a quoted config path made sqlite create
+# a directory literally named `".` which `git add -A` then committed)
+*.sqlite3*
 # ...except the vendored NVMP server-mod ESPs (reference import corpus)
 !data/plugins/
 # ...and this directory's own README
