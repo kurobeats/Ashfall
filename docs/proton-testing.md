@@ -181,6 +181,14 @@ build, exe md5 `8a3adab8...`) under Proton Experimental:
   ID 0x707) to find the baseForm field, and map the real GetBaseForm slot
   in the Steam vtable.
 
+- **Respawn disable applied + live-verified (2026-08-08)**: Steam sites
+  found via semantic anchors (death-UI string → death-flow fingerprint,
+  see docs/steam-re.md) — predicate NOP 0x9C43A5, guard jump
+  0x8C9CE0→0x8C9D5D, ==2-path flag-write NOP 0x8C9D52. Byte-guarded
+  `vaultmp::apply_steam_respawn()` runs from `hooks::install()`. Player
+  stays dead on the ground (position frozen, respawn flag + death-handled
+  flag stay clear, no SP death menu, game stable).
+
 Commands that work on the Steam build now: OP_GET_DEAD (stub), OP_GET_POS,
 OP_GET_ANGLE, OP_GET_PARENT_CELL, OP_PROBE_CODE, OP_PROBE_FORM, OP_DUMP_IMAGE.
 Do NOT send vtable-call commands (OP_GET_BASE, OP_GET_ACTOR_STATE,

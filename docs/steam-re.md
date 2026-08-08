@@ -16,9 +16,11 @@ pressure-vessel safe), stable across runs.
 | vtable methods | stdcall (WRONG) | **thiscall** | entries read ECX (`mov (%ecx),%eax`); inline-asm shims `vcall_0..3` |
 | baseForm field | vtable 0x10 (WRONG) | **field +0x1C** | obj-field probe: +0x1C → form object with ID 0x7 (Player base) |
 | pos/angle/cell/scale/refID | fields | fields (+0x2C/0x30/0x34, +0x38, +0x3C, +0x0C) | live battery, game stable |
+| **Respawn disable** (patch sites) | 0x6D5965 / 0x78B230 | **0x9C43A5 / 0x8C9CE0→0x8C9D5D / 0x8C9D52** | semantic anchor (death-UI string → death flow) + probe-verified live; applied + behavior-verified 2026-08-08 |
 
 Auto-detection: `vtable::fo3_lookup_addr()` reads 0x455190 (`51 8b 0d` = GOG)
-vs 0x711EF0 (`55 8b ec 53` = Steam).
+vs 0x711EF0 (`55 8b ec 53` = Steam). Respawn patch is byte-guarded inside
+`vaultmp::apply_steam_respawn()` (no-op unless the Steam bytes are present).
 
 ## Open: vaultmp behavior-patch sites
 
