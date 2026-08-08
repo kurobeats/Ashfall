@@ -115,13 +115,23 @@ Per-site semantic identification is required.
 - Size-matching sanity check: Steam size==1699 gives **2** candidates
   (0x64D850, 0xAE92C0) — the earlier "147" figure came from a fuzzy pass
   and is not reproducible from the saved JSON.
-- **Respawn mapped + live-patch applied (this session)**: Steam sites found
+- **Respawn mapped + LIVE-VERIFIED behaviorally (2026-08-08, tetsuo)**: Steam
+  sites found
   semantically (string → death-flow fingerprint) — see table above. Site A =
   0x9C43A5 (NOP), site B = 0x8C9CE0 → 0x8C9D5D (WriteRelJump, NOP @
   0x8C9CE5). **Trap: the dump is FLAT (offset = VA − 0x400000) — r2 PE-parse
   of the dump shifts .text by +0xC00.** Probe-verified on tetsuo: address
   0x9C4FA5 (r2-derived) holds `2f 8b 0d` live; the true site-A bytes `75 03`
   are at 0x9C43A5. Verify candidate VAs live (OP_PROBE_CODE) before patching.
-- Next session: live-verify behavior (die → stay dead), then map the rest:
-  semantic-anchor method for the remaining sites: AI pause (4), fire relay
-  (2), PlaceAtMe/activate (3), race match (2), lock fix (1), delegators (3).
+- **Live test results**: land death → player stays dead on ground 6+ min,
+  position frozen, no auto-respawn, no SP death menu; respawn-flag byte
+  (struct 0x123C5D4 + 2) stays 0, death-handled flag 0x1228871 stays 0;
+  game stable. Water death crashed ~3 min post-death once (natural FO3
+  water-death crash — land death is stable, so not the patch).
+  Residual risk: the ==2-path flag write (0x8C9D52, vaultmp-parity leave)
+  is unpatched — if a death reaches death-state 2 it could still set the
+  flag + show the SP reload-save menu. Land deaths parked at state 1
+  (observed). Consider NOP 0x8C9D52 for full robustness.
+- Next session: map the remaining sites the same way (semantic anchors,
+  probe-verify VAs): AI pause (4), fire relay (2), PlaceAtMe/activate (3),
+  race match (2), lock fix (1), delegators (3).
