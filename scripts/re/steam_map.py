@@ -8,7 +8,7 @@ reads SizeOfImage bytes contiguously from the image base 0x400000, so
 
 NOT PE section math. r2 -m 0x400000 PE-parses the dump and shifts .text
 addresses by +0xC00 (section alignment vs file alignment) — subtract 0xC00
-from any r2-derived address, or use this script. Verified live on tetsuo via
+from any r2-derived address, or use this script. Verified live on the game host via
 OP_PROBE_CODE (2026-08-08).
 
 Usage:

@@ -69,8 +69,8 @@ races (30), terminals (484); NPC_ dump count fully present + 886 CREA.
 
 ## Update — real game data imported (2026-08-07)
 
-Both games fully ingested from GOG downloads (innoextract on
-battlecruiser, files in `data/fallout3/` + `data/falloutnv/` — gitignored):
+Both games fully ingested from GOG downloads (innoextract on an
+analysis host, files in `data/fallout3/` + `data/falloutnv/` — gitignored):
 
 | | FO3 1.7.0.3 GOG | FNV 1.4.0.525(a) GOG |
 |---|---|---|

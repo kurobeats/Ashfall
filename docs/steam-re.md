@@ -1,8 +1,8 @@
 # Steam Build Reverse-Engineering — Findings & Plan
 
 Target: FO3 GOTY Steam (post-2023), exe md5 `8a3adab8...`, .text 11.6MB
-(10MB classic). Toolchain: Python + objdump on malum, radare2 6.0.5 on
-battlecruiser. Image: `OP_DUMP_IMAGE` from the live process (PE-header based,
+(10MB classic). Toolchain: Python + objdump locally, radare2 6.0.5 on the
+r2 analysis host. Image: `OP_DUMP_IMAGE` from the live process (PE-header based,
 pressure-vessel safe), stable across runs.
 
 ## Solved (live-verified, in the bridge)
@@ -126,16 +126,16 @@ signatures (early `jne +3; xor al,al; ret` predicates).
 
 ## Test hosts (session notes)
 
-- **battlecruiser.chaotic.lan** — r2 6.0.5; binaries in /tmp: `Fallout3.exe`
-  (GOG PE), `steam-fo3.bin` (Steam dump). ssh works, no password.
-- **tetsuo.chaotic.lan** — live game host: FO3 GOTY at
-  `~/.local/share/.games/SteamLibrary/steamapps/common/Fallout 3 goty/`;
-  deploy bridge proxy as `dinput8.dll` in that dir. Launch:
-  `steam -applaunch 22370` with `DISPLAY=:0 XAUTHORITY=/run/user/1000/xauth_NHaKwn`
-  (KDE Wayland + XWayland), then `xdotool key Return` on the launcher.
-  Bridge port 127.0.0.1:1771; `bridge_probe.py` runs on the host directly
-  (python3). Poll script pattern: `scripts/re/` + OP_GET_DEAD/OP_GET_POS
-  every 3s; respawn-flag check via OP_PROBE_PTR chain.
+- **r2 analysis host** — r2 6.0.5; binaries in /tmp: `Fallout3.exe`
+  (GOG PE), `steam-fo3.bin` (Steam dump).
+- **game host** — live FO3 GOTY under Proton; bridge proxy deployed as
+  `dinput8.dll` in the game dir; bridge TCP on 127.0.0.1:1771.
+
+Full access/setup details (paths, launch incantation, X auth, poll
+patterns) live in the untracked `hosts/` notes — kept out of git on
+purpose. Respawn-flag check pattern: OP_PROBE_PTR chain — probe
+0x123C5D4 → dword0 = struct ptr → probe struct → byte +2 = respawn flag;
+0x1228871 = death-handled.
 
 ## Known traps
 
@@ -150,7 +150,7 @@ signatures (early `jne +3; xor al,al; ret` predicates).
 
 ## Session handoff (2026-08-08)
 
-- r2 function lists (aflj) dumped for both binaries on battlecruiser:
+- r2 function lists (aflj) dumped for both binaries on the analysis host:
   `/tmp/gog_fns.json` (30,364 fns) + `/tmp/steam_fns.json` (17,724 fns);
   copies saved locally at `data/fallout3/` (gitignored).
 - Parsing: use the `addr` field — fully populated (30,364 / 17,724),
@@ -166,12 +166,12 @@ signatures (early `jne +3; xor al,al; ret` predicates).
 - Size-matching sanity check: Steam size==1699 gives **2** candidates
   (0x64D850, 0xAE92C0) — the earlier "147" figure came from a fuzzy pass
   and is not reproducible from the saved JSON.
-- **Respawn mapped + LIVE-VERIFIED behaviorally (2026-08-08, tetsuo)**: Steam
+- **Respawn mapped + LIVE-VERIFIED behaviorally (2026-08-08, game host)**: Steam
   sites found
   semantically (string → death-flow fingerprint) — see table above. Site A =
   0x9C43A5 (NOP), site B = 0x8C9CE0 → 0x8C9D5D (WriteRelJump, NOP @
   0x8C9CE5). **Trap: the dump is FLAT (offset = VA − 0x400000) — r2 PE-parse
-  of the dump shifts .text by +0xC00.** Probe-verified on tetsuo: address
+  of the dump shifts .text by +0xC00.** Probe-verified live: address
   0x9C4FA5 (r2-derived) holds `2f 8b 0d` live; the true site-A bytes `75 03`
   are at 0x9C43A5. Verify candidate VAs live (OP_PROBE_CODE) before patching.
 - **Live test results**: land death → player stays dead on ground 6+ min,

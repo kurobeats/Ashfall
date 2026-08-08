@@ -37,3 +37,4 @@ data/*
 !data/plugins/
 # ...and this directory's own README
 !data/README.md
+hosts/ 

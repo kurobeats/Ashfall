@@ -1485,7 +1485,7 @@ pub struct MasterServer {
 **Implemented** (impl-plan.md Phase 10, 96 tests): 36 pipe opcodes, memory/
 VTable/detour/opcode hooks, 11 default GECK opcode interceptors (15 verified
 with two tools), real VTable getters, FOSE/NVSE ABI fixed, i686 cross-build +
-wine round-trip. **Post-MVP RE (2026-08-07/08, live on tetsuo):** Steam
+wine round-trip. **Post-MVP RE (2026-08-07/08, live on the game host):** Steam
 post-2023 build re-derived (LookupFormByID 0x711EF0, cdecl + thiscall
 convention fixes), field reads live-verified under Proton; remaining work =
 Steam vtable slots for vtable-call getters + behavior-patch sites

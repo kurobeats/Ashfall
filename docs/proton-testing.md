@@ -147,7 +147,7 @@ the Steam build** until the Steam TESObjectREFR vtable slots are re-derived
 (index 4 = destructor, not GetBaseForm). Check the `crate::hooks::` call in
 the dispatch arm before sending a command.
 
-## Steam build — live re-derivation progress (2026-08-07, tetsuo)
+## Steam build — live re-derivation progress (2026-08-07, game host)
 
 Full runtime pipeline exercised against the real Steam FO3 GOTY (post-2023
 build, exe md5 `8a3adab8...`) under Proton Experimental:

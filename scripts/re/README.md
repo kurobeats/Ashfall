@@ -155,7 +155,7 @@ recovering the 14-formID cross-master collisions. One GRA quirk: 95 refs
 authored at hi=0 are genuine base overrides (correct); 1 ref authored at
 hi=2 collides with HonestHearts (1 row in 427k).
 
-## Steam build runtime re-derivation (2026-08-07, live on tetsuo)
+## Steam build runtime re-derivation (2026-08-07, live on the game host)
 
 Full pipeline exercised against the real Steam FO3 GOTY (post-2023 build,
 exe md5 `8a3adab8...`) under Proton Experimental:
