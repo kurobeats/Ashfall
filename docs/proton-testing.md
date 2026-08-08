@@ -18,6 +18,13 @@ Experimental, verified 2026-08-06 against the real game — see
 
 ## Why vtable commands crash (verified 2026-08-06, loaded save)
 
+> ⚠️ **Superseded 2026-08-07/08**: the Steam table WAS re-derived (see
+> "Steam build — live re-derivation progress" below) and the Steam build
+> now runs the field reads + lookup live. The crash warning below applies
+> only to vtable-*call* getters (GET_BASE/GET_ACTOR_VALUE/IS_MOVING) and
+> to GOG addresses used against the Steam build. See the working command
+> set at the bottom of this file.
+
 **The classic address table (xFOSE/vaultmp-era) does NOT match the user's
 Steam build.** In-process probe: `LOOKUP_FORM_BY_ID` at 0x455190
 holds FPU-op garbage, not the form lookup. Calling any of these addresses
@@ -37,16 +44,26 @@ build stays updated, re-derive for it; if they run the GOG exe (DRM-free,
 works under Proton), the existing table + `hooks::vaultmp` recipes apply
 as-is.
 
-Until the Steam-build table is re-derived: **do not send vtable-path commands
-(OP_GET_POS/SET_POS/GET_ANGLE/GET_CELL/GET_PARENT_CELL/IS_MOVING/
-GET_ACTOR_STATE/GET_ACTOR_VALUE/GET_BASE) — every one crashes the game.
-Only stub-path commands are safe (`OP_GET_DEAD`).**
+**Superseded 2026-08-07:** the Steam build's table is now re-derived
+(LookupFormByID 0x711EF0, ExtractArgs 0x787530, ConsoleManager 0x788B30,
+cdecl + thiscall convention fixes) — see "Steam build — live re-derivation
+progress" below. Field-read commands (OP_GET_POS/GET_ANGLE/GET_PARENT_CELL)
+are live-verified on the Steam build. Still unsafe: **vtable-call getters
+(OP_GET_BASE, OP_GET_ACTOR_STATE, OP_GET_ACTOR_VALUE, OP_IS_MOVING)** — the
+Steam TESObjectREFR vtable layout differs from the xFOSE assumption (index
+4 = destructor, not GetBaseForm); they crash until the real slots are
+re-derived.
 
 ## What crashes the game (verified)
 
-Any command reaching a real vtable call — see the mismatch note above.
-A loaded save does NOT make them safe: the GOG-verified offsets are wrong
-for the Steam build, so the crash is in the lookup, not the missing player.
+Only **vtable-call getters** on the Steam build: OP_GET_BASE,
+OP_GET_ACTOR_STATE, OP_GET_ACTOR_VALUE, OP_IS_MOVING — the Steam
+TESObjectREFR vtable layout differs from the xFOSE assumption (index 4 =
+destructor with `ret $0x4`, not GetBaseForm; 20–29 ≠ AV virtuals;
+60–72 = bool stubs), so the call corrupts the stack (reproduced twice,
+game restart needed). A loaded save does NOT make them safe. Field reads
+and the form lookup are fine (see "Steam build — live re-derivation
+progress" below).
 
 ## In-game verification plan
 
@@ -72,7 +89,7 @@ def cmd(op, refid=0x14):
     return s.recv(64).hex()
 print("get_dead:", cmd(0x19))          # stub path — safe everywhere
 print("probe_code:", ...)              # 0xFD — safe (no execution)
-print("get_pos:", cmd(0x0001))         # vtable — CRASHES until table re-derived
+print("get_pos:", cmd(0x0001))         # field read — verified on Steam 08-07
 s.close()
 ```
 
@@ -118,14 +135,17 @@ Re-verification method options (in order of laziness):
    xFOSE `STATIC_ASSERT`s (already done for addresses; vtables are the
    remaining gap) — see [scripts/re](./scripts/re).
 
-## Safe command set (stub path — usable at any time)
+## Safe command set
 
-`OP_GET_DEAD` (0x19) is the only fully safe vtable-independent command.
-`OP_PROBE_CODE` (0xFD), `OP_PROBE_SAVES` (0xFE), `OP_DUMP_IMAGE` (0xFC) are
-debug-only and safe (reads, no execution). **Everything else in `commands.rs`
-either stubs (returns zeros) or hits a vtable call — check the
-`crate::hooks::` call in the dispatch arm before sending it. vtable-path
-commands crash the Steam build regardless of save state.**
+Stub path (`OP_GET_DEAD` 0x19) is safe everywhere. Debug reads are safe:
+`OP_PROBE_CODE` (0xFD), `OP_PROBE_SAVES` (0xFE), `OP_DUMP_IMAGE` (0xFC),
+`OP_PROBE_FORM`, `OP_PROBE_PTR` — reads, no execution. **Field-read
+commands (OP_GET_POS, OP_GET_ANGLE, OP_GET_PARENT_CELL) are live-verified on
+the Steam build** (2026-08-07, loaded save). **vtable-call commands
+(OP_GET_BASE, OP_GET_ACTOR_STATE, OP_GET_ACTOR_VALUE, OP_IS_MOVING) crash
+the Steam build** until the Steam TESObjectREFR vtable slots are re-derived
+(index 4 = destructor, not GetBaseForm). Check the `crate::hooks::` call in
+the dispatch arm before sending a command.
 
 ## Steam build — live re-derivation progress (2026-08-07, tetsuo)
 

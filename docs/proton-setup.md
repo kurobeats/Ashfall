@@ -173,10 +173,12 @@ Same as desktop. Proton version ≥ 9 recommended. Bridge DLL works identically.
 ### Game crashes on startup
 - bridge.dll has memory-patching primitives and VTable getters, but `hooks::install()`
   does not patch any engine addresses yet — hooks are inert
-- **VTable getter commands (OP_GET_POS/GET_ACTOR_STATE/IS_MOVING etc.) crash the game
-  before a save is loaded** — no player ref exists at the main menu (refID 0x14 is
-  garbage) and anim-struct offsets are still unverified. Use stub-path commands
-  (OP_GET_DEAD, OP_GET_ACTOR_VALUE at menu) or test with a loaded save
+- **Field-read commands (OP_GET_POS/GET_ANGLE/GET_PARENT_CELL) crash at the main
+  menu before a save is loaded** — no player ref exists (refID 0x14 is garbage).
+  Test with a loaded save: they are live-verified on the Steam build (2026-08-07).
+  **vtable-call getters (OP_GET_BASE/GET_ACTOR_STATE/GET_ACTOR_VALUE/IS_MOVING)
+  crash the Steam build even with a loaded save** (vtable layout differs from
+  xFOSE — index 4 = destructor). Use stub-path commands (OP_GET_DEAD at menu)
 - Remove dinput8.dll to bypass entirely
 - Check Proton logs: `PROTON_LOG=1 %command%` as a launch option
 

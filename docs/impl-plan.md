@@ -92,7 +92,7 @@ PRs within a phase often parallelizable unless noted.
 **Implemented (Part A — foundation):**
 - wasmtime v22 Engine + ScriptState + module loader + instance lifecycle
 - 35 callback stubs (OnHit, OnEquip, OnQuestStage, OnDialogueChoice + 31 original)
-- 51 host function stubs (server, object, item, actor, player, container, world, utility, timers, quest, combat, GUI widgets)
+- 56 host function stubs (server, object, item, actor, player, container, world, utility, timers, quest, combat, GUI widgets)
 - TimerManager with create_timer/kill_timer/tick, wired into dedicated loop
 - ashfall-script SDK crate with host_fn!/callback! macros and type aliases
 - Example freeroam WASM game mode (scripts/freeroam/)
@@ -277,7 +277,7 @@ PRs within a phase often parallelizable unless noted.
 | Phase 2: Server Foundation | 18–29 | ~2,030 | ✅ DONE. Config, UDP + reliability, sessions, registry, dispatch, combat resolver, AI, physics |
 | Phase 3: World Sync | 30–39 | ~1,690 | ✅ DONE. Cell grid, position/angle/actor/item sync, combat, projectile, NPC AI, cell snapshot |
 | Phase 4: Persistence | 40–47 | ~800 | ✅ DONE. 17 SQLite tables, CRUD, startup load, quest/karma/reputation/hardcore/factions |
-| Phase 5: Scripting | 48–59 | ~2,300 | ✅ DONE. wasmtime v22, all 35 callbacks dispatched, all 51 host fns real, real WASM game mode builds + runs e2e, timers, effects queue |
+| Phase 5: Scripting | 48–59 | ~2,300 | ✅ DONE. wasmtime v22, all 35 callbacks dispatched, all 56 host fns real, real WASM game mode builds + runs e2e, timers, effects queue |
 | Phase 6: GUI | 60–67 | ~1,120 | ✅ DONE. eframe/egui app, server browser, chat overlay, widget manager |
 | Phase 7: Client | 68–80 | ~1,770 | ✅ DONE. UDP networking, connection flow, object cache, handlers, 30Hz poll loop |
 | Phase 8: Master Server | 81–87 | 420 | ✅ DONE. Announce/query/cull, server heartbeat, client query, 6 integration tests |

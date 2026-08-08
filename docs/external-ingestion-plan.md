@@ -5,7 +5,7 @@
 > per-item ✅ notes below; the implementation-order section is fully checked off.
 >
 > Note: this is a historical record of that plan's completion. The repo has
-> since grown — see README for the current test count (362) and status.
+> since grown — see README for the current test count (396) and status.
 
 > Date: 2026-07-10
 > Scope: Incremental improvements only. No redesigns, no new architectures.

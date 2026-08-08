@@ -27,22 +27,50 @@ changed code layout AND function boundaries — byte-pattern and seed matches
 produce decoys (e.g. a JNZ+0x83 + global-load false positive at 0xB59356).
 Per-site semantic identification is required.
 
-**Respawn (highest value)** — GOG anatomy:
-- Site A: 0x6D5965, 20-byte predicate: `jne +3; xor al,al; ret; mov edx,[ecx+0x14]; push 1,0,edx,eax; call 0x6D5750`. vaultmp NOPs the JNE → always false.
-- Site B: 0x78B230, respawn-function entry (1699 bytes): `jne +0x83; mov ecx,[0x107A0D4]; mov byte[ecx+2],1`. vaultmp redirects the JNE via RespawnDetour.
-- Steam: neither byte pattern exists; the respawn function must be located
-  semantically (find where the death flow sets the respawn flag/position).
+**Respawn (highest value) — SOLVED for Steam (2026-08-08)** — GOG anatomy:
+- Site A: 0x6D5965, 20-byte predicate (fcn.006D5960): `jne +3; xor al,al;
+  ret; mov edx,[ecx+0x14]; push 1,0,edx,eax; call 0x6D5750`. vaultmp NOPs
+  the JNE → always false.
+- Site B: 0x78B230, `jne +0x83; mov ecx,[0x107A0D4]; mov byte[ecx+2],1`.
+  vaultmp: NOP site A + WriteRelJump(0x78B230 → 0x78B2B9) — flag write never
+  runs, players stay dead (server revives).
+- **Steam twins (verified byte-level, side-by-side disasm):**
+
+| GOG (classic) | Steam (post-2023) | role |
+|---|---|---|---|
+| 0x6D5965 `75 03` | **0x9C4FA5** `75 03` | site-A JNE in predicate fn 0x9C4FA0 (structurally byte-identical to fcn.006D5960; inner call 0x6D5750 → 0x9C4BE0) |
+| 0x78B230 `0F 85 83 00 00 00` | **0x8CA8E0** `0F 85 77 00 00 00` | site-B JNE guarding first respawn-flag write; tests site-A predicate result (`test al,al` @ 0x8CA8DE, call @ 0x8CA8D9) |
+| 0x78B2B9 | **0x8CA95D** | skip destination (common continuation `mov eax,[edi]`) |
+| 0x78B235 | **0x8CA8E5** | leftover byte after 5-byte WriteRelJump → NOP |
+| flag struct +2 | 0x107A0D4 | **0x123C5D4** (`mov byte [eax+2],1` @ 0x8CA8EB) |
+| death-handled flag | 0x107BA66 | **0x1228871** (written @ 0x8CA956) |
+| ==2-path flag write (vaultmp leaves it) | 0x78B2AE | **0x8CA952** (dead-state path, leave for parity) |
+| reload-save UI ptrs | 0xF65568/74/80 | **0x11017DC/E8/F4** ("Reloading the most recent save game" @ 0xF60DB8) |
+
+  Steam death-flow fields that survived the recompile: 0xFC (death state,
+  cmp 1/2), 0x5A8/0x5AA, 0x6E5, 0x184; vtable slots 0x214, 0x2A0 — same
+  method (PlayerCharacter death handler), same structure. Patch = NOP
+  0x9C4FA5 (2B) + WriteRelJump 0x8CA8E0→0x8CA95D + NOP 0x8CA8E5 (1B).
+- Method: callee-graph matching was NOT usable here (aflj merges these
+  methods into `method.*` nodes; no callees in JSON). Instead: string xref
+  ("Reloading the most recent save game" → ptr cluster → death UI block)
+  + `mov byte [reg+2],1` pattern scan (13 sites, 2 = respawn writes) +
+  death-state/global-flag fingerprint. NOTE: the dump is PE-layout, not
+  flat VA — file offset ≠ VA−0x400000 (the old +0xC00 bug). Map via section
+  headers (python) or let r2 parse the PE (`-m 0x400000`).
 
 ## Plan for the patch work (separate focused effort)
 
 1. **r2 batch workflow** (verified working): `r2 -q -e scr.color=0 -i script.r2
    bin > out.txt`, python-parse. Analyze BOTH binaries (GOG PE + Steam raw
-   @0x400000), dump function lists (addr/size/callees).
+   @0x400000), dump function lists (addr/size). Callees are NOT in the
+   aflj JSON — build callee sets per function with `s <addr>; axt` + `pdr`
+   call extraction (see handoff below).
 2. **Function-pair mapping**: for each GOG function containing a patch site,
    find the Steam function by size proximity + callee-graph similarity
    (recompile preserves function structure more than bytes).
 3. **Verify each pair** by disassembling both sides side-by-side; only then
-   patch. Expected: respawn (2 sites), AI pause (4), fire relay (2),
+   patch. Status: respawn (2 sites) ✅ done, AI pause (4), fire relay (2),
    PlaceAtMe/activate (3), race match (2), lock fix (1), delegators (3).
 4. Live-verify each patch with a game restart (apply → observe behavior).
 
@@ -73,11 +101,24 @@ Per-site semantic identification is required.
 - r2 function lists (aflj) dumped for both binaries on battlecruiser:
   `/tmp/gog_fns.json` (30,364 fns) + `/tmp/steam_fns.json` (17,724 fns);
   copies saved locally at `data/fallout3/` (gitignored).
-- `aflj` quirk: the JSON `offset` field is 0 — addresses are encoded in the
-  `name` field (`fcn.00ae92c0`); parse the name when mapping.
-- Size-matching for the respawn function (GOG 1699B) yields 147 Steam
-  candidates — needs callee-graph comparison (compare each candidate's
-  called-functions set against the GOG respawn fn's callees) to converge.
-- Next session: load both function lists, build the GOG-respawn callee set
-  (r2: `s 0x78b230; axt` + `pdr` call extraction), filter Steam candidates
-  by callee overlap, verify by side-by-side disassembly, then patch.
+- Parsing: use the `addr` field — fully populated (30,364 / 17,724),
+  decimal VA. No `offset` field exists; names are `fcn.00ae92c0`-style
+  (~20k) + `method.*` merged nodes (~10k) + 1 `entry0`.
+- ⚠️ **aflj gaps**: vtable-only / indirectly-called code is NOT a function
+  entry. The GOG respawn site 0x78B230 is inside
+  `method.PlayerCharacter.5.virtual_760` (0x788350–0x78B8D3, 13,699B) —
+  the "1699B respawn function" is a sub-range, not an aflj boundary.
+  Same on Steam: LookupFormByID 0x711EF0 is absent from the list (nearest
+  fns start 0x711F90). Extract real sub-function boundaries (prologue /
+  ret scan from the site) or match on the containing method.
+- Size-matching sanity check: Steam size==1699 gives **2** candidates
+  (0x64D850, 0xAE92C0) — the earlier "147" figure came from a fuzzy pass
+  and is not reproducible from the saved JSON.
+- **Respawn done (this session)**: Steam sites found semantically (string →
+  death-flow fingerprint) — see table above. Site A = 0x9C4FA5 (NOP),
+  site B = 0x8CA8E0 → 0x8CA95D (WriteRelJump, NOP @ 0x8CA8E5).
+- Next session: apply the respawn patch on tetsuo (NOP 0x9C4FA5 ×2,
+  WriteRelJump 0x8CA8E0→0x8CA95D, NOP 0x8CA8E5), live-verify (die → stay
+  dead, no auto-respawn / reload-save menu). Then repeat the same
+  semantic-anchor method for the remaining sites: AI pause (4), fire relay
+  (2), PlaceAtMe/activate (3), race match (2), lock fix (1), delegators (3).

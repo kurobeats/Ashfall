@@ -121,7 +121,7 @@ ashfall/
 │   │       ├── script/                 # wasmtime scripting bridge
 │   │       │   ├── mod.rs
 │   │       │   ├── engine.rs           # WASM engine init, module loading
-│   │       │   ├── host.rs             # Host functions exposed to WASM (51 APIs)
+│   │       │   ├── host.rs             # Host functions exposed to WASM (56 APIs)
 │   │       │   ├── callbacks.rs        # 35 callback stubs (permissive defaults)
 │   │       │   └── timer.rs            # Script timer management
 │   │       └── master.rs               # Master server registration + heartbeat
@@ -916,7 +916,7 @@ pub struct ScriptEngine {
 // back to permissive defaults in callbacks.rs.
 ```
 
-**Host functions** (51) exposed to WASM — ALL real (2026-08-06): `set_game_weather`,
+**Host functions** (56) exposed to WASM — ALL real (2026-08-06, +4 on 08-07): `set_game_weather`,
 `get_game_weather`, `set_game_time`, `get_quest_stage`, `set_quest_stage`,
 `get_dialogue_flag`, `set_dialogue_flag`, `chat_message`, `ui_message`, `kick`,
 `create_timer`, `kill_timer`, `get_current_players`, `get_max_players`,
@@ -1444,7 +1444,7 @@ pub struct MasterServer {
 
 ### Phase 5: Scripting
 1. wasmtime engine setup
-2. Host functions (51) — world/quest/chat/clock/player-count/object-actor CRUD real (Part B)
+2. Host functions (56) — world/quest/chat/clock/player-count/object-actor CRUD real (Part B)
 3. Callback dispatch (auth, chat, spawn cell, spawn, death, quest stage, time)
 4. Example freeroam script
 
@@ -1473,16 +1473,23 @@ pub struct MasterServer {
 5. Cell transition tests (metros, Strip gates)
 6. Stress tests (10–20 players in Megaton/Freeside)
 
-### Phase 10: Proton Bridge ⚠️ DEFERRED
+### Phase 10: Proton Bridge ✅ DONE (post-MVP RE work ongoing)
 1. Gamebryo VTable hooks (reverse engineering dependent)
-2. Full command dispatcher (~120 opcodes)
+2. Full command dispatcher (36 opcodes)
 3. NVSE/FOSE plugin registration
 4. Event sinks (OnHit, OnActivate, OnEquip, OnCellChange, OnDeath)
 5. Console command hooks
 6. Proton integration test
 7. CI cross-compile workflow
 
-**Phase 10 deferred.** TCP server + command stubs + hook stubs exist. Real VTable patches require Gamebryo reverse engineering — post-MVP.
+**Implemented** (impl-plan.md Phase 10, 96 tests): 36 pipe opcodes, memory/
+VTable/detour/opcode hooks, 11 default GECK opcode interceptors (15 verified
+with two tools), real VTable getters, FOSE/NVSE ABI fixed, i686 cross-build +
+wine round-trip. **Post-MVP RE (2026-08-07/08, live on tetsuo):** Steam
+post-2023 build re-derived (LookupFormByID 0x711EF0, cdecl + thiscall
+convention fixes), field reads live-verified under Proton; remaining work =
+Steam vtable slots for vtable-call getters + behavior-patch sites
+(hooks::vaultmp recipes) — see docs/steam-re.md.
 
 ---
 
@@ -1506,7 +1513,7 @@ pub struct MasterServer {
 ## 14. Risk Areas
 
 1. **UDP reliability layer**: Custom ACK/reassembly is non-trivial. Mitigation: start simple, test with packet loss simulation.
-2. **wasmtime host functions**: 51 API functions require careful FFI design. Mitigation: code-gen from a specification.
+2. **wasmtime host functions**: 56 API functions require careful FFI design. Mitigation: code-gen from a specification.
 3. **ObjectRegistry contention**: DashMap reads are lock-free, but write contention around cell changes could be an issue. Mitigation: batch cell changes.
 4. **IPC game engine bridge**: Depends on bridge.dll running inside Proton. Mitigation: stub mode for development — client runs standalone without game engine. TCP loopback tested and works in Proton 9+.
 5. **Packet ordering**: postcard + UDP means no built-in ordering. Mitigation: reliability layer handles sequence numbers and reordering.
