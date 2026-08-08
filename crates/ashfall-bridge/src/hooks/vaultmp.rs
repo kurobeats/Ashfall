@@ -135,6 +135,57 @@ pub const FO3_STEAM_CLASSIC: Fo3SteamClassic = Fo3SteamClassic {
     fire_weapon_call: 0x004BE1A0,
 };
 
+/// Steam FO3 (post-2023) respawn-disable sites — re-derived 2026-08-08 by
+/// side-by-side disassembly vs GOG (see docs/steam-re.md). Same semantics as
+/// vaultmp's ToggleRespawn disable: NOP the site-A predicate JNE + jump the
+/// site-B guard over the respawn-flag write (`mov byte [eax+2],1` @ 0x8CA8EB).
+pub mod fo3_steam_17_respawn {
+    /// Site A: `jne +3` inside the respawn predicate fn (GOG fcn.006D5960
+    /// twin at 0x9C43A0, structurally byte-identical). NOP -> always false.
+    pub const SITE_A_JNE: usize = 0x009C_43A5; // bytes 75 03
+    /// Site B: guard `jne 0x8c9d5d` (tests the predicate result, `test al,al`
+    /// @ 0x8C9CDE) — GOG 0x78B230 twin. Jump it -> flag write never runs.
+    pub const SITE_B_JNE: usize = 0x008C_9CE0; // bytes 0F 85 77 00 00 00
+    /// Skip destination for the site-B jump (common continuation, all three
+    /// skip paths in the death handler converge here: 0x8C9CE0+6+0x77,
+    /// 0x8C9CF4+2+0x67, 0x8C9CEF+2+0x6C).
+    pub const SITE_B_SKIP: usize = 0x008C_9D5D;
+    /// Leftover byte after the 5-byte jump over the 6-byte JNE.
+    pub const SITE_B_TAIL: usize = SITE_B_JNE + 5; // 0x8C9CE5, original 0x00
+}
+
+/// Apply the Steam respawn-disable patch. Byte-guarded: reads the site bytes
+/// first and only patches when they match the verified Steam build — safe on
+/// the GOG/classic build (bytes won't match) and on a wrong build (no-op).
+///
+/// # Safety
+///
+/// Patches executable memory of the current process; guarded by byte checks.
+pub unsafe fn apply_steam_respawn() -> Option<Vec<crate::hooks::memory::Patch>> {
+    use crate::hooks::memory;
+    use fo3_steam_17_respawn as s;
+
+    if crate::hooks::read_bytes(s::SITE_A_JNE, 2) != [0x75, 0x03] {
+        return None; // not the verified Steam bytes
+    }
+    if crate::hooks::read_bytes(s::SITE_B_JNE, 6) != [0x0F, 0x85, 0x77, 0x00, 0x00, 0x00] {
+        return None;
+    }
+
+    let mut out = Vec::new();
+    // Site A: NOP the predicate JNE -> always `xor al,al; ret` -> respawn denied.
+    let a = memory::Patch::new(s::SITE_A_JNE as *const u8, &[0x90, 0x90]);
+    a.apply();
+    out.push(a);
+    // Site B: unconditional JMP over the respawn-flag write (0x8CA8EB).
+    memory::write_rel_jump(s::SITE_B_JNE, s::SITE_B_SKIP);
+    // Tail byte of the 6-byte JNE left after the 5-byte JMP.
+    let t = memory::Patch::new(s::SITE_B_TAIL as *const u8, &[0x90]);
+    t.apply();
+    out.push(t);
+    Some(out)
+}
+
 /// A single patch recipe — the exact bytes written at one address, or a
 /// relative jump/call whose target is a fixed table address or a hook
 /// function supplied by the caller at install time.
@@ -467,6 +518,19 @@ pub unsafe fn apply(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn steam_respawn_sites_consistent() {
+        use fo3_steam_17_respawn as s;
+        // The 6-byte JNE at site B must land exactly on the skip dest:
+        // 0F 85 <rel32>: from + 6 + rel == skip.
+        let rel: i32 = 0x77;
+        assert_eq!(s::SITE_B_JNE + 6 + rel as usize, s::SITE_B_SKIP);
+        // Site-A guard bytes (75 03) and site-B tail (00) match the dump.
+        assert_eq!(s::SITE_B_TAIL, s::SITE_B_JNE + 5);
+        assert!((0x400000..0x1200000).contains(&s::SITE_A_JNE));
+        assert!((0x400000..0x1200000).contains(&s::SITE_B_SKIP));
+    }
 
     #[test]
     fn table_addresses_in_pe_range() {

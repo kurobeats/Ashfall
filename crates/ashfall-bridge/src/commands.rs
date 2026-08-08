@@ -511,7 +511,7 @@ pub fn execute(func: u32, params: &[u8]) -> Vec<u8> {
             out
         }
         OP_PROBE_CODE => {
-            const ADDRS: [usize; 12] = [
+            const ADDRS: [usize; 16] = [
                 0x0045_5190, // fo3 LOOKUP_FORM_BY_ID (GOG/classic)
                 0x0071_1EF0, // fo3 LOOKUP_FORM_BY_ID (Steam post-2023)
                 0x0051_7950, // fo3 EXTRACT_ARGS (GOG)
@@ -524,6 +524,14 @@ pub fn execute(func: u32, params: &[u8]) -> Vec<u8> {
                 0x0122_4B84, // Steam form-map global (data)
                 0x0106_CDCC, // fo3 DATA_HANDLER (GOG)
                 0x0040_0000, // image base
+                // Steam respawn-disable sites (2026-08-08): post-patch they
+                // should read 90 90 / E9 .. / 90 instead of 75 03 / 0F 85 .. / 00.
+                // NOTE: dump is FLAT (offset = VA - 0x400000) — these VAs were
+                // probe-verified against the live process, NOT r2 PE-parse.
+                0x009C_43A5, // site A: predicate JNE (75 03 -> 90 90)
+                0x008C_9CE0, // site B: guard JNE (0F 85 77 00 00 00 -> E9 ..)
+                0x008C_9CE5, // site B tail (00 -> 90)
+                0x008C_9CEB, // respawn-flag write (c6 40 02 01 — unchanged by patch)
             ];
             let mut out = Vec::new();
             for a in ADDRS {

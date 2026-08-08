@@ -123,6 +123,11 @@ pub fn is_fnv() -> bool {
 /// Install all hooks. Called from DllMain on DLL_PROCESS_ATTACH.
 pub fn install() {
     HOOKS_INSTALLED.store(true, Ordering::SeqCst);
+    // Steam respawn disable (sites verified 2026-08-08, docs/steam-re.md).
+    // Byte-guarded inside — no-op on non-matching builds (GOG/classic, launcher).
+    unsafe {
+        vaultmp::apply_steam_respawn();
+    }
     // TODO: locate TESObjectREFR vtable, patch all hooks.
     // For Proton: same VTable layout as Windows — Wine mirrors the binary exactly.
 }

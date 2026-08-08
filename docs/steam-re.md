@@ -38,26 +38,27 @@ Per-site semantic identification is required.
 
 | GOG (classic) | Steam (post-2023) | role |
 |---|---|---|---|
-| 0x6D5965 `75 03` | **0x9C4FA5** `75 03` | site-A JNE in predicate fn 0x9C4FA0 (structurally byte-identical to fcn.006D5960; inner call 0x6D5750 → 0x9C4BE0) |
-| 0x78B230 `0F 85 83 00 00 00` | **0x8CA8E0** `0F 85 77 00 00 00` | site-B JNE guarding first respawn-flag write; tests site-A predicate result (`test al,al` @ 0x8CA8DE, call @ 0x8CA8D9) |
-| 0x78B2B9 | **0x8CA95D** | skip destination (common continuation `mov eax,[edi]`) |
-| 0x78B235 | **0x8CA8E5** | leftover byte after 5-byte WriteRelJump → NOP |
-| flag struct +2 | 0x107A0D4 | **0x123C5D4** (`mov byte [eax+2],1` @ 0x8CA8EB) |
-| death-handled flag | 0x107BA66 | **0x1228871** (written @ 0x8CA956) |
-| ==2-path flag write (vaultmp leaves it) | 0x78B2AE | **0x8CA952** (dead-state path, leave for parity) |
+| 0x6D5965 `75 03` | **0x9C43A5** `75 03` | site-A JNE in predicate fn 0x9C43A0 (structurally byte-identical to fcn.006D5960; inner call 0x6D5750 → 0x9C3FE0) |
+| 0x78B230 `0F 85 83 00 00 00` | **0x8C9CE0** `0F 85 77 00 00 00` | site-B JNE guarding first respawn-flag write; tests site-A predicate result (`test al,al` @ 0x8C9CDE, call @ 0x8C9CD9 → 0x9C43A0) |
+| 0x78B2B9 | **0x8C9D5D** | skip destination (common continuation `mov eax,[edi]`; all three death-handler skip paths converge here) |
+| 0x78B235 | **0x8C9CE5** | leftover byte after 5-byte WriteRelJump → NOP |
+| flag struct +2 | 0x107A0D4 | **0x123C5D4** (`mov byte [eax+2],1` @ 0x8C9CEB) |
+| death-handled flag | 0x107BA66 | **0x1228871** (written @ 0x8C9D56) |
+| ==2-path flag write (vaultmp leaves it) | 0x78B2AE | **0x8C9D52** (dead-state path, leave for parity) |
 | reload-save UI ptrs | 0xF65568/74/80 | **0x11017DC/E8/F4** ("Reloading the most recent save game" @ 0xF60DB8) |
 
   Steam death-flow fields that survived the recompile: 0xFC (death state,
   cmp 1/2), 0x5A8/0x5AA, 0x6E5, 0x184; vtable slots 0x214, 0x2A0 — same
   method (PlayerCharacter death handler), same structure. Patch = NOP
-  0x9C4FA5 (2B) + WriteRelJump 0x8CA8E0→0x8CA95D + NOP 0x8CA8E5 (1B).
+  0x9C43A5 (2B) + WriteRelJump 0x8C9CE0→0x8C9D5D + NOP 0x8C9CE5 (1B).
 - Method: callee-graph matching was NOT usable here (aflj merges these
   methods into `method.*` nodes; no callees in JSON). Instead: string xref
   ("Reloading the most recent save game" → ptr cluster → death UI block)
   + `mov byte [reg+2],1` pattern scan (13 sites, 2 = respawn writes) +
-  death-state/global-flag fingerprint. NOTE: the dump is PE-layout, not
-  flat VA — file offset ≠ VA−0x400000 (the old +0xC00 bug). Map via section
-  headers (python) or let r2 parse the PE (`-m 0x400000`).
+  death-state/global-flag fingerprint. NOTE: the dump IS flat (offset =
+  VA − 0x400000) — r2 `-m 0x400000` PE-parses the dump and shifts .text
+  by +0xC00; subtract 0xC00 from r2-derived addresses (verified live via
+  OP_PROBE_CODE).
 
 ## Plan for the patch work (separate focused effort)
 
@@ -114,11 +115,13 @@ Per-site semantic identification is required.
 - Size-matching sanity check: Steam size==1699 gives **2** candidates
   (0x64D850, 0xAE92C0) — the earlier "147" figure came from a fuzzy pass
   and is not reproducible from the saved JSON.
-- **Respawn done (this session)**: Steam sites found semantically (string →
-  death-flow fingerprint) — see table above. Site A = 0x9C4FA5 (NOP),
-  site B = 0x8CA8E0 → 0x8CA95D (WriteRelJump, NOP @ 0x8CA8E5).
-- Next session: apply the respawn patch on tetsuo (NOP 0x9C4FA5 ×2,
-  WriteRelJump 0x8CA8E0→0x8CA95D, NOP 0x8CA8E5), live-verify (die → stay
-  dead, no auto-respawn / reload-save menu). Then repeat the same
+- **Respawn mapped + live-patch applied (this session)**: Steam sites found
+  semantically (string → death-flow fingerprint) — see table above. Site A =
+  0x9C43A5 (NOP), site B = 0x8C9CE0 → 0x8C9D5D (WriteRelJump, NOP @
+  0x8C9CE5). **Trap: the dump is FLAT (offset = VA − 0x400000) — r2 PE-parse
+  of the dump shifts .text by +0xC00.** Probe-verified on tetsuo: address
+  0x9C4FA5 (r2-derived) holds `2f 8b 0d` live; the true site-A bytes `75 03`
+  are at 0x9C43A5. Verify candidate VAs live (OP_PROBE_CODE) before patching.
+- Next session: live-verify behavior (die → stay dead), then map the rest:
   semantic-anchor method for the remaining sites: AI pause (4), fire relay
   (2), PlaceAtMe/activate (3), race match (2), lock fix (1), delegators (3).
