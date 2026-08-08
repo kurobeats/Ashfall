@@ -152,6 +152,11 @@ pub mod fo3_steam_17_respawn {
     pub const SITE_B_SKIP: usize = 0x008C_9D5D;
     /// Leftover byte after the 5-byte jump over the 6-byte JNE.
     pub const SITE_B_TAIL: usize = SITE_B_JNE + 5; // 0x8C9CE5, original 0x00
+    /// ==2-path (death-state 2) respawn-flag write — vaultmp left it
+    /// unpatched; we NOP it too so no death path can ever set the flag
+    /// (a state-2 death would otherwise still force the SP reload-save
+    /// flow). GOG twin 0x78B2AE.
+    pub const SITE_B2_FLAG: usize = 0x008C_9D52; // bytes c6 40 02 01
 }
 
 /// Apply the Steam respawn-disable patch. Byte-guarded: reads the site bytes
@@ -171,6 +176,9 @@ pub unsafe fn apply_steam_respawn() -> Option<Vec<crate::hooks::memory::Patch>> 
     if crate::hooks::read_bytes(s::SITE_B_JNE, 6) != [0x0F, 0x85, 0x77, 0x00, 0x00, 0x00] {
         return None;
     }
+    if crate::hooks::read_bytes(s::SITE_B2_FLAG, 4) != [0xC6, 0x40, 0x02, 0x01] {
+        return None;
+    }
 
     let mut out = Vec::new();
     // Site A: NOP the predicate JNE -> always `xor al,al; ret` -> respawn denied.
@@ -183,6 +191,10 @@ pub unsafe fn apply_steam_respawn() -> Option<Vec<crate::hooks::memory::Patch>> 
     let t = memory::Patch::new(s::SITE_B_TAIL as *const u8, &[0x90]);
     t.apply();
     out.push(t);
+    // ==2-path flag write: NOP so no death path sets the respawn flag.
+    let b2 = memory::Patch::new(s::SITE_B2_FLAG as *const u8, &[0x90, 0x90, 0x90, 0x90]);
+    b2.apply();
+    out.push(b2);
     Some(out)
 }
 
@@ -530,6 +542,8 @@ mod tests {
         assert_eq!(s::SITE_B_TAIL, s::SITE_B_JNE + 5);
         assert!((0x400000..0x1200000).contains(&s::SITE_A_JNE));
         assert!((0x400000..0x1200000).contains(&s::SITE_B_SKIP));
+        assert_eq!(s::SITE_B2_FLAG, 0x8C9D52);
+        assert!((0x400000..0x1200000).contains(&s::SITE_B2_FLAG));
     }
 
     #[test]

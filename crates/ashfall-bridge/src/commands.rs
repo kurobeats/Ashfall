@@ -511,7 +511,7 @@ pub fn execute(func: u32, params: &[u8]) -> Vec<u8> {
             out
         }
         OP_PROBE_CODE => {
-            const ADDRS: [usize; 16] = [
+            const ADDRS: [usize; 17] = [
                 0x0045_5190, // fo3 LOOKUP_FORM_BY_ID (GOG/classic)
                 0x0071_1EF0, // fo3 LOOKUP_FORM_BY_ID (Steam post-2023)
                 0x0051_7950, // fo3 EXTRACT_ARGS (GOG)
@@ -531,7 +531,8 @@ pub fn execute(func: u32, params: &[u8]) -> Vec<u8> {
                 0x009C_43A5, // site A: predicate JNE (75 03 -> 90 90)
                 0x008C_9CE0, // site B: guard JNE (0F 85 77 00 00 00 -> E9 ..)
                 0x008C_9CE5, // site B tail (00 -> 90)
-                0x008C_9CEB, // respawn-flag write (c6 40 02 01 — unchanged by patch)
+                0x008C_9CEB, // respawn-flag write (c6 40 02 01 — unreachable, unchanged)
+                0x008C_9D52, // ==2-path flag write (c6 40 02 01 -> 90 90 90 90)
             ];
             let mut out = Vec::new();
             for a in ADDRS {
