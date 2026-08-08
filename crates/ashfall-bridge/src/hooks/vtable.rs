@@ -549,22 +549,25 @@ pub unsafe fn get_cell_from_obj(obj: *mut u8) -> u32 {
     read_field::<u32>(cell_ptr as *mut u8, OFFSET_REF_ID)
 }
 
-/// Read base FormID (TESObjectREFR::GetBaseForm → TESForm::GetFormID).
+/// Read base FormID (TESObjectREFR::baseForm field).
+///
+/// Field +0x1C was derived empirically on the Steam build (2026-08-07): the
+/// player ref (0x14) has +0x1C -> a form object whose +0x0C = 0x07 (the
+/// Player base record in Fallout3.esm). Field read avoids the vtable call
+/// entirely — the xFOSE vtable index (0x10) does NOT hold GetBaseForm in
+/// the Steam build (that slot is a destructor with `ret $4`).
 pub unsafe fn get_base(ref_id: u32) -> u32 {
     let obj = lookup_form_by_id(ref_id);
     if obj.is_null() {
         return 0;
     }
-
-    // VTable GetBaseForm (index 4 on x86) → returns TESForm*
-    let base_form: u32 = vcall_0(obj, VTBL_REF_GET_BASE_FORM);
+    const OFFSET_BASE_FORM: usize = 0x1C;
+    let base_form = read_field::<usize>(obj, OFFSET_BASE_FORM);
     if base_form == 0 {
         return 0;
     }
-
-    // VTable GetFormID (index 1) on the base form
-    const VTBL_FORM_GET_FORM_ID: usize = vtable_index(0x04);
-    vcall_0(base_form as *mut u8, VTBL_FORM_GET_FORM_ID)
+    // TESForm::refID at +0x0C (xFOSE STATIC_ASSERT).
+    read_field::<u32>(base_form as *mut u8, OFFSET_REF_ID)
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -654,13 +657,10 @@ pub unsafe fn get_name_from_obj(obj: *mut u8) -> String {
     if obj.is_null() {
         return "unnamed".into();
     }
-    // Use vcall_0 (thiscall) with a null-entry guard: partially patched
-    // vtables (null slots) during runtime hooking degrade to "unnamed",
-    // not panic.
-    if vtable_entry::<usize>(obj, VTBL_REF_GET_BASE_FORM).is_none() {
-        return "unnamed".into();
-    }
-    let base_form: *mut u8 = vcall_0(obj, VTBL_REF_GET_BASE_FORM);
+    // baseForm field at +0x1C (empirically derived on Steam 2026-08-07) —
+    // the vtable GetBaseForm slot differs from xFOSE in the Steam build and
+    // calling it corrupts the stack.
+    let base_form: *mut u8 = read_field::<usize>(obj, 0x1C) as *mut u8;
     if base_form.is_null() {
         return "unnamed".into();
     }
@@ -901,10 +901,6 @@ mod tests {
 
     #[test]
     fn test_get_name_from_obj_vtable_chain() {
-        unsafe extern "C" fn fake_get_base_form(this: *mut u8) -> *mut u8 {
-            // Base form pointer stored by the test at obj+0x40
-            read_field::<usize>(this, 0x40) as *mut u8
-        }
         unsafe extern "C" fn fake_get_full_name(_this: *mut u8) -> *const i8 {
             b"Wanderer\0".as_ptr() as *const i8
         }
@@ -913,13 +909,12 @@ mod tests {
             base_vtable[VTBL_FORM_GET_FULL_NAME] = fake_get_full_name as *const () as usize;
             let (_base, base_ptr) = fake_object(&base_vtable, 64);
 
-            let mut obj_vtable = vec![0usize; 16];
-            obj_vtable[VTBL_REF_GET_BASE_FORM] = fake_get_base_form as *const () as usize;
-            let (mut obj, obj_ptr) = fake_object(&obj_vtable, 128);
-            write_field::<usize>(obj.as_mut_ptr(), 0x40, base_ptr as usize);
-            let _ = obj_ptr;
+            // baseForm field at +0x1C (derived on Steam 2026-08-07).
+            let obj_vtable = vec![0usize; 16];
+            let (_mut_obj, obj_ptr) = fake_object(&obj_vtable, 128);
+            write_field::<usize>(obj_ptr, 0x1C, base_ptr as usize);
 
-            assert_eq!(get_name_from_obj(obj.as_mut_ptr()), "Wanderer");
+            assert_eq!(get_name_from_obj(obj_ptr), "Wanderer");
         }
     }
 

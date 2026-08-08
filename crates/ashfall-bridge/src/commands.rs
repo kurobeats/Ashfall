@@ -62,6 +62,8 @@ pub mod opcodes {
     pub const OP_DUMP_IMAGE: u32           = 0x00FC;
     /// Temporary debug: read-only form probe (lookup + vtable, no calls).
     pub const OP_PROBE_FORM: u32           = 0x00FB;
+    /// Temporary debug: read-only pointer deref (16 dwords at an address).
+    pub const OP_PROBE_PTR: u32            = 0x00FA;
     /// Temporary debug: 16 bytes at each hardcoded engine address.
     pub const OP_PROBE_CODE: u32           = 0x00FD;
 }
@@ -448,6 +450,20 @@ pub fn execute(func: u32, params: &[u8]) -> Vec<u8> {
         // Read-only form probe: [obj:4][vtable:4][vtable dwords x16][pos x12]
         // then [obj fields x64 dwords] — no vtable CALLS, isolates lookup/
         // object vs vtable-call crashes.
+        // Read-only pointer deref: 16 dwords at [addr:4] — for locating
+        // the baseForm field (deref candidate heap pointers, check +0x0C).
+        OP_PROBE_PTR => {
+            let Some(addr) = read_u32(params, 0) else { return vec![] };
+            unsafe fn rd_u32(addr: usize) -> u32 {
+                if addr == 0 { return 0; }
+                (addr as *const u32).read()
+            }
+            let mut out = Vec::with_capacity(64);
+            for i in 0..16 {
+                out.extend_from_slice(&unsafe { rd_u32(addr as usize + i * 4) }.to_le_bytes());
+            }
+            out
+        }
         OP_PROBE_FORM => {
             let Some(ref_id) = read_u32(params, 0) else { return vec![] };
             unsafe fn rd_u32(addr: usize) -> u32 {
