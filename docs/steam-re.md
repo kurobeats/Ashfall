@@ -62,6 +62,40 @@ Per-site semantic identification is required.
   by +0xC00; subtract 0xC00 from r2-derived addresses (verified live via
   OP_PROBE_CODE).
 
+### Respawn — residual risk (==2-path death menu)
+
+Only the flag writes are NOP'd. In the death-state-2 path the SP death menu
+UI call (0x8C9D43 `call 0x8FA990`, pushes of the Main-Menu/Reload strings)
+is still live: a death that reaches state 2 (death-handled 0x1228871 == 0
+and the 0x9C4970 check passing) can still show the menu. Observed deaths
+park at state 1 (both flags stay 0), so it never fired. If it ever shows:
+NOP the 5-byte call at 0x8C9D43 (the 9 pushes balance with `add esp,0x24`
+at 0x8C9D48, stack stays aligned).
+
+## Remaining patch-site groups — GOG anatomy + anchors
+
+GOG addresses + recipe names live in `hooks/vaultmp.rs` (`FO3_STEAM_CLASSIC`
++ `recipes()`). vaultmp semantics source (fetched 2026-08-08):
+`https://raw.githubusercontent.com/foxtacles/vaultmp/master/source/vaultmpdll/vaultmp.cpp`
+(also `vaultmp.hpp`). For each group: disassemble the GOG site, extract the
+structural signature, find the Steam twin semantically, probe-verify the VA
+live (OP_PROBE_CODE) before patching. Group list:
+
+| Group | vaultmp fn / what it does | GOG table fields |
+|---|---|---|
+| AI pause (4) | `aiFix1..4` — stop NPC AI processing in unloaded cells | ai_fix1 (NOP 2B), ai_fix2 (redirect), ai_fix3 (6B block), ai_fix4 (11B NOP) |
+| Fire relay (2) | `FireWeapon` — relay fire calls so the server sees shots | fire_fix_jmp (3B jump), fire_fix_patch (9B block) |
+| PlaceAtMe/activate (3) | `PlaceAtMe`, `GetActivate` — intercept spawn/activate | place_at_me_jmp/call/fix(+dest), get_activate_jmp/ret |
+| Race match (2) | `matchRace` NOPs + param — body-type desync fix | match_race_nop1 (18B), nop2 (3B), patch, param |
+| Lock fix (1) | `LockFix` — disable vanilla lock-bypass check | lock_fix (NOP) |
+| Delegators (3) | `BethesdaDelegator`, `AnimDetour`, `PlayIdleDetour` — anim/idle forwarding | delegator_src/dest/call_src, play_idle_call_src/fix_src, play_group_fix(+src/dest) |
+| PlayGroup/AV (extra) | `PlayGroup`, `AVFix` — anim group + actor-value fixes | play_group 0x45F704, av_fix_src/ret/term |
+
+Anchors that survive recompiles (from the respawn work): player/actor field
+offsets (0xFC death state, 0x5A8/0x5AA, 0x6E5, 0x184), vtable slots (0x214,
+0x2A0), static UI strings (string → ptr-globals → code), and structural
+signatures (early `jne +3; xor al,al; ret` predicates).
+
 ## Plan for the patch work (separate focused effort)
 
 1. **r2 batch workflow** (verified working): `r2 -q -e scr.color=0 -i script.r2
@@ -79,14 +113,29 @@ Per-site semantic identification is required.
 
 ## Live probe infrastructure (in bridge, read-only where possible)
 
-- OP_PROBE_CODE — 16 bytes at table addresses
-- OP_PROBE_FORM — obj + 128 vtable entries + 64 obj fields
-- OP_PROBE_PTR — deref 16 dwords at an address
+- OP_PROBE_CODE 0xFD — 16 bytes at table addresses (incl. the 4 respawn sites)
+- OP_PROBE_FORM 0xFB — obj + 128 vtable entries + 64 obj fields
+- OP_PROBE_PTR 0xFA — deref 16 dwords at an address (used for the respawn-
+  flag struct: probe 0x123C5D4 → dword0 = struct ptr → probe struct →
+  byte+2 = respawn flag)
 - OP_VCALL_TEST / OP_VCALL_TEST0 — guarded thiscall calls (crash = wrong
   index, game restart needed)
-- OP_DUMP_IMAGE — full image (PE-header based)
+- OP_DUMP_IMAGE 0xFC — full image (PE-header based, FLAT layout)
 - scripts/re/bridge_probe.py + probe_baseform.py — python clients
 - scripts/re/thiscall_test.rs — thiscall shim validation under wine
+
+## Test hosts (session notes)
+
+- **battlecruiser.chaotic.lan** — r2 6.0.5; binaries in /tmp: `Fallout3.exe`
+  (GOG PE), `steam-fo3.bin` (Steam dump). ssh works, no password.
+- **tetsuo.chaotic.lan** — live game host: FO3 GOTY at
+  `~/.local/share/.games/SteamLibrary/steamapps/common/Fallout 3 goty/`;
+  deploy bridge proxy as `dinput8.dll` in that dir. Launch:
+  `steam -applaunch 22370` with `DISPLAY=:0 XAUTHORITY=/run/user/1000/xauth_NHaKwn`
+  (KDE Wayland + XWayland), then `xdotool key Return` on the launcher.
+  Bridge port 127.0.0.1:1771; `bridge_probe.py` runs on the host directly
+  (python3). Poll script pattern: `scripts/re/` + OP_GET_DEAD/OP_GET_POS
+  every 3s; respawn-flag check via OP_PROBE_PTR chain.
 
 ## Known traps
 

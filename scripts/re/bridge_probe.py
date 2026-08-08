@@ -30,6 +30,12 @@ OP_GET_DEAD = 0x0019
 OP_GET_ACTOR_STATE = 0x0007
 OP_DUMP_IMAGE = 0x00FC
 OP_PROBE_CODE = 0x00FD
+OP_PROBE_PTR = 0x00FA
+
+# Steam respawn-flag globals (see docs/steam-re.md):
+# [0x123C5D4] -> struct ptr, byte +2 = respawn flag; 0x1228871 = death-handled.
+STEAM_RESPAWN_STRUCT_G = 0x123C5D4
+STEAM_DEATH_HANDLED = 0x1228871
 
 
 def cmd(conn, func, params=b"", key=7):
@@ -91,6 +97,38 @@ def action_dump(conn, out):
     return 1
 
 
+def action_probe_ptr(conn, addr):
+    """OP_PROBE_PTR: 16 dwords at an address."""
+    raw = cmd(conn, OP_PROBE_PTR, struct.pack("<I", addr))
+    if len(raw) < 64:
+        print(f"probe_ptr(0x{addr:x}) -> {raw.hex()}")
+        return
+    dw = struct.unpack("<16I", raw[:64])
+    print(f"0x{addr:08x}: " + " ".join(f"{d:08x}" for d in dw))
+
+
+def action_respawn(conn):
+    """Steam respawn-flag state: struct ptr, flag byte (+2), death-handled."""
+    raw = cmd(conn, OP_PROBE_PTR, struct.pack("<I", STEAM_RESPAWN_STRUCT_G))
+    if len(raw) < 4:
+        print(f"no respawn-struct response ({raw.hex()})")
+        return
+    struct_ptr = struct.unpack("<I", raw[:4])[0]
+    print(f"[0x{STEAM_RESPAWN_STRUCT_G:08x}] -> struct 0x{struct_ptr:x}")
+    if struct_ptr:
+        r2 = cmd(conn, OP_PROBE_PTR, struct.pack("<I", struct_ptr))
+        if len(r2) >= 4:
+            d0 = struct.unpack("<I", r2[:4])[0]
+            flag = (d0 >> 16) & 0xFF
+            print(f"  respawn flag (struct+2) = {flag} ({'SET!' if flag else 'clear'})")
+    r3 = cmd(conn, OP_PROBE_PTR, struct.pack("<I", STEAM_DEATH_HANDLED & ~3))
+    if len(r3) >= 4:
+        d = struct.unpack("<I", r3[:4])[0]
+        off = STEAM_DEATH_HANDLED & 3
+        dh = (d >> (8 * off)) & 0xFF
+        print(f"  death-handled flag 0x{STEAM_DEATH_HANDLED:x} = {dh} ({'set' if dh else 'clear'})")
+
+
 def action_dead(conn):
     """Stub-path command — safe everywhere; proves the pipe round-trip."""
     raw = cmd(conn, OP_GET_DEAD, struct.pack("<I", 0x14))
@@ -110,10 +148,11 @@ def action_pos(conn):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--action", required=True, choices=["probe", "dump", "dead", "pos"])
+    ap.add_argument("--action", required=True, choices=["probe", "dump", "dead", "pos", "ptr", "respawn"])
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=1771)
     ap.add_argument("--out", default="/tmp/fo3-image.bin")
+    ap.add_argument("--addr", type=lambda s: int(s, 0), default=0)
     args = ap.parse_args()
 
     conn = socket.create_connection((args.host, args.port), timeout=300)
@@ -126,6 +165,10 @@ def main():
             action_dead(conn)
         elif args.action == "pos":
             action_pos(conn)
+        elif args.action == "ptr":
+            action_probe_ptr(conn, args.addr)
+        elif args.action == "respawn":
+            action_respawn(conn)
     finally:
         conn.close()
     return 0
