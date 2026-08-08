@@ -60,14 +60,18 @@ pub unsafe fn vcall_0<R: Copy>(obj: *mut u8, index: usize) -> R {
     let fn_ptr: usize = vtable_entry(obj, index).expect("vcall_0: null vtable entry");
     let mut ret: usize = 0;
     core::arch::asm!(
+        "push ecx",
+        "push edx",
         "mov ecx, {this}",
         "call eax",
         "mov edi, eax",
         "mov {ret}, edi",
+        "pop edx",
+        "pop ecx",
         inout("eax") fn_ptr => _,
         this = in(reg) obj as usize,
         ret = out(reg) ret,
-        out("ecx") _, out("edx") _, out("edi") _,
+        out("edi") _,
     );
     std::mem::transmute_copy(&ret)
 }
@@ -80,16 +84,20 @@ pub unsafe fn vcall_1<T: Copy, R: Copy>(obj: *mut u8, index: usize, a1: T) -> R 
     let arg: usize = std::mem::transmute_copy(&a1);
     let mut ret: usize = 0;
     core::arch::asm!(
+        "push ecx",
+        "push edx",
         "mov ecx, {this}",
         "push {arg}",
         "call eax",
         "mov edi, eax",
         "mov {ret}, edi",
+        "pop edx",
+        "pop ecx",
         inout("eax") fn_ptr => _,
         this = in(reg) obj as usize,
         arg = in(reg) arg,
         ret = out(reg) ret,
-        out("ecx") _, out("edx") _, out("edi") _,
+        out("edi") _,
     );
     std::mem::transmute_copy(&ret)
 }
@@ -102,18 +110,22 @@ pub unsafe fn vcall_2<T1: Copy, T2: Copy, R: Copy>(obj: *mut u8, index: usize, a
     let arg2: usize = std::mem::transmute_copy(&a2);
     let mut ret: usize = 0;
     core::arch::asm!(
+        "push ecx",
+        "push edx",
         "mov ecx, {this}",
         "push {arg2}",
         "push {arg1}",
         "call eax",
         "mov edi, eax",
         "mov {ret}, edi",
+        "pop edx",
+        "pop ecx",
         inout("eax") fn_ptr => _,
         this = in(reg) obj as usize,
         arg1 = in(reg) arg1,
         arg2 = in(reg) arg2,
         ret = out(reg) ret,
-        out("ecx") _, out("edx") _, out("edi") _,
+        out("edi") _,
     );
     std::mem::transmute_copy(&ret)
 }
@@ -133,6 +145,8 @@ pub unsafe fn vcall_3<T1: Copy, T2: Copy, T3: Copy, R: Copy>(
     let arg3: usize = std::mem::transmute_copy(&a3);
     let mut ret: usize = 0;
     core::arch::asm!(
+        "push ecx",
+        "push edx",
         "mov ecx, {this}",
         "push {arg3}",
         "push {arg2}",
@@ -140,13 +154,15 @@ pub unsafe fn vcall_3<T1: Copy, T2: Copy, T3: Copy, R: Copy>(
         "call eax",
         "mov edi, eax",
         "mov {ret}, edi",
+        "pop edx",
+        "pop ecx",
         inout("eax") fn_ptr => _,
         this = in(reg) obj as usize,
         arg1 = in(reg) arg1,
         arg2 = in(reg) arg2,
         arg3 = in(reg) arg3,
         ret = out(reg) ret,
-        out("ecx") _, out("edx") _, out("edi") _,
+        out("edi") _,
     );
     std::mem::transmute_copy(&ret)
 }

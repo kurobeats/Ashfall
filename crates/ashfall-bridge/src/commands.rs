@@ -64,6 +64,8 @@ pub mod opcodes {
     pub const OP_PROBE_FORM: u32           = 0x00FB;
     /// Temporary debug: read-only pointer deref (16 dwords at an address).
     pub const OP_PROBE_PTR: u32            = 0x00FA;
+    /// Temporary debug: guarded vtable-call test (getter identification).
+    pub const OP_VCALL_TEST: u32            = 0x00F9;
     /// Temporary debug: 16 bytes at each hardcoded engine address.
     pub const OP_PROBE_CODE: u32           = 0x00FD;
 }
@@ -463,6 +465,16 @@ pub fn execute(func: u32, params: &[u8]) -> Vec<u8> {
                 out.extend_from_slice(&unsafe { rd_u32(addr as usize + i * 4) }.to_le_bytes());
             }
             out
+        }
+        /// Guarded vtable-call test: [ref_id:4][index:4][arg1:4] — calls
+        /// vtable[index](this, arg1) via thiscall and returns the 4-byte
+        /// result. Used to identify getters live (crash = wrong index).
+        OP_VCALL_TEST => {
+            let (Some(ref_id), Some(index), Some(arg)) = (read_u32(params, 0), read_u32(params, 4), read_u32(params, 8)) else { return vec![] };
+            let obj = unsafe { crate::hooks::vtable::lookup_form_by_id(ref_id) };
+            if obj.is_null() { return vec![]; }
+            let r: u32 = unsafe { crate::hooks::vtable::vcall_1::<u32, u32>(obj, index as usize, arg) };
+            r.to_le_bytes().to_vec()
         }
         OP_PROBE_FORM => {
             let Some(ref_id) = read_u32(params, 0) else { return vec![] };
