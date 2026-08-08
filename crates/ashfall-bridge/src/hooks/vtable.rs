@@ -353,7 +353,6 @@ pub unsafe fn lookup_form_by_id(form_id: u32) -> *mut u8 {
 /// Only referenced on the Windows target (in-process patching).
 #[allow(dead_code)]
 const VTBL_REF_GET_POS: usize = vtable_index(0x30);        // index 12 (x86)
-const VTBL_REF_GET_BASE_FORM: usize = vtable_index(0x10);  // index 4 (x86)
 const VTBL_ACTOR_GET_VALUE: usize = vtable_index(0x68);    // index 26 (x86)
 const VTBL_ACTOR_GET_BASE_VALUE: usize = vtable_index(0x70); // index 28 (x86, estimated)
 const VTBL_ACTOR_ANIM_DATA: usize = vtable_index(0x01E4);   // index 121 (x86, vaultmp.cpp GetActorState)

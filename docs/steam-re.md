@@ -67,3 +67,17 @@ Per-site semantic identification is required.
 - No RTTI in the image (vtable[-1] is not a COL).
 - FO3 command table is runtime-built (no static name→opcode array in the
   exe) — string-xref identification doesn't work.
+
+## Session handoff (2026-08-08)
+
+- r2 function lists (aflj) dumped for both binaries on battlecruiser:
+  `/tmp/gog_fns.json` (30,364 fns) + `/tmp/steam_fns.json` (17,724 fns);
+  copies saved locally at `data/fallout3/` (gitignored).
+- `aflj` quirk: the JSON `offset` field is 0 — addresses are encoded in the
+  `name` field (`fcn.00ae92c0`); parse the name when mapping.
+- Size-matching for the respawn function (GOG 1699B) yields 147 Steam
+  candidates — needs callee-graph comparison (compare each candidate's
+  called-functions set against the GOG respawn fn's callees) to converge.
+- Next session: load both function lists, build the GOG-respawn callee set
+  (r2: `s 0x78b230; axt` + `pdr` call extraction), filter Steam candidates
+  by callee overlap, verify by side-by-side disassembly, then patch.

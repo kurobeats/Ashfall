@@ -468,8 +468,8 @@ pub fn execute(func: u32, params: &[u8]) -> Vec<u8> {
             }
             out
         }
-        /// Guarded vtable-call test (0 args): [ref_id:4][index:4] — calls
-        /// vtable[index](this) via thiscall, returns the 4-byte result.
+        // Guarded vtable-call test (0 args): [ref_id:4][index:4] — calls
+        // vtable[index](this) via thiscall, returns the 4-byte result.
         OP_VCALL_TEST0 => {
             let (Some(ref_id), Some(index)) = (read_u32(params, 0), read_u32(params, 4)) else { return vec![] };
             let obj = unsafe { crate::hooks::vtable::lookup_form_by_id(ref_id) };
@@ -477,9 +477,9 @@ pub fn execute(func: u32, params: &[u8]) -> Vec<u8> {
             let r: u32 = unsafe { crate::hooks::vtable::vcall_0::<u32>(obj, index as usize) };
             r.to_le_bytes().to_vec()
         }
-        /// Guarded vtable-call test: [ref_id:4][index:4][arg1:4] — calls
-        /// vtable[index](this, arg1) via thiscall and returns the 4-byte
-        /// result. Used to identify getters live (crash = wrong index).
+        // Guarded vtable-call test: [ref_id:4][index:4][arg1:4] — calls
+        // vtable[index](this, arg1) via thiscall and returns the 4-byte
+        // result. Used to identify getters live (crash = wrong index).
         OP_VCALL_TEST => {
             let (Some(ref_id), Some(index), Some(arg)) = (read_u32(params, 0), read_u32(params, 4), read_u32(params, 8)) else { return vec![] };
             let obj = unsafe { crate::hooks::vtable::lookup_form_by_id(ref_id) };
