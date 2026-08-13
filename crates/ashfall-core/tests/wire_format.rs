@@ -634,7 +634,7 @@ fn test_spell_cast_roundtrip() {
 #[test]
 fn test_mod_list_roundtrip() {
     roundtrip(&Packet::GameModList {
-        mods: vec![("Fallout3.esm".into(), 0x1C877592), ("example.esp".into(), 0xDEADBEEF)],
+        mods: vec![("Fallout3.esm".into(), 0xC092218B), ("example.esp".into(), 0xDEADBEEF)],
     });
     roundtrip(&Packet::GameModList { mods: vec![] });
 }

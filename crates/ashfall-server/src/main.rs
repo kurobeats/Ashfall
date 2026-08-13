@@ -37,6 +37,13 @@ struct Cli {
     /// engine normally rewrites this byte at startup by real load order.
     #[arg(long, default_value_t = 0)]
     import_index: u8,
+
+    /// Tool mode: print config-ready `mod = "file:CRC"` lines for every
+    /// .esm/.esp in a directory (base master first, others sorted). Paste
+    /// the output into server.ini under [server] — this is what the
+    /// GameModList policy verifies clients against.
+    #[arg(long)]
+    list_mod_crc: Option<String>,
 }
 
 #[tokio::main]
@@ -61,6 +68,32 @@ async fn main() -> anyhow::Result<()> {
             stats.containers,
             stats.references,
         );
+        return Ok(());
+    }
+
+    // Tool mode: list mod CRCs (no server startup)
+    if let Some(dir) = cli.list_mod_crc {
+        let mut files: Vec<std::path::PathBuf> = std::fs::read_dir(&dir)?
+            .filter_map(|e| e.ok().map(|e| e.path()))
+            .filter(|p| {
+                p.extension()
+                    .map(|ext| ext == "esm" || ext == "esp")
+                    .unwrap_or(false)
+            })
+            .collect();
+        // Base master first (Fallout3.esm / FalloutNV.esm), rest sorted.
+        files.sort_by(|a, b| {
+            let an = a.file_name().unwrap_or_default();
+            let bn = b.file_name().unwrap_or_default();
+            let a_base = an == "Fallout3.esm" || an == "FalloutNV.esm";
+            let b_base = bn == "Fallout3.esm" || bn == "FalloutNV.esm";
+            b_base.cmp(&a_base).then_with(|| an.cmp(bn))
+        });
+        for f in &files {
+            let crc = ashfall_core::crc32::file_crc32(f)?;
+            let name = f.file_name().unwrap_or_default().to_string_lossy();
+            println!("mod = \"{}:{:08X}\"", name, crc);
+        }
         return Ok(());
     }
 

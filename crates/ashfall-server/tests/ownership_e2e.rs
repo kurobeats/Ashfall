@@ -253,14 +253,14 @@ async fn boot_with_mods(expected: Vec<String>) -> (DedicatedServer, u16) {
 
 #[tokio::test]
 async fn test_mod_policy_rejects_mismatch() {
-    let (server, port) = boot_with_mods(vec!["Fallout3.esm:1C877592".into()]).await;
+    let (server, port) = boot_with_mods(vec!["Fallout3.esm:C092218B".into()]).await;
 
     let client = async {
         // Wrong load order → rejected with GameEnd.
         let mut sock = TestClient::connect(port).await;
         authenticate(&mut sock, "Wanderer").await;
         sock.send_reliable(&Packet::GameModList {
-            mods: vec![("Oblivion.esm".into(), 0x1C877592)],
+            mods: vec![("Oblivion.esm".into(), 0xC092218B)],
         }).await;
         let mut saw_end = false;
         for _ in 0..8 {
@@ -275,7 +275,7 @@ async fn test_mod_policy_rejects_mismatch() {
         let mut sock2 = TestClient::connect(port).await;
         authenticate(&mut sock2, "Wanderer").await;
         sock2.send_reliable(&Packet::GameModList {
-            mods: vec![("Fallout3.esm".into(), 0x1C877592)],
+            mods: vec![("Fallout3.esm".into(), 0xC092218B)],
         }).await;
         let mut saw_load = false;
         for _ in 0..12 {

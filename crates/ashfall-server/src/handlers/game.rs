@@ -139,8 +139,8 @@ mod tests {
     #[test]
     fn test_parse_mod_entry() {
         assert_eq!(
-            parse_mod_entry("Fallout3.esm:1C877592"),
-            Some(("Fallout3.esm".to_string(), 0x1C877592))
+            parse_mod_entry("Fallout3.esm:C092218B"),
+            Some(("Fallout3.esm".to_string(), 0xC092218B))
         );
         assert_eq!(
             parse_mod_entry(" mods/example.esp : deadbeef "),
@@ -160,7 +160,7 @@ mod tests {
     #[test]
     fn test_mod_policy_exact_match_required() {
         let expected = vec![
-            ("Fallout3.esm".to_string(), 0x1C877592),
+            ("Fallout3.esm".to_string(), 0xC092218B),
             ("example.esp".to_string(), 0xDEADBEEF),
         ];
         // Exact order + crc → accept.

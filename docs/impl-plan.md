@@ -313,7 +313,7 @@ PRs within a phase often parallelizable unless noted.
 | 6. PvP enforcement | `pvp_enabled` (config) now enforced in combat: player-on-player hits rejected when off (was broadcast-only/decorative). | `dispatch.rs`, `handlers/combat.rs`, `dedicated.rs` |
 | 7. Game clock display | Client stores `GameClock` from GameTime packets, egui top bar shows date/time + scale + ⚔ PvP badge. | client `game.rs`, `dispatch.rs`, `ui/app.rs` |
 | 8. Entity streaming | Actors register in their owner's cell; `UpdateContext` enter/leave now streams all entity kinds (Actor/Player/Container/Item/Object) — New on enter, Remove on leave. | `handlers/actor.rs`, `handlers/player.rs` |
-| 9. Mod policy | `GameModList` (client load order: filename+crc) verified against server config `mod` entries (STR ModPolicy); mismatch → GameEnd Denied + disconnect. Off when list empty. | `protocol/mod.rs`, `handlers/game.rs`, `config.rs`, client `config.rs`/`game.rs` |
+| 9. Mod policy | `GameModList` (client load order: filename+crc) verified against server config `mod` entries (STR ModPolicy); mismatch → GameEnd Denied + disconnect. Off when list empty. CRCs are IEEE CRC-32 of the raw file bytes — shared `ashfall_core::crc32` (zlib-verified), and `ashfall-server --list-mod-crc <dir>` prints ready-to-paste config lines (base master first, verified against the real data/ files: Fallout3.esm = C092218B). | `protocol/mod.rs`, `handlers/game.rs`, `config.rs`, `crc32.rs`, `main.rs`, client `config.rs`/`game.rs` |
 
 Admin/ban system: explicitly skipped per project direction.
 
