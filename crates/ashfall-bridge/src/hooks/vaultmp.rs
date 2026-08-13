@@ -787,3 +787,51 @@ pub fn start_npc_flush_thread() {
         }
     });
 }
+
+// ═══════════════════════════════════════════════════════════════
+// Per-frame player-state hook (FNV — NVSE main-loop anchor)
+// ═══════════════════════════════════════════════════════════════
+//
+// NVSE's kMainLoopHookPatchAddr = 0x86B386 — the WinMain loop's
+// `call 0x43C4B0` ("7th call before first call to Sleep in oldWinMain",
+// Hooks_Gameplay.cpp). Executed once per frame (Sleep(50) loop), so a
+// call-redirect fires the 10 Hz player-state reporter continuously —
+// the FNV half of "own-player movement sync" without a frame-function
+// re-derivation. FO3's equivalent (NVSE comment: 0x6EEC15) is a
+// mid-function dispatch, not a call — defer, document in steam-re.md.
+
+/// FNV frame-hook site (classic 1.4.0.525 — Steam FNV is the same build).
+#[cfg(target_arch = "x86")]
+pub const FNV_FRAME_HOOK_SITE: usize = 0x0086_B386;
+#[cfg(target_arch = "x86")]
+const FNV_FRAME_ORIGINAL_CALL: usize = 0x0043_C4B0;
+/// Guard: `call 0x43C4B0` (verified on the real GOG FalloutNV.exe).
+#[cfg(target_arch = "x86")]
+const FNV_FRAME_GUARD: [u8; 5] = [0xE8, 0x25, 0x11, 0xBD, 0xFF];
+
+/// Redirect the FNV main-loop call to a hook that samples the local player
+/// at 10 Hz. Byte-guarded (no-op unless the site matches). The hook calls
+/// the original getter and returns its result so the loop continues
+/// unchanged; `report_player_state_due` throttles internally (STR cadence).
+#[cfg(target_arch = "x86")]
+pub fn apply_fnv_frame_hook() -> bool {
+    if crate::hooks::read_bytes(FNV_FRAME_HOOK_SITE, 5) != FNV_FRAME_GUARD {
+        return false; // not the FNV build at this site
+    }
+    unsafe {
+        unsafe extern "C" fn fnv_frame_hook() -> u32 {
+            let orig: unsafe extern "C" fn() -> u32 =
+                unsafe { std::mem::transmute(FNV_FRAME_ORIGINAL_CALL) };
+            let result = orig();
+            crate::network::report_player_state_due();
+            result
+        }
+        crate::hooks::memory::write_rel_call(FNV_FRAME_HOOK_SITE, fnv_frame_hook as *const () as usize);
+    }
+    true
+}
+
+#[cfg(not(target_arch = "x86"))]
+pub fn apply_fnv_frame_hook() -> bool {
+    false // tests / x64 hosts — nothing to hook
+}

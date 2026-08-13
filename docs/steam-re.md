@@ -219,3 +219,26 @@ purpose. Respawn-flag check pattern: OP_PROBE_PTR chain — probe
 - Next session: map the remaining sites the same way (semantic anchors,
   probe-verify VAs): AI pause (4), fire relay (2), PlaceAtMe/activate (3),
   race match (2), lock fix (1), delegators (3).
+
+## New Vegas (FNV 1.4.0.525) — static mapping session 2026-08-13
+
+FNV needs its own addresses (different build/compiler than FO3), but there is
+**no Steam/GOG split** — GOG 1.4.0.525(a) == Steam FNV, so one table covers
+both. The `fnv_14` table (xNVSE RUNTIME block) was already statically
+verified; this session added the NPC-sync anchors:
+
+| Item | FNV address | Source / method |
+|---|---|---|
+| PlayerCharacter singleton | **0x011DEA3C** | NVSE `g_thePlayer = (PlayerCharacter**)0x011DEA3C` (GameObjects.cpp) — double pointer |
+| **Main-loop frame hook** | **0x0086B386** | NVSE `kMainLoopHookPatchAddr` — "7th call before first call to Sleep in oldWinMain" (Hooks_Gameplay.cpp). Loop confirmed: `call 0x43C4B0; ... Sleep(50)` per frame. `kMainLoopHookRetnAddr = 0x86B38B`. Wired as `vaultmp::apply_fnv_frame_hook()` (byte-guard `E8 25 11 BD FF`, hook calls the original getter + 10 Hz `report_player_state_due`, returns the result). FO3's equivalent per NVSE comment: 0x6EEC15 (mid-function dispatch `mov eax,[eax+0x288]` — NOT a call, deferred) |
+| HighProcess (ProcessLists high-actor processing) | **0x008EEEC0** | vtable slot 16, 12,717 bytes — FNV's per-actor processor (the FO3 `+0x234` vtable fingerprint does NOT match FNV; slots differ) |
+| Save/load hook anchors | 0x848C3C / 0x847C45 / 0x7D33CE | NVSE Hooks_SaveLoad — load/save/new-game events |
+| FNV AI predicate | **not yet found** | the per-actor "should process" gate the discovery detour needs. Rule-outs: the 5 `cmp reg,[0x11DEA3C]` sites (fcn.00422480/00430410/0043ed90/00444850/00451ef0 — quest/flag/event code), the high-frequency HighProcess callees (accessors, 17-18 bytes). Next: analyze HighProcess's per-actor dispatch (the FO3 predicate was called from HighProcess; look for a small bool-returning thiscall fn with vtable calls + state compares) — or live-probe on the host |
+
+**Dead ends:** mojave-online has NO patch-table recipes (only animation/
+interpolation/entity_manager via PlaceAtMe expressions); NVSE source hooks
+save/load/text/model-path only — no AI/process hook.
+
+**Wired:** `apply_fnv_frame_hook()` (per-frame player-state, byte-guarded,
+installed from `hooks::install()`). Remaining FNV: the AI-predicate address
+for the discovery detour + live verification on the host.

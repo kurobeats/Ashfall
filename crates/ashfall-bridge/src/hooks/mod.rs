@@ -135,6 +135,10 @@ pub fn install() {
     // no-op on Steam until the Steam AI-pause address is re-derived
     // (steam-re.md remaining site groups).
     vaultmp::apply_actor_discovery();
+    // FNV per-frame player-state hook (0x86B386 main-loop call, NVSE anchor).
+    // Byte-guarded — no-op on FO3. FO3's frame hook (0x6EEC15) is a
+    // mid-function dispatch; deferred (steam-re.md).
+    vaultmp::apply_fnv_frame_hook();
     // TODO: locate TESObjectREFR vtable, patch all hooks.
     // For Proton: same VTable layout as Windows — Wine mirrors the binary exactly.
 }
