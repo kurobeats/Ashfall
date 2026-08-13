@@ -69,6 +69,13 @@ impl DedicatedServer {
         let db = Database::open(&config.database.path)?;
 
         let mut dispatcher = Dispatcher::new();
+        dispatcher.pvp_enabled = config.server.pvp_enabled;
+        dispatcher.expected_mods = config
+            .server
+            .mods
+            .iter()
+            .filter_map(|s| crate::handlers::game::parse_mod_entry(s))
+            .collect();
 
         // Load persistent state into memory
         db.startup_load(&dispatcher.quests, &mut dispatcher.factions);

@@ -310,6 +310,13 @@ PRs within a phase often parallelizable unless noted.
 
 | 5. Time/settings/spell/version | `GameTime` (authoritative clock, advances server-side at time_scale, 30-day-month rollover, join-send + change-broadcast — STR CalendarService), `ServerSettings { pvp_enabled }` (config → join broadcast), `SpellCast` (owner-gated relay, STR NotifySpellCast), `GameAuth.version` (reject mismatch, STR AuthenticationRequest). | `protocol/mod.rs`, `dedicated.rs`, `config.rs`, `handlers/auth.rs`, `handlers/actor.rs`, client `game.rs`/`dispatch.rs` |
 
+| 6. PvP enforcement | `pvp_enabled` (config) now enforced in combat: player-on-player hits rejected when off (was broadcast-only/decorative). | `dispatch.rs`, `handlers/combat.rs`, `dedicated.rs` |
+| 7. Game clock display | Client stores `GameClock` from GameTime packets, egui top bar shows date/time + scale + ⚔ PvP badge. | client `game.rs`, `dispatch.rs`, `ui/app.rs` |
+| 8. Entity streaming | Actors register in their owner's cell; `UpdateContext` enter/leave now streams all entity kinds (Actor/Player/Container/Item/Object) — New on enter, Remove on leave. | `handlers/actor.rs`, `handlers/player.rs` |
+| 9. Mod policy | `GameModList` (client load order: filename+crc) verified against server config `mod` entries (STR ModPolicy); mismatch → GameEnd Denied + disconnect. Off when list empty. | `protocol/mod.rs`, `handlers/game.rs`, `config.rs`, client `config.rs`/`game.rs` |
+
+Admin/ban system: explicitly skipped per project direction.
+
 396 tests, 0 warnings.
 
 P3+P4 can run in parallel (both depend on P2). P6+P7 can run in parallel after P5+P7 foundation ready. P10 can start after P7 IPC module (PR79).

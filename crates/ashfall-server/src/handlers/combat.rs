@@ -4,6 +4,7 @@ use ashfall_core::id::NetworkID;
 use ashfall_core::protocol::Packet;
 use crate::combat::resolver::CombatResolver;
 use crate::session::Session;
+use crate::world::objects::Player;
 use crate::world::registry::ObjectRegistry;
 use std::sync::Arc;
 
@@ -14,6 +15,7 @@ pub fn handle_actor_hit(
     registry: &Arc<ObjectRegistry>,
     session: &Session,
     hit: &Packet,
+    pvp_enabled: bool,
 ) -> Option<Vec<Packet>> {
     // Validate base damage bounds
     if let Packet::ActorHit { base_damage, .. } = hit {
@@ -35,6 +37,22 @@ pub fn handle_actor_hit(
             attacker_id.map_or(0, |n| n.as_u64())
         );
         return None;
+    }
+
+    // PvP rule: when disabled, a player may not damage another player.
+    let is_player = |id: NetworkID| -> bool {
+        registry.get(id).map(|arc| {
+            let guard = arc.read();
+            guard.as_any().downcast_ref::<Player>().is_some()
+        }).unwrap_or(false)
+    };
+    if !pvp_enabled {
+        if let Packet::ActorHit { target, attacker, .. } = hit {
+            if is_player(*target) && is_player(*attacker) {
+                tracing::warn!("Combat: hit rejected — PvP disabled ({} -> {})", attacker, target);
+                return None;
+            }
+        }
     }
 
     CombatResolver::resolve_hit(registry, hit)

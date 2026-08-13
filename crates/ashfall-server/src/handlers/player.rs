@@ -54,6 +54,46 @@ pub fn handle_update_control(
     Some(Packet::UpdateControl { id, control, key })
 }
 
+/// New-packet for any streamable entity kind (Object/Container/Item/Actor/Player).
+fn entity_new_packet(registry: &ObjectRegistry, id: NetworkID) -> Option<Packet> {
+    let arc = registry.get(id)?;
+    let guard = arc.read();
+    if let Some(obj) = guard.as_any().downcast_ref::<crate::world::objects::Object>() {
+        return Some(obj.to_new_packet());
+    }
+    if let Some(cont) = guard.as_any().downcast_ref::<crate::world::objects::Container>() {
+        // ContainerNew + ObjectNew pair; keep it to one packet here (ObjectNew
+        // carries the position/state — ContainerNew is the identity link).
+        return Some(cont.object.to_new_packet());
+    }
+    if let Some(item) = guard.as_any().downcast_ref::<crate::world::objects::Item>() {
+        return Some(item.to_new_packet());
+    }
+    if let Some(actor) = guard.as_any().downcast_ref::<crate::world::objects::Actor>() {
+        return Some(actor.to_new_packet());
+    }
+    if let Some(player) = guard.as_any().downcast_ref::<crate::world::objects::Player>() {
+        return Some(player.to_new_packet());
+    }
+    None
+}
+
+/// Cell of any position-bearing entity, if known.
+fn entity_cell(registry: &ObjectRegistry, id: NetworkID) -> Option<u32> {
+    let arc = registry.get(id)?;
+    let guard = arc.read();
+    if let Some(obj) = guard.as_any().downcast_ref::<crate::world::objects::Object>() {
+        return Some(obj.cell);
+    }
+    if let Some(actor) = guard.as_any().downcast_ref::<crate::world::objects::Actor>() {
+        return Some(actor.container.object.cell);
+    }
+    if let Some(player) = guard.as_any().downcast_ref::<crate::world::objects::Player>() {
+        return Some(player.actor.container.object.cell);
+    }
+    None
+}
+
 /// Handle UpdateContext — cell context change.
 pub fn handle_update_context(
     registry: &Arc<ObjectRegistry>,
@@ -81,34 +121,28 @@ pub fn handle_update_context(
     let (enter, leave) = old_ctx.diff(&new_ctx);
     let mut packets = Vec::new();
 
-    // Send ObjectNew for objects in entered cells
+    // Send New packets for entities in entered cells (any kind — object,
+    // actor, container, item, player). Self is skipped (PlayerNew is
+    // delivered by the auth flow).
     for cell in &enter {
         for obj_id in registry.get_by_cell(*cell) {
-            if let Some(arc) = registry.get(obj_id) {
-                let guard = arc.read();
-                if let Some(obj) = guard.as_any().downcast_ref::<crate::world::objects::Object>() {
-                    packets.push(obj.to_new_packet());
-                }
+            if obj_id == id {
+                continue;
+            }
+            if let Some(pkt) = entity_new_packet(registry, obj_id) {
+                packets.push(pkt);
             }
         }
     }
 
-    // G7: Send ObjectRemove for objects exclusive to left cells
+    // Send ObjectRemove for entities exclusive to left cells
     let new_cells: std::collections::HashSet<u32> = cells.iter().copied().collect();
     for cell in &leave {
         for obj_id in registry.get_by_cell(*cell) {
-            // Check if object is in any remaining context cell
-            let still_visible = {
-                let arc = registry.get(obj_id);
-                arc.map(|a| {
-                    let guard = a.read();
-                    if let Some(obj) = guard.as_any().downcast_ref::<crate::world::objects::Object>() {
-                        new_cells.contains(&obj.cell)
-                    } else {
-                        false
-                    }
-                }).unwrap_or(false)
-            };
+            // Check if the entity is in any remaining context cell
+            let still_visible = entity_cell(registry, obj_id)
+                .map(|c| new_cells.contains(&c))
+                .unwrap_or(false);
             if !still_visible {
                 packets.push(Packet::ObjectRemove { id: obj_id, silent: true });
             }

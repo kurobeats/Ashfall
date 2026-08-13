@@ -92,6 +92,7 @@ async fn boot() -> (DedicatedServer, u16) {
             master_port: port + 1,
             game_type: "fo3".into(),
             pvp_enabled: false,
+            mods: Vec::new(),
         },
         scripts: ScriptSection { path: dir },
         database: DatabaseSection { path: db },

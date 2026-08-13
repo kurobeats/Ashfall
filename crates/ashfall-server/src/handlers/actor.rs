@@ -72,7 +72,11 @@ pub fn handle_actor_new(
     actor.death_limbs = *death_limbs;
     actor.death_cause = *death_cause;
     actor.object.scale = *scale;
+    // The NPC lives in its owner's cell — register it there so cell-context
+    // streaming (UpdateContext enter/leave) picks it up for other players.
+    actor.object.cell = session.current_cell;
     registry.insert(actor);
+    registry.add_to_cell(session.current_cell, *id);
 
     let grant = Packet::OwnershipGranted { id: *id };
     (Some(grant), Some(packet.clone()))

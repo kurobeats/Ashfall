@@ -36,6 +36,17 @@ impl eframe::App for AshfallApp {
                     });
                     ui.separator();
                     ui.label(format!("Player: {}", game.config.name));
+                    if let Some(t) = game.game_time {
+                        ui.separator();
+                        ui.label(format!(
+                            "🕐 {}-{:02}-{:02} {:02}:00 ({:.0}x)",
+                            t.year, t.month, t.day, t.hour, t.time_scale
+                        ));
+                    }
+                    if game.pvp_enabled {
+                        ui.separator();
+                        ui.label("⚔ PvP");
+                    }
                 });
             });
 

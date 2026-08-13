@@ -97,6 +97,7 @@ async fn boot() -> (DedicatedServer, u16) {
             master_port: port + 1,
             game_type: "fo3".into(),
             pvp_enabled: true,
+            mods: Vec::new(),
         },
         scripts: ScriptSection { path: dir },
         database: DatabaseSection { path: db },
@@ -220,3 +221,73 @@ async fn test_ownership_transfer_roundtrip() {
 // Silence unused-import warning for PathBuf kept for boot symmetry.
 #[allow(dead_code)]
 fn _unused(_: PathBuf) {}
+
+async fn boot_with_mods(expected: Vec<String>) -> (DedicatedServer, u16) {
+    let seq = SEQ.fetch_add(1, Ordering::SeqCst);
+    let dir = std::env::temp_dir().join(format!("ashfall_mods_scripts_{}_{}", std::process::id(), seq));
+    std::fs::create_dir_all(&dir).unwrap();
+    let db = std::env::temp_dir().join(format!("ashfall_mods_db_{}_{}.sqlite3", std::process::id(), seq));
+    let port = {
+        let s = std::net::UdpSocket::bind("127.0.0.1:0").unwrap();
+        s.local_addr().unwrap().port()
+    };
+    let config = ServerConfig {
+        server: ServerSection {
+            host: "127.0.0.1".into(),
+            port,
+            connections: 4,
+            announce: "127.0.0.1".into(),
+            master_port: port + 1,
+            game_type: "fo3".into(),
+            pvp_enabled: false,
+            mods: expected,
+        },
+        scripts: ScriptSection { path: dir },
+        database: DatabaseSection { path: db },
+        ..Default::default()
+    };
+    let server = DedicatedServer::new(config).await.unwrap();
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    (server, port)
+}
+
+#[tokio::test]
+async fn test_mod_policy_rejects_mismatch() {
+    let (server, port) = boot_with_mods(vec!["Fallout3.esm:1C877592".into()]).await;
+
+    let client = async {
+        // Wrong load order → rejected with GameEnd.
+        let mut sock = TestClient::connect(port).await;
+        authenticate(&mut sock, "Wanderer").await;
+        sock.send_reliable(&Packet::GameModList {
+            mods: vec![("Oblivion.esm".into(), 0x1C877592)],
+        }).await;
+        let mut saw_end = false;
+        for _ in 0..8 {
+            if let Some(Packet::GameEnd { .. }) = sock.recv_packet().await {
+                saw_end = true;
+                break;
+            }
+        }
+        assert!(saw_end, "mod mismatch → GameEnd + disconnect");
+
+        // Matching load order → accepted (GameLoad arrives).
+        let mut sock2 = TestClient::connect(port).await;
+        authenticate(&mut sock2, "Wanderer").await;
+        sock2.send_reliable(&Packet::GameModList {
+            mods: vec![("Fallout3.esm".into(), 0x1C877592)],
+        }).await;
+        let mut saw_load = false;
+        for _ in 0..12 {
+            if let Some(pkt) = sock2.recv_packet().await {
+                if matches!(pkt, Packet::GameLoad) {
+                    saw_load = true;
+                    break;
+                }
+            }
+        }
+        assert!(saw_load, "matching load order accepted → GameLoad");
+    };
+
+    run_with(server, client).await;
+}

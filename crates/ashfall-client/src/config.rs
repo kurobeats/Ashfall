@@ -18,6 +18,10 @@ pub struct ClientConfig {
     pub ipc_mode: String,
     #[serde(default = "default_ipc_port")]
     pub ipc_port: u16,
+    /// Client load order, "filename:crc" per entry (hex crc) — sent to the
+    /// server for verification (STR ModPolicy).
+    #[serde(default)]
+    pub mods: Vec<String>,
 }
 
 fn default_name() -> String { "Wanderer".into() }
@@ -38,6 +42,7 @@ impl Default for ClientConfig {
             init_time: default_init_time(),
             ipc_mode: default_ipc_mode(),
             ipc_port: default_ipc_port(),
+            mods: Vec::new(),
         }
     }
 }

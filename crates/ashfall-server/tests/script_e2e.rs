@@ -77,6 +77,7 @@ async fn test_config() -> ServerConfig {
             master_port: free_port(),
             game_type: "fo3".into(),
             pvp_enabled: false,
+            mods: Vec::new(),
         },
         scripts: ScriptSection { path: dir },
         database: DatabaseSection { path: db_path },

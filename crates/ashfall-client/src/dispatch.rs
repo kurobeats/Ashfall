@@ -20,7 +20,7 @@ pub fn dispatch(game: &mut Game, packet: &Packet) {
             game.weather = *weather;
         }
         Packet::GameTime { year, month, day, hour, time_scale } => {
-            tracing::debug!("Game time: {year}-{month:02}-{day:02} {hour:02}:00 (scale {time_scale})");
+            game.game_time = Some(crate::game::GameClock { year: *year, month: *month, day: *day, hour: *hour, time_scale: *time_scale });
         }
         Packet::ServerSettings { pvp_enabled } => {
             game.pvp_enabled = *pvp_enabled;
@@ -51,5 +51,33 @@ pub fn dispatch(game: &mut Game, packet: &Packet) {
                 return;
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::game::Game;
+    use crate::config::ClientConfig;
+
+    fn game() -> Game {
+        Game::new(ClientConfig::default())
+    }
+
+    #[test]
+    fn test_game_time_stored_from_packet() {
+        let mut g = game();
+        dispatch(&mut g, &Packet::GameTime { year: 2277, month: 8, day: 17, hour: 9, time_scale: 30.0 });
+        let t = g.game_time.expect("clock stored");
+        assert_eq!((t.year, t.month, t.day, t.hour), (2277, 8, 17, 9));
+        assert_eq!(t.time_scale, 30.0);
+    }
+
+    #[test]
+    fn test_server_settings_stored() {
+        let mut g = game();
+        assert!(!g.pvp_enabled);
+        dispatch(&mut g, &Packet::ServerSettings { pvp_enabled: true });
+        assert!(g.pvp_enabled);
     }
 }

@@ -30,6 +30,10 @@ pub struct ServerSection {
     /// Player-vs-player combat allowed (broadcast to clients via ServerSettings).
     #[serde(default)]
     pub pvp_enabled: bool,
+    /// Expected client load order, "filename:crc" per entry (hex crc).
+    /// Empty = no policy (STR ModPolicy off).
+    #[serde(default)]
+    pub mods: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -73,6 +77,7 @@ impl Default for ServerConfig {
                 connections: default_connections(),
                 announce: default_announce(),
                 pvp_enabled: false,
+                mods: Vec::new(),
                 master_port: 1660,
                 game_type: default_game_type(),
             },
@@ -135,6 +140,7 @@ impl ServerConfig {
                     "master_port" => config.server.master_port = value.parse().unwrap_or(1660),
                     "game_type" => config.server.game_type = value.to_string(),
                     "pvp_enabled" => config.server.pvp_enabled = value.eq_ignore_ascii_case("true") || value == "1",
+                    "mod" => config.server.mods.push(value.to_string()),
                     "scripts_path" => config.scripts.path = PathBuf::from(value),
                     "db_path" => config.database.path = PathBuf::from(value),
                     "tick_rate" => config.game.tick_rate = value.parse().unwrap_or(30),

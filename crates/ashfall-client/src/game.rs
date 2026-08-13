@@ -11,6 +11,16 @@ use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::time::Instant;
 
+/// Server-authoritative game clock (GameTime packets, STR CalendarService).
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct GameClock {
+    pub year: u32,
+    pub month: u32,
+    pub day: u32,
+    pub hour: u32,
+    pub time_scale: f32,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 // ponytail: Loading/InGame are never constructed in stub mode; the real flow
 // reaches them after GameStart arrives from the server.
@@ -35,6 +45,8 @@ pub struct Game {
     pub karma: i32,
     /// Server rule: player-vs-player combat allowed (ServerSettings on join).
     pub pvp_enabled: bool,
+    /// Authoritative game clock (None until the first GameTime packet).
+    pub game_time: Option<GameClock>,
     pub reputation: HashMap<u32, i32>,
     pub hardcore_hunger: f32,
     pub hardcore_thirst: f32,
@@ -55,6 +67,7 @@ impl Game {
             weather: 0,
             karma: 0,
             pvp_enabled: false,
+            game_time: None,
             reputation: HashMap::new(),
             hardcore_hunger: 0.0,
             hardcore_thirst: 0.0,
@@ -79,6 +92,19 @@ impl Game {
             version: ashfall_core::constants::CLIENT_VERSION.into(),
         };
         self.send_reliable(auth).await?;
+        // Load-order verification (STR ModPolicy) — sent right after auth so
+        // the server checks it before the world-state handoff completes.
+        let mods = self
+            .config
+            .mods
+            .iter()
+            .filter_map(|s| {
+                let (file, crc) = s.rsplit_once(':')?;
+                let crc = u32::from_str_radix(crc.trim(), 16).ok()?;
+                Some((file.trim().to_string(), crc))
+            })
+            .collect();
+        self.send_reliable(Packet::GameModList { mods }).await?;
         Ok(())
     }
 

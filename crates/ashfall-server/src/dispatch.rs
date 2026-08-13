@@ -58,6 +58,12 @@ pub struct Dispatcher {
     pub factions: FactionMatrix,
     /// Ring-buffered positions for server-side lag compensation.
     pub pos_history: crate::world::position_history::PositionHistory,
+    /// PvP rule (from config, set at startup): player-vs-player hits rejected
+    /// when false. Broadcast to clients via ServerSettings.
+    pub pvp_enabled: bool,
+    /// Expected client load order (STR ModPolicy) — parsed from config `mod`
+    /// entries. Empty = policy off.
+    pub expected_mods: Vec<(String, u32)>,
 }
 
 impl Dispatcher {
@@ -69,6 +75,8 @@ impl Dispatcher {
             quests: QuestManager::new(),
             factions: FactionMatrix::default(),
             pos_history: crate::world::position_history::PositionHistory::new(),
+            pvp_enabled: false,
+            expected_mods: Vec::new(),
         }
     }
 
@@ -220,7 +228,7 @@ impl Dispatcher {
 
             // ═══ Combat ═══
             Packet::ActorHit { .. } => {
-                match combat::handle_actor_hit(&self.registry, session, &packet) {
+                match combat::handle_actor_hit(&self.registry, session, &packet, self.pvp_enabled) {
                     Some(pkts) => {
                         let mut result = DispatchResult::new();
                         for p in pkts { result = result.broadcast(p); }
@@ -285,6 +293,14 @@ impl Dispatcher {
             Packet::GameChat { message } => {
                 match chat::handle_chat(message) {
                     Some(pkt) => DispatchResult::new().broadcast(pkt),
+                    None => DispatchResult::new(),
+                }
+            }
+
+            // ═══ Mod policy (STR ModPolicy) ═══
+            Packet::GameModList { mods } => {
+                match game::handle_mod_list(&self.expected_mods, &mods) {
+                    Some(pkt) => DispatchResult::new().response(pkt).with_disconnect(),
                     None => DispatchResult::new(),
                 }
             }

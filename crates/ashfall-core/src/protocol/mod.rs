@@ -73,6 +73,9 @@ pub enum Packet {
     GameEnd { reason: u8 },
     /// Server ↔ Client: mod file verification (filename, CRC32).
     GameMod { filename: String, crc: u32 },
+    /// Client → Server: full load order as (filename, CRC32) pairs —
+    /// compared against the server's expected list (STR ModPolicy).
+    GameModList { mods: Vec<(String, u32)> },
     /// Server ↔ Client: UI notification message (string-cached).
     GameMessage { message: CachedString, emoticon: u8 },
     /// Server ↔ Client: chat message broadcast (string-cached).

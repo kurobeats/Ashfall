@@ -632,6 +632,14 @@ fn test_spell_cast_roundtrip() {
 }
 
 #[test]
+fn test_mod_list_roundtrip() {
+    roundtrip(&Packet::GameModList {
+        mods: vec![("Fallout3.esm".into(), 0x1C877592), ("example.esp".into(), 0xDEADBEEF)],
+    });
+    roundtrip(&Packet::GameModList { mods: vec![] });
+}
+
+#[test]
 fn test_max_chat_length() {
     let message = "B".repeat(constants::MAX_CHAT_LENGTH);
     roundtrip(&Packet::GameChat { message: message.into() });

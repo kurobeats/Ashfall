@@ -205,7 +205,7 @@ fn test_pvp_damage_resolves() {
         weapon_id: 0,
         projectile: 0,
     };
-    let packets = handle_actor_hit(&registry, &sess, &hit).expect("hit resolves");
+    let packets = handle_actor_hit(&registry, &sess, &hit, true).expect("hit resolves");
     assert!(packets.iter().any(|p| matches!(p, Pkt::ActorDamaged { target: t, final_damage, .. } if *t == target && *final_damage > 0.0)));
 
     // Target health reduced by 25
@@ -233,7 +233,7 @@ fn test_pvp_lethal_hit_kills() {
         weapon_id: 0,
         projectile: 0,
     };
-    let packets = handle_actor_hit(&registry, &sess, &hit).expect("hit resolves");
+    let packets = handle_actor_hit(&registry, &sess, &hit, true).expect("hit resolves");
     assert!(packets.iter().any(|p| matches!(p, Pkt::ActorDeathExt { id, .. } if *id == target)));
 
     let arc = registry.get(target).unwrap();
@@ -260,7 +260,7 @@ fn test_hit_attacker_spoof_rejected() {
         weapon_id: 0,
         projectile: 0,
     };
-    assert!(handle_actor_hit(&registry, &sess, &hit).is_none(), "spoofed attacker rejected");
+    assert!(handle_actor_hit(&registry, &sess, &hit, true).is_none(), "spoofed attacker rejected");
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -651,4 +651,63 @@ fn test_session_string_table_wired() {
     assert!(s.string_table.is_empty());
     let id = s.string_table.intern("Vault101");
     assert_eq!(s.string_table.lookup(id), Some("Vault101"));
+}
+
+#[test]
+fn test_pvp_disabled_rejects_player_hits() {
+    let registry = Arc::new(ObjectRegistry::new());
+    let a = registry.allocate_id();
+    registry.insert(Player::new(a, 0x14, 0x07, 5));
+    let b = registry.allocate_id();
+    registry.insert(Player::new(b, 0x14, 0x07, 5));
+    // Give them positions within range
+    {
+        let arc = registry.get(a).unwrap();
+        let mut g = arc.write();
+        g.as_any_mut().downcast_mut::<Player>().unwrap().actor.container.object.net_pos = [0.0, 0.0, 0.0];
+    }
+    {
+        let arc = registry.get(b).unwrap();
+        let mut g = arc.write();
+        g.as_any_mut().downcast_mut::<Player>().unwrap().actor.container.object.net_pos = [10.0, 0.0, 0.0];
+    }
+
+    let sess = session(1, Some(a));
+    let hit = Pkt::ActorHit {
+        target: b, attacker: a, limb: 0, base_damage: 50.0, flags: 0, weapon_id: 0, projectile: 0,
+    };
+    // PvP off → player-on-player hit rejected.
+    assert!(handle_actor_hit(&registry, &sess, &hit, false).is_none(), "pvp off rejects player hit");
+    // PvP on → resolves.
+    assert!(handle_actor_hit(&registry, &sess, &hit, true).is_some(), "pvp on resolves player hit");
+}
+
+#[test]
+fn test_actor_registered_in_owners_cell_and_streams_on_context() {
+    use ashfall_server::handlers::player;
+    let registry = Arc::new(ObjectRegistry::new());
+
+    // Alice claims an NPC while in cell 5.
+    let mut alice = session(1, Some(NetworkID::new(10)));
+    alice.current_cell = 5;
+    actor::handle_actor_new(&registry, &alice, &actor_new_packet(100, 0x500));
+    assert_eq!(registry.get_by_cell(5), vec![NetworkID::new(100)], "actor in owner's cell");
+
+    // Bob moves his context to include cell 5 → he receives the actor.
+    let mut bob = session(2, Some(NetworkID::new(20)));
+    bob.cell_context = [1, 1, 1, 1, 1, 1, 1, 1, 1]; // all cell 1, no overlap
+    let cells = [5, 5, 5, 5, 5, 5, 5, 5, 5];
+    let pkts = player::handle_update_context(&registry, &mut bob, NetworkID::new(20), cells, false);
+    assert!(
+        pkts.iter().any(|p| matches!(p, Packet::ActorNew { id, .. } if *id == NetworkID::new(100))),
+        "entered cell streams the actor"
+    );
+
+    // Bob leaves cell 5 → the actor is removed.
+    let cells2 = [1, 1, 1, 1, 1, 1, 1, 1, 1];
+    let pkts2 = player::handle_update_context(&registry, &mut bob, NetworkID::new(20), cells2, false);
+    assert!(
+        pkts2.iter().any(|p| matches!(p, Packet::ObjectRemove { id, .. } if *id == NetworkID::new(100))),
+        "left cell removes the actor"
+    );
 }
