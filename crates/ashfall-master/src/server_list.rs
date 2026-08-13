@@ -29,6 +29,7 @@ impl ServerList {
     }
 
     /// Insert or update a server entry.
+    #[allow(clippy::too_many_arguments)] // maps 1:1 to the wire listing packet
     pub fn upsert(
         &mut self,
         addr: SocketAddr,

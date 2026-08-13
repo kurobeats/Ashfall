@@ -72,7 +72,7 @@ pub fn handle_update_pos(
         tracing::warn!("Rejected UpdatePos for {id} from {} (not owner)", session.player_name);
         return None;
     }
-    let Some(prev) = read_pos(registry, id) else { return None };
+    let prev = read_pos(registry, id)?;
     let delta = session.last_recv.elapsed().min(Duration::from_secs(1));
 
     // Anti-cheat: validate position with speed + teleport check

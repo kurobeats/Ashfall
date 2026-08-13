@@ -40,6 +40,7 @@ pub struct InterpBuffer {
 }
 
 impl InterpBuffer {
+    #[allow(dead_code)] // used by tests
     pub fn new() -> Self {
         Self::default()
     }

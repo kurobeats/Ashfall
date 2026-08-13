@@ -608,9 +608,15 @@ impl DedicatedServer {
 
         // Broadcast PlayerNew to the new player
         if let Some(arc) = self.dispatcher.registry.get(player_id) {
-            let guard = arc.read();
-            if let Some(p) = guard.as_any().downcast_ref::<crate::world::objects::Player>() {
-                self.send(addr, p.to_new_packet()).await;
+            let pkt = {
+                let guard = arc.read();
+                guard
+                    .as_any()
+                    .downcast_ref::<crate::world::objects::Player>()
+                    .map(|p| p.to_new_packet())
+            };
+            if let Some(pkt) = pkt {
+                self.send(addr, pkt).await;
             }
         }
 
@@ -644,9 +650,14 @@ impl DedicatedServer {
             .map(|entry| *entry.key())
             .collect();
         if let Some(arc) = self.dispatcher.registry.get(player_id) {
-            let guard = arc.read();
-            if let Some(p) = guard.as_any().downcast_ref::<crate::world::objects::Player>() {
-                let player_pkt = p.to_new_packet();
+            let player_pkt = {
+                let guard = arc.read();
+                guard
+                    .as_any()
+                    .downcast_ref::<crate::world::objects::Player>()
+                    .map(|p| p.to_new_packet())
+            };
+            if let Some(player_pkt) = player_pkt {
                 for other_addr in &other_addrs {
                     if *other_addr != addr {
                         self.send(*other_addr, player_pkt.clone()).await;

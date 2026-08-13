@@ -164,17 +164,17 @@ fn query_master_sync(master_addr: &str) -> Vec<ServerInfo> {
     while start.elapsed() < Duration::from_secs(2) {
         match socket.recv_from(&mut recv_buf) {
             Ok((len, src)) => {
-                if let Some(packet) = decode_response(&recv_buf[..len]) {
-                    if let Packet::MasterAnnounce { name, map, players, max_players, game_type, .. } = packet {
-                        servers.push(ServerInfo {
-                            name,
-                            addr: src,
-                            map,
-                            players,
-                            max_players,
-                            game_type,
-                        });
-                    }
+                if let Some(Packet::MasterAnnounce { name, map, players, max_players, game_type, .. }) =
+                    decode_response(&recv_buf[..len])
+                {
+                    servers.push(ServerInfo {
+                        name,
+                        addr: src,
+                        map,
+                        players,
+                        max_players,
+                        game_type,
+                    });
                 }
             }
             Err(_) => break, // timeout
@@ -182,7 +182,7 @@ fn query_master_sync(master_addr: &str) -> Vec<ServerInfo> {
     }
 
     // Dedup by addr (keep first)
-    servers.sort_by(|a, b| a.addr.cmp(&b.addr));
+    servers.sort_by_key(|a| a.addr);
     servers.dedup_by(|a, b| a.addr == b.addr);
 
     servers

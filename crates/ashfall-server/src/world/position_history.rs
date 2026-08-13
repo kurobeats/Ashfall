@@ -29,7 +29,7 @@ impl PositionHistory {
         let now = Instant::now();
         self.by_id.entry(id).or_default().push_back((now, pos));
         if let Some(mut q) = self.by_id.get_mut(&id) {
-            while q.front().map_or(false, |(t, _)| now.duration_since(*t) > HISTORY_WINDOW) {
+            while q.front().is_some_and(|(t, _)| now.duration_since(*t) > HISTORY_WINDOW) {
                 q.pop_front();
             }
         }
@@ -58,6 +58,10 @@ impl PositionHistory {
 
     pub fn len(&self) -> usize {
         self.by_id.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.by_id.is_empty()
     }
 }
 

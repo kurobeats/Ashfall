@@ -23,6 +23,12 @@ pub struct DispatchResult {
     pub disconnect: bool,
 }
 
+impl Default for DispatchResult {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DispatchResult {
     pub fn new() -> Self {
         DispatchResult { responses: vec![], broadcasts: vec![], disconnect: false }
@@ -64,6 +70,12 @@ pub struct Dispatcher {
     /// Expected client load order (STR ModPolicy) — parsed from config `mod`
     /// entries. Empty = policy off.
     pub expected_mods: Vec<(String, u32)>,
+}
+
+impl Default for Dispatcher {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Dispatcher {

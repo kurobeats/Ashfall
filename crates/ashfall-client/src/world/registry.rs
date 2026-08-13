@@ -92,7 +92,7 @@ impl ClientRegistry {
                 let name = name.resolve(&mut self.string_table);
                 self.interp
                     .entry(*id)
-                    .or_insert_with(crate::world::state::InterpBuffer::new)
+                    .or_default()
                     .push_now(*net_pos);
                 self.objects.insert(
                     *id,
@@ -215,7 +215,7 @@ impl ClientRegistry {
     fn update_pos(&mut self, id: NetworkID, pos: [f32; 3]) {
         self.interp
             .entry(id)
-            .or_insert_with(crate::world::state::InterpBuffer::new)
+            .or_default()
             .push_now(pos);
         match self.objects.get_mut(&id) {
             Some(ClientObject::Object { pos: p, .. }) | Some(ClientObject::Actor { pos: p, .. }) | Some(ClientObject::Player { pos: p, .. }) => *p = pos,

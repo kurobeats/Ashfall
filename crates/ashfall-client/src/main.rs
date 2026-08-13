@@ -79,21 +79,24 @@ impl eframe::App for AppState {
                         let game = self.game.clone();
                         std::thread::spawn(move || {
                             let rt = tokio::runtime::Runtime::new().unwrap();
-                            rt.block_on(async {
+                            // Dedicated thread + block_on: single future, std
+                            // Mutex — no other task can starve, no deadlock.
+                            #[allow(clippy::await_holding_lock)]
+                            let fut = async {
                                 let mut g = game.lock().unwrap();
                                 let _ = g.connect(addr).await;
                                 let _ = g.authenticate().await;
-                            });
+                            };
+                            rt.block_on(fut);
                         });
                     }
-                    if matches!(state, ClientState::InGame | ClientState::Loading) {
-                        if ui.button("Disconnect").clicked() {
+                    if matches!(state, ClientState::InGame | ClientState::Loading)
+                        && ui.button("Disconnect").clicked() {
                             let mut game = self.game.lock().unwrap();
                             game.chat_messages.push(("System".into(), "Disconnected".into()));
                             game.state = ClientState::Disconnected;
                             game.network = None;
                         }
-                    }
                 });
             });
         });

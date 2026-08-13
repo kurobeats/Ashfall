@@ -313,7 +313,7 @@ pub unsafe fn lookup_form_by_id(form_id: u32) -> *mut u8 {
     #[cfg(not(target_os = "windows"))]
     {
         let _ = form_id;
-        return std::ptr::null_mut();
+        std::ptr::null_mut()
     }
 
     #[cfg(target_os = "windows")]

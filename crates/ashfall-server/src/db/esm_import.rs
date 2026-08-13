@@ -134,18 +134,18 @@ fn sub<'a>(subs: &'a [Subrecord], ty: &[u8; 4]) -> Option<&'a [u8]> {
 /// FULL name, trimmed at the NUL terminator.
 fn full_name(subs: &[Subrecord]) -> String {
     sub(subs, b"FULL")
-        .and_then(|d| {
+        .map(|d| {
             let end = d.iter().position(|&b| b == 0).unwrap_or(d.len());
-            Some(String::from_utf8_lossy(&d[..end]).into_owned())
+            String::from_utf8_lossy(&d[..end]).into_owned()
         })
         .unwrap_or_default()
 }
 
 fn desc(subs: &[Subrecord]) -> String {
     sub(subs, b"DESC")
-        .and_then(|d| {
+        .map(|d| {
             let end = d.iter().position(|&b| b == 0).unwrap_or(d.len());
-            Some(String::from_utf8_lossy(&d[..end]).into_owned())
+            String::from_utf8_lossy(&d[..end]).into_owned()
         })
         .unwrap_or_default()
 }
@@ -369,6 +369,7 @@ impl Database {
     }
 
     /// Route one record into its table (pure extraction + inserts).
+    #[allow(clippy::too_many_arguments)] // record fields, maps to the DB row
     fn import_record(
         &self,
         rec_type: &[u8; 4],

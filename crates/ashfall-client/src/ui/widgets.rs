@@ -246,7 +246,7 @@ impl GuiState {
     pub fn top_windows(&self) -> Vec<&GuiWindow> {
         self.widgets
             .values()
-            .filter(|w| w.kind == GuiWidgetKind::Window && w.parent.map_or(true, |p| p.as_u64() == 0))
+            .filter(|w| w.kind == GuiWidgetKind::Window && w.parent.is_none_or(|p| p.as_u64() == 0))
             .collect()
     }
 }

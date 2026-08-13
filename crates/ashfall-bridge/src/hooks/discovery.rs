@@ -42,7 +42,7 @@ pub const FNV_ACTOR_PROCESS_MANAGER: usize = 0x011E_0E80;
 /// Other tiers (lowActors @ +0x0C/+0x18, highActors @ +0x5C per AnhNVSE's
 /// "needs recalc" header) are host-verify candidates — start with the
 /// confirmed tier, extend once live-probed.
-pub const FNV_FIRST_ACTOR_LIST: usize = FNV_ACTOR_PROCESS_MANAGER + 0x00;
+pub const FNV_FIRST_ACTOR_LIST: usize = FNV_ACTOR_PROCESS_MANAGER;
 
 /// Hard cap on list nodes (a corrupted `next` chain must not loop forever).
 const LIST_NODE_CAP: usize = 4096;

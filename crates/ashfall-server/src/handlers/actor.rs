@@ -88,10 +88,8 @@ pub fn handle_ownership_claim(
     session: &Session,
     id: NetworkID,
 ) -> Option<Packet> {
-    let Some(player_id) = session.player_id else { return None };
-    if registry.get(id).is_none() {
-        return None; // unknown actor
-    }
+    let player_id = session.player_id?;
+    registry.get(id)?;
     if !registry.set_owner(id, player_id) {
         return None; // already owned
     }
@@ -99,6 +97,7 @@ pub fn handle_ownership_claim(
     Some(Packet::OwnershipGranted { id })
 }
 
+#[allow(clippy::too_many_arguments)] // wire packet fields, relayed as-is
 pub fn handle_actor_state(registry: &Arc<ObjectRegistry>, session: &crate::session::Session, id: NetworkID, idle: u32, moving: u8, moving_xy: u8, weapon: u8, alerted: bool, sneaking: bool, firing: bool) -> Option<Packet> {
     if !can_mutate(registry, session, id) {
         return None;
@@ -125,6 +124,7 @@ pub fn handle_actor_state(registry: &Arc<ObjectRegistry>, session: &crate::sessi
 }
 
 /// Handle ActorStateDelta — apply only the present fields, relay the delta.
+#[allow(clippy::too_many_arguments)] // wire packet fields, relayed as-is
 pub fn handle_actor_state_delta(
     registry: &Arc<ObjectRegistry>,
     session: &crate::session::Session,

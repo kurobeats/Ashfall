@@ -401,7 +401,7 @@ pub fn get_reputation(_faction: u32) -> i32 {
 
 /// Set reputation with a faction (FNV only).
 pub fn set_reputation(_faction: u32, _value: i32) {
-    if !is_fnv() { return; }
+    // TODO: PlayerCharacter::SetReputation()
 }
 
 /// Get hardcore stat values (FNV only).
@@ -414,7 +414,7 @@ pub fn get_hardcore_stats() -> (f32, f32, f32) {
 
 /// Set hardcore stat values (FNV only).
 pub fn set_hardcore_stats(_hunger: f32, _thirst: f32, _sleep: f32) {
-    if !is_fnv() { return; }
+    // TODO: PlayerCharacter::SetHardcoreStats()
 }
 
 // ═══════════════════════════════════════════════════════════════

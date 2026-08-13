@@ -84,7 +84,7 @@ impl WasmInstance {
         let need = offset + s.len();
         let have = mem.data_size(&self.store);
         if need > have {
-            let pages = (need - have + 65535) / 65536;
+            let pages = (need - have).div_ceil(65536);
             if mem.grow(&mut self.store, pages as u64).is_err() {
                 return false;
             }
@@ -231,7 +231,7 @@ impl ScriptEngine {
         for entry in std::fs::read_dir(dir)? {
             let entry = entry?;
             let path = entry.path();
-            if path.extension().map_or(false, |ext| ext == "wasm") {
+            if path.extension().is_some_and(|ext| ext == "wasm") {
                 let name = path
                     .file_stem()
                     .unwrap_or_default()

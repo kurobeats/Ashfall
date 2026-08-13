@@ -85,10 +85,7 @@ impl ClientNetwork {
         let mut buf = vec![0u8; 65536];
         let mut packets = Vec::new();
         // ponytail: single recv per poll. Batch in production.
-        match self.recv(&mut buf).await? {
-            Some(p) => packets.push(p),
-            None => {}
-        }
+        if let Some(p) = self.recv(&mut buf).await? { packets.push(p) }
         Ok(packets)
     }
 

@@ -47,9 +47,7 @@ pub fn dispatch(game: &mut Game, packet: &Packet) {
         Packet::OwnershipGranted { .. } | Packet::OwnershipReleased { .. } => {}
         // Server-authored GUI packets → GuiState
         _ => {
-            if game.gui.apply_packet(packet) {
-                return;
-            }
+            game.gui.apply_packet(packet);
         }
     }
 }

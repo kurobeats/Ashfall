@@ -31,7 +31,7 @@ pub fn is_valid_coordinate(c: f32) -> bool {
 /// Check if an axis angle is valid.
 #[inline]
 pub fn is_valid_angle(_axis: u8, a: f32) -> bool {
-    a.is_finite() && a >= -360.0 && a <= 360.0
+    a.is_finite() && (-360.0..=360.0).contains(&a)
 }
 
 /// Check if a 3D position is valid.

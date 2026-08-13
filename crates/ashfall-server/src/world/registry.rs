@@ -60,9 +60,9 @@ impl ObjectRegistry {
     }
 
     /// Get and downcast to a specific type.
-    pub fn get_typed<T: 'static>(&self, id: NetworkID) -> Option<T>
+    pub fn get_typed<T>(&self, id: NetworkID) -> Option<T>
     where
-        T: Clone + Send + Sync,
+        T: 'static + Clone + Send + Sync,
     {
         let arc = self.get(id)?;
         let guard = arc.read();

@@ -12,7 +12,7 @@ impl CellGrid {
     /// Extract cell coordinates from a cell ID.
     /// Returns (world_id, x, y) for exterior cells, or (0, 0, 0) for interiors.
     pub fn decode_cell(cell: u32) -> (u32, i32, i32) {
-        let world_id = (cell >> 16) as u32;
+        let world_id = cell >> 16;
         let y = ((cell >> 8) & 0xFF) as i32;
         let x = (cell & 0xFF) as i32;
         (world_id, x, y)

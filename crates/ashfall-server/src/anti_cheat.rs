@@ -57,14 +57,14 @@ impl AntiCheat {
     /// Validate item condition — item health percent, must be finite and in
     /// [0, 100]. Rejects NaN/negative/absurd values (infinite-repair hack).
     pub fn validate_item_condition(condition: f32) -> bool {
-        condition.is_finite() && condition >= 0.0 && condition <= 100.0
+        condition.is_finite() && (0.0..=100.0).contains(&condition)
     }
 
     // ── Scale ──
 
     /// Validate scale — within sane bounds.
     pub fn validate_scale(scale: f32) -> bool {
-        scale.is_finite() && scale >= MIN_SCALE && scale <= MAX_SCALE
+        scale.is_finite() && (MIN_SCALE..=MAX_SCALE).contains(&scale)
     }
 
     // ── Damage ──

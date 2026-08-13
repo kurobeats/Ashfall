@@ -32,7 +32,7 @@ impl PhysicsValidator {
 
     /// Check if scale is within valid bounds.
     pub fn validate_scale(scale: f32) -> bool {
-        scale.is_finite() && scale >= MIN_SCALE && scale <= MAX_SCALE
+        scale.is_finite() && (MIN_SCALE..=MAX_SCALE).contains(&scale)
     }
 
     /// Validate a full physics state update.
