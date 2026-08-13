@@ -14,6 +14,10 @@ ashfall/
 │   │       ├── constants.rs            # MAX_PLAYER_NAME, ports, channels, version
 │   │       ├── math.rs                 # VaultVector, coords, IsValidCoordinate
 │   │       ├── id.rs                   # NetworkID (newtype over u64)
+│   │       ├── string_cache.rs         # StringTable + CachedString (per-conn ids)
+│   │       ├── crc32.rs                # IEEE CRC-32 for mod-file verification
+│   │       ├── event.rs                # Pipe frame framing + bridge event types
+│   │       │                           #   (player state, NPC spawn/remove/state)
 │   │       └── protocol/              # packet definitions + serde
 │   │           ├── mod.rs
 │   │           ├── channel.rs          # Channel enum (System/Game/Chat)
@@ -50,6 +54,10 @@ ashfall/
 │   │           │                       #   FormID resolution, concrete getters
 │   │           │                       #   (pos, angle, actor state, cell, enabled,
 │   │           │                       #   name, lock, parent cell, combat target)
+│   │           ├── address.rs          # AutoPtr lazy address, prologue-signature
+│   │           │                       #   build selection, thiscall call shims
+│   │           ├── discovery.rs        # NPC seen-set diff (STR VisitForms) +
+│   │           │                       #   actor collector + 10 Hz event flush
 │   │           ├── detour.rs           # Trampoline-based function detour
 │   │           ├── opcode.rs           # Direct-indexed GECK opcode interception
 │   │           │                       #   (PlaceAtMe, AddItem, EquipItem, Kill, Lock)
@@ -57,6 +65,7 @@ ashfall/
 │   │           │                       #   (35 addrs) + 34 byte-exact detour
 │   │           │                       #   recipes (respawn, AI pause, race match,
 │   │           │                       #   fire/activate/PlaceAtMe interception)
+│   │           │                       #   + actor-discovery detour + NPC flush
 │   │           └── animation.rs        # Remote-actor PlayGroup state machine
 │   │                                   #   (vaultmp net_SetActorState semantics)
 │   │
@@ -135,6 +144,8 @@ ashfall/
 │   │       ├── game.rs                 # Client orchestrator (Game)
 │   │       ├── network.rs              # UDP socket, varint framing, ACK queue
 │   │       ├── dispatch.rs             # Packet handler dispatch
+│   │       ├── sync.rs                 # Bridge ↔ server sync: events→packets,
+│   │       │                           #   packets→engine commands (the coop loop)
 │   │       ├── handlers/               # Client-side packet processing
 │   │       │   ├── mod.rs
 │   │       │   ├── game.rs             # Load, weather, global, deleted
@@ -1181,8 +1192,11 @@ round-trips and `sync.rs` maps:
   applied to the local game (remote entities addressed by their `ref_id`)
 
 Wired into the client poll loop; stub IPC mode fails fast instead of hanging.
-The remaining game-side triggers (per-frame player-state hook, loaded-cell NPC
-enumeration) need live-verified RE on the Steam build — see `docs/steam-re.md`.
+The remaining game-side triggers: the per-frame player-state hook (Steam
+frame-function RE), and — for the Steam build only — the twin of the AI
+predicate that the actor-discovery detour hooks (GOG 0x6FAE90 mapped +
+detoured 2026-08-13, byte-guarded; Steam address TBD). See
+`docs/steam-re.md` for both.
 
 ---
 
@@ -1356,7 +1370,7 @@ pub struct MasterServer {
 ## 11. Implementation Phases
 
 > The living phase-by-phase record is [docs/impl-plan.md](./impl-plan.md) —
-> phases 1–10 done + post-phase-10 ingestion and STR-reuse work, 449 tests.
+> phases 1–10 done + post-phase-10 ingestion and STR-reuse work, 463 tests.
 > The plan below is the original design sketch, kept for history.
 
 ### Phase 1: Core Protocol

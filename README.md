@@ -5,7 +5,7 @@ mod for the classic Bethesda games — host a server, connect with your crew,
 and explore the wasteland together. Built from scratch in Rust, inspired by
 the old vaultmp project and its successors.
 
-[![Tests](https://img.shields.io/badge/tests-449%20passed-brightgreen)](#status)
+[![Tests](https://img.shields.io/badge/tests-463%20passed-brightgreen)](#status)
 [![License](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
 [![Status](https://img.shields.io/badge/status-co-op%20MVP%20in%20progress-orange)](#status)
 
@@ -35,12 +35,12 @@ This is an honest status. The plumbing is done; the polish is coming.
 | **Dedicated server** | ✅ Run your own — UDP reliability layer, sessions, anti-cheat validation, persistence, master-server browser listing |
 | **Chat** | ✅ In-game chat relayed by the server |
 | **Server-side rules** | ✅ PvP on/off, game clock (time of day syncs to players), load-order check, player limits |
-| **Owned NPC simulation** | ✅ Ownership protocol — whoever's near an NPC simulates it, handoff on disconnect (the game-side hooks that feed it are the next RE step) |
+| **Owned NPC simulation** | ✅ Ownership protocol — whoever's near an NPC simulates it, handoff on disconnect. The bridge's NPC discovery (detours the engine's actor-processing gate, GOG-verified) + owned-NPC state reporting are built and tested |
 | **Mod support** | ✅ Full ESM/ESP import → server database (both games + all DLC verified); optional load-order verification |
 | **Scripted game modes** | ✅ WASM scripting — servers can run custom game modes written in Rust/WASM |
 | **Combat** | ✅ Server-authoritative damage with Fallout's DR/DT formula |
 | **GUI** | 🚧 Client has a server browser + chat + top-down world view. A 3D view isn't there yet — the game window itself is your view. |
-| **NPC sync in-game** | 🚧 The bridge DLL hooks are being verified against the current Steam build (reverse-engineering work — see [What's Left](#whats-left)) |
+| **NPC sync in-game** | 🚧 Fully wired client/server/bridge — discovery, ownership, state sampling, remote application all built + tested. Needs the Steam-build address + live verification on the game host (see [What's Left](#whats-left)) |
 
 **The goal:** vanilla co-op — your group playing the actual game together,
 no mods required, on either Fallout 3 or New Vegas.
@@ -134,22 +134,27 @@ Full architecture: [docs/architecture.md](./docs/architecture.md)
 
 ## Status & roadmap
 
-**Phases 1–10 complete, 449 tests, zero warnings.** The phase-by-phase record
+**Phases 1–10 complete, 463 tests, zero warnings.** The phase-by-phase record
 lives in [docs/impl-plan.md](./docs/impl-plan.md). Recent highlights:
 
 - Ownership transfer, string compression, and differential state sync
   (ported from Skyrim Together Reborn)
 - Game clock sync, PvP enforcement, entity streaming, mod policy
 - A working bridge→client event pipeline (the co-op loop's transport)
+- NPC discovery via the engine's actor-processing gate + owned-NPC state
+  reporting + remote-NPC application (the full sync loop, GOG-mapped)
 - Verified ESM import for both games + all DLC (real GOG binaries)
 - Live Proton testing: Steam respawn-disable patch applied and verified on
   the game host
 
 ### What's left
 
-- **NPC sync in-game** — the bridge hooks that report NPCs in your cell and
-  the per-frame player-state feed are the remaining reverse-engineering work
-  (verified against the current Steam build on the game host)
+- **NPC sync live** — the full loop is built and tested (discovery detour on
+  the classic build, ownership, state sampling, remote application); the
+  remaining piece is the Steam-build address for the discovery detour and
+  live verification on the game host (see [docs/steam-re.md](./docs/steam-re.md))
+- **Per-frame player hook** — own-player state sync currently triggers from
+  a debug command; the engine's frame function (Steam RE) makes it continuous
 - **3D client view** — today the client shows a top-down projection; the
   game window is the real view
 - **Windows-native client** — currently Linux-only (the bridge DLL already
@@ -168,7 +173,7 @@ engineering, all fair game. One hard rule:
 > you can exercise the whole client+server stack without the game running.
 
 ```bash
-cargo test --workspace   # 449 tests
+cargo test --workspace   # 463 tests
 cargo clippy -- -D warnings
 cargo fmt -- --check
 ```

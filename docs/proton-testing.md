@@ -194,3 +194,15 @@ OP_GET_ANGLE, OP_GET_PARENT_CELL, OP_PROBE_CODE, OP_PROBE_FORM, OP_DUMP_IMAGE.
 Do NOT send vtable-call commands (OP_GET_BASE, OP_GET_ACTOR_STATE,
 OP_GET_ACTOR_VALUE, OP_IS_MOVING) until the GetBaseForm slot is re-derived —
 they crash the game (reproduced twice).
+
+## Next host session (NPC sync, 2026-08-13+)
+
+Everything client/server/bridge-side is built and tested. On the host:
+1. **GOG build**: load a cell with NPCs → verify the actor-discovery detour
+   (AI predicate 0x6FAE90, byte-guarded) emits EVENT_NPC_SPAWN frames, then
+   OP_TRACK_ACTOR → EVENT_NPC_STATE samples, and remote NPCs move via
+   OP_SET_POS/OP_SET_ACTOR_VALUE.
+2. **Steam build**: re-derive the AI-predicate twin (anchor: the vaultmp
+   ai_fix sites live inside it — see docs/steam-re.md "Actor discovery"),
+   plus the frame-function address for the continuous player-state hook
+   (`report_player_state_due`). Remember the dump is FLAT (+0xC00 trap).
