@@ -328,6 +328,12 @@ Admin/ban system: explicitly skipped per project direction.
 
 **466 tests, 0 warnings** (2026-08-13).
 
+2026-08-14: live-collector tests serialized (shared CURRENT/LAST statics raced in
+parallel); repo-wide clippy/lint cleanup (map_or → is_none_or/is_some_and,
+deadlock-safe connect threads, send-without-read-lock, Default impls). No new
+tests. Infra note: game-host OOM (4.8GB probe-side python) killed the tmux/pi
+session — no work lost, checkpoint committed.
+
 P3+P4 can run in parallel (both depend on P2). P6+P7 can run in parallel after P5+P7 foundation ready. P10 can start after P7 IPC module (PR79).
 
 ---

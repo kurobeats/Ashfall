@@ -23,7 +23,7 @@ Auto-detection: `vtable::fo3_lookup_addr()` reads 0x455190 (`51 8b 0d` = GOG)
 vs 0x711EF0 (`55 8b ec 53` = Steam). Respawn patch is byte-guarded inside
 `vaultmp::apply_steam_respawn()` (no-op unless the Steam bytes are present).
 
-## Actor discovery (NPC sync) — GOG mapped, Steam TBD
+## Actor discovery (NPC sync) — GOG + Steam mapped
 
 Session 2026-08-13 (r2 on battlecruiser.chaotic.lan, GOG Fallout3.exe):
 
@@ -48,14 +48,14 @@ and a 10 Hz flush thread emits EVENT_NPC_SPAWN / EVENT_NPC_REMOVE frames
 `hooks::install()` (DllMain-safe: memory writes only; the flush thread
 starts from the TCP server thread).
 
-**Steam re-derivation task:** find the Steam twin of fcn.006FAE90 (the AI
-predicate). Method: the AI-pause recipe sites are already on the remaining-
-patches list; on Steam, locate by the same semantic anchors (predicate reads
-`[this+0xFC]` cmp 3/5 + PlayerCharacter compare — probe candidates live via
-OP_PROBE_CODE before patching, remember the dump is FLAT/+0xC00). Once found:
-same detour, same collector — no other changes needed. The Steam AI-pause
-patch sites in the vaultmp table (ai_fix1..4) are the natural anchor: find
-those first, the predicate is the function containing ai_fix2/ai_fix3.
+**Steam re-derivation: DONE (2026-08-13)** — Steam twin found at **0x7F9B70**
+(`cmp [reg+0xFC],5/3` fingerprint on the flat dump, prologue `55 8B EC 51 57
+8B F9`, structurally identical to classic — same `[edi+0xF8]`/`[edi+0xFC]`
+checks, player compare vs Steam singleton 0x123C674, shared vtable slot
++0x22C). `ai_predicate_site()` picks classic vs Steam by prologue signature;
+same detour + collector, no other changes. Details in the Solved table above.
+The vaultmp AI-pause recipe twins (ai_fix1..4) are derivable from it once
+live-probed.
 
 ## Open: vaultmp behavior-patch sites
 
@@ -241,8 +241,10 @@ interpolation/entity_manager via PlaceAtMe expressions); NVSE source hooks
 save/load/text/model-path only — no AI/process hook.
 
 **Wired:** `apply_fnv_frame_hook()` (per-frame player-state, byte-guarded,
-installed from `hooks::install()`). Remaining FNV: the AI-predicate address
-for the discovery detour + live verification on the host.
+installed from `hooks::install()`). FNV discovery is DONE via the
+ActorProcessManager (above) — the frame hook feeds the list walk. Remaining
+FNV: live verification on the host (middleHighActors tier confirmed; the
++0x0C/+0x18 low and +0x5C high tiers are host-verify candidates).
 
 ## FO3 Anniversary/2023 build — community solution (online research 2026-08-13)
 

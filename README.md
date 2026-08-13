@@ -40,7 +40,7 @@ This is an honest status. The plumbing is done; the polish is coming.
 | **Scripted game modes** | ✅ WASM scripting — servers can run custom game modes written in Rust/WASM |
 | **Combat** | ✅ Server-authoritative damage with Fallout's DR/DT formula |
 | **GUI** | 🚧 Client has a server browser + chat + top-down world view. A 3D view isn't there yet — the game window itself is your view. |
-| **NPC sync in-game** | 🚧 Fully wired client/server/bridge — discovery (classic + Steam re-derived), ownership, state sampling, remote application all built + tested. Needs live verification on the game host (see [What's Left](#whats-left)) |
+| **NPC sync in-game** | 🚧 Fully wired client/server/bridge — discovery (classic + Steam re-derived + FNV ActorProcessManager), ownership, state sampling, remote application all built + tested. Needs live verification on the game host (see [What's Left](#whats-left)) |
 
 **The goal:** vanilla co-op — your group playing the actual game together,
 no mods required, on either Fallout 3 or New Vegas.
@@ -154,8 +154,9 @@ lives in [docs/impl-plan.md](./docs/impl-plan.md). Recent highlights:
   re-derived from the dump; ownership, state sampling, remote application
   all wired); remaining is live verification on the game host
   (see [docs/steam-re.md](./docs/steam-re.md))
-- **Per-frame player hook** — own-player state sync currently triggers from
-  a debug command; the engine's frame function (Steam RE) makes it continuous
+- **Per-frame player hook** — wired for FNV (0x86B386 main-loop hook) and
+  FO3 classic (0x6EEB2F); Steam/Anniversary per-frame + live verification
+  remain
 - **3D client view** — today the client shows a top-down projection; the
   game window is the real view
 - **Windows-native client** — currently Linux-only (the bridge DLL already
