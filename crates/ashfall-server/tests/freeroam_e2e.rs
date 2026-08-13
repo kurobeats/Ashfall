@@ -91,6 +91,7 @@ async fn boot() -> (DedicatedServer, u16) {
             announce: "127.0.0.1".into(),
             master_port: port + 1,
             game_type: "fo3".into(),
+            pvp_enabled: false,
         },
         scripts: ScriptSection { path: dir },
         database: DatabaseSection { path: db },
@@ -119,7 +120,9 @@ async fn test_real_freeroam_module_end_to_end() {
         let mut sock = TestClient::connect(port).await;
 
         // Reject an empty name (freeroam auth gate)
-        sock.send_reliable(&Packet::GameAuth { name: String::new(), password: String::new() }).await;
+        sock.send_reliable(&Packet::GameAuth { name: String::new(), password: String::new(),
+            version: ashfall_core::constants::DEDICATED_VERSION.into(),
+        }).await;
         let mut saw_end = false;
         for _ in 0..8 {
             if let Some(Packet::GameEnd { .. }) = sock.recv_packet().await {
@@ -130,7 +133,9 @@ async fn test_real_freeroam_module_end_to_end() {
         assert!(saw_end, "empty name rejected by freeroam auth");
 
         // Accept a normal name; script-set weather + spawn welcome must arrive
-        sock.send_reliable(&Packet::GameAuth { name: "Wanderer".into(), password: String::new() }).await;
+        sock.send_reliable(&Packet::GameAuth { name: "Wanderer".into(), password: String::new(),
+            version: ashfall_core::constants::DEDICATED_VERSION.into(),
+        }).await;
         let mut saw_load = false;
         let mut saw_weather = false;
         let mut saw_welcome = false;
@@ -142,7 +147,8 @@ async fn test_real_freeroam_module_end_to_end() {
                         saw_weather = weather == 0x00015E5E; // freeroam on_server_init
                     }
                     Packet::GameChat { message } => {
-                        saw_welcome = message == "Welcome to the Wasteland!";
+                        use ashfall_core::string_cache::StringTable;
+                        saw_welcome = message.resolve(&mut StringTable::new()) == "Welcome to the Wasteland!";
                     }
                     _ => {}
                 }

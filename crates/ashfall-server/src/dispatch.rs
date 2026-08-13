@@ -164,7 +164,25 @@ impl Dispatcher {
 
             // ═══ Actor ═══
             Packet::ActorNew { .. } => {
-                match actor::handle_actor_new(&self.registry, &packet) {
+                let (response, broadcast) =
+                    actor::handle_actor_new(&self.registry, session, &packet);
+                let mut result = DispatchResult::new();
+                if let Some(pkt) = response {
+                    result = result.response(pkt);
+                }
+                if let Some(pkt) = broadcast {
+                    result = result.broadcast(pkt);
+                }
+                result
+            }
+            Packet::OwnershipClaim { id } => {
+                match actor::handle_ownership_claim(&self.registry, session, id) {
+                    Some(pkt) => DispatchResult::new().response(pkt),
+                    None => DispatchResult::new(),
+                }
+            }
+            Packet::ActorStateDelta { id, idle, moving, moving_xy, weapon, alerted, sneaking, firing } => {
+                match actor::handle_actor_state_delta(&self.registry, session, id, idle, moving, moving_xy, weapon, alerted, sneaking, firing) {
                     Some(pkt) => DispatchResult::new().broadcast(pkt),
                     None => DispatchResult::new(),
                 }
@@ -189,6 +207,12 @@ impl Dispatcher {
             }
             Packet::UpdateFireWeapon { id, weapon } => {
                 match actor::handle_fire_weapon(&self.registry, session, id, weapon) {
+                    Some(pkt) => DispatchResult::new().broadcast(pkt),
+                    None => DispatchResult::new(),
+                }
+            }
+            Packet::SpellCast { id, spell, source, dual, target } => {
+                match actor::handle_spell_cast(&self.registry, session, id, spell, source, dual, target) {
                     Some(pkt) => DispatchResult::new().broadcast(pkt),
                     None => DispatchResult::new(),
                 }
@@ -395,6 +419,10 @@ impl Dispatcher {
             | Packet::TextNew { .. }
             | Packet::CheckboxNew { .. }
             | Packet::RadioButtonNew { .. }
+            | Packet::OwnershipGranted { .. }
+            | Packet::OwnershipReleased { .. }
+            | Packet::GameTime { .. }
+            | Packet::ServerSettings { .. }
             | Packet::ListNew { .. }
             => {
                 DispatchResult::new()
@@ -408,9 +436,10 @@ impl Dispatcher {
         addr: SocketAddr,
         name: String,
         password: String,
+        version: String,
         session_id: ashfall_core::id::NetworkID,
     ) -> (Option<Session>, Vec<Packet>) {
-        auth::handle_auth(addr, name, password, session_id)
+        auth::handle_auth(addr, name, password, version, session_id)
     }
 
     /// Send world state to a newly authenticated session.

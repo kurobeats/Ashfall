@@ -27,7 +27,7 @@ fn parse_frame(data: &[u8]) -> (u8, Option<u16>, &[u8]) {
 }
 
 fn chat(message: &str) -> Packet {
-    Packet::GameChat { message: message.to_string() }
+    Packet::GameChat { message: message.into() }
 }
 
 #[tokio::test]
@@ -220,7 +220,7 @@ async fn test_first_contact_bootstraps_reliable_channel() {
     let client_addr = client.local_addr().unwrap();
     // NOTE: no server.register_session(client_addr) — this is first contact.
 
-    let auth = Packet::GameAuth { name: "Wanderer".into(), password: String::new() };
+    let auth = Packet::GameAuth { name: "Wanderer".into(), password: String::new(), version: ashfall_core::constants::DEDICATED_VERSION.into() };
     let payload = postcard::to_stdvec(&auth).unwrap();
     client.send(&encode_reliable_frame(0, &payload)).await.unwrap();
 

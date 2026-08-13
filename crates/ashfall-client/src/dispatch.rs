@@ -13,10 +13,20 @@ pub fn dispatch(game: &mut Game, packet: &Packet) {
             game.chat_messages.push(("System".into(), format!("Disconnected (reason: {reason})")));
         }
         Packet::GameChat { message } => {
-            game.chat_messages.push(("Server".into(), message.clone()));
+            let message = message.resolve(&mut game.registry.string_table);
+            game.chat_messages.push(("Server".into(), message));
         }
         Packet::GameWeather { weather } => {
             game.weather = *weather;
+        }
+        Packet::GameTime { year, month, day, hour, time_scale } => {
+            tracing::debug!("Game time: {year}-{month:02}-{day:02} {hour:02}:00 (scale {time_scale})");
+        }
+        Packet::ServerSettings { pvp_enabled } => {
+            game.pvp_enabled = *pvp_enabled;
+        }
+        Packet::SpellCast { id, spell, .. } => {
+            tracing::debug!("Spell cast by {id}: form {spell:#x}");
         }
         Packet::KarmaUpdate { value } => {
             game.karma = *value;
@@ -32,6 +42,9 @@ pub fn dispatch(game: &mut Game, packet: &Packet) {
         Packet::PlayerNew { id, .. } => {
             if game.local_player_id.is_none() { game.local_player_id = Some(*id); }
         }
+        // Ownership: registry tracks the sets; nothing extra to do here —
+        // the bridge consults `Game::owns()` before sending actor updates.
+        Packet::OwnershipGranted { .. } | Packet::OwnershipReleased { .. } => {}
         // Server-authored GUI packets → GuiState
         _ => {
             if game.gui.apply_packet(packet) {

@@ -64,7 +64,7 @@ async fn test_all_packets_delivered_in_order_under_loss() {
 
         // Send the next packet whenever the send window is open
         if next_send < PACKETS {
-            let packet = Packet::GameChat { message: format!("msg {next_send}") };
+            let packet = Packet::GameChat { message: format!("msg {next_send}").into() };
             if server.send_reliable(client_addr, &packet).await.is_ok() {
                 next_send += 1;
             }
@@ -122,7 +122,7 @@ async fn test_all_packets_delivered_in_order_under_loss() {
         }
 
         // Record and ACK (cumulative = highest contiguous received)
-        seen.insert(seq, message);
+        seen.insert(seq, message.into());
         if seq == next_expected {
             while seen.contains_key(&next_expected) {
                 next_expected = next_expected.wrapping_add(1);

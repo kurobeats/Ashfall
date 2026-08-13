@@ -240,7 +240,8 @@ const LOOKUP_FORM_FO3_GOG: usize = 0x0045_5190;
 /// Steam (post-2023): `push ebp; mov ebp,esp; push ebx; push esi; push edi; mov <global>,%edi`
 const LOOKUP_FORM_FO3_STEAM: usize = 0x0071_1EF0;
 
-/// Which FO3 build is running — picked once, by prologue signature.
+/// Which FO3 build is running — picked once, by prologue signature
+/// (generalized as `address::AutoPtr` + `address::select_candidate`).
 static FO3_LOOKUP_ADDR: std::sync::OnceLock<usize> = std::sync::OnceLock::new();
 
 /// Resolve the LookupFormByID address for the running build.
@@ -252,26 +253,16 @@ static FO3_LOOKUP_ADDR: std::sync::OnceLock<usize> = std::sync::OnceLock::new();
 /// classic table.
 pub fn fo3_lookup_addr() -> usize {
     *FO3_LOOKUP_ADDR.get_or_init(|| {
-        #[cfg(target_os = "windows")]
-        {
-            unsafe fn rd4(addr: usize) -> [u8; 4] {
-                let p = addr as *const u8;
-                [p.read(), p.add(1).read(), p.add(2).read(), p.add(3).read()]
-            }
-            // GOG/classic prologue: push ecx; mov <global>,%ecx
-            if unsafe { rd4(LOOKUP_FORM_FO3_GOG) } == [0x51, 0x8B, 0x0D, 0x14] {
-                return LOOKUP_FORM_FO3_GOG;
-            }
-            // Steam post-2023 prologue: push ebp; mov ebp,esp; push ebx
-            if unsafe { rd4(LOOKUP_FORM_FO3_STEAM) } == [0x55, 0x8B, 0xEC, 0x53] {
-                return LOOKUP_FORM_FO3_STEAM;
-            }
-        }
-        #[cfg(not(target_os = "windows"))]
-        {
-            let _ = (LOOKUP_FORM_FO3_GOG, LOOKUP_FORM_FO3_STEAM);
-        }
-        LOOKUP_FORM_FO3_GOG
+        use crate::hooks::address::{select_candidate, Candidate};
+        select_candidate(
+            &[
+                // GOG/classic prologue: push ecx; mov <global>,%ecx
+                Candidate { addr: LOOKUP_FORM_FO3_GOG, signature: &[0x51, 0x8B, 0x0D, 0x14] },
+                // Steam post-2023 prologue: push ebp; mov ebp,esp; push ebx
+                Candidate { addr: LOOKUP_FORM_FO3_STEAM, signature: &[0x55, 0x8B, 0xEC, 0x53] },
+            ],
+            LOOKUP_FORM_FO3_GOG,
+        )
     })
 }
 

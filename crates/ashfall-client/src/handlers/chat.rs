@@ -5,5 +5,5 @@ pub fn handle_incoming_chat(message: &str) -> String {
 }
 
 pub fn build_chat_packet(message: String) -> ashfall_core::protocol::Packet {
-    ashfall_core::protocol::Packet::GameChat { message }
+    ashfall_core::protocol::Packet::GameChat { message: message.into() }
 }

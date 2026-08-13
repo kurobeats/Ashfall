@@ -41,7 +41,7 @@ fn test_world_state_handoff_size() {
             id: NetworkID::new(i + 1),
             ref_id: 0x100 + i as u32,
             base_id: 0x200,
-            name: format!("Object {i}"),
+            name: format!("Object {i}").into(),
             game_pos: [i as f32, 0.0, 0.0],
             net_pos: [i as f32, 0.0, 0.0],
             angle: [0.0; 3],
@@ -61,7 +61,7 @@ fn test_world_state_handoff_size() {
 
 #[test]
 fn test_chat_and_event_sizes() {
-    let chat = Packet::GameChat { message: "hello world".repeat(5) };
+    let chat = Packet::GameChat { message: "hello world".repeat(5).into() };
     let quest = Packet::QuestStage { quest_id: 0x6136D, stage: 100 };
     let hit = Packet::ActorHit {
         target: NetworkID::new(1),

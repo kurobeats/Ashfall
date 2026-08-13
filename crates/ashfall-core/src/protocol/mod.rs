@@ -5,6 +5,7 @@
 
 use crate::form_id::FormIDSync;
 use crate::id::NetworkID;
+use crate::string_cache::{CachedString, StringTable};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -61,8 +62,9 @@ pub const CELL_FLAG_QUEST_ITEM: u32 = 0x08;
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum Packet {
     // ===== System (channel 0) =====
-    /// Client → Server: authenticate with name + password.
-    GameAuth { name: String, password: String },
+    /// Client → Server: authenticate with name + password + client version.
+    /// Version mismatch → server rejects (Reason::Denied) — desync prevention.
+    GameAuth { name: String, password: String, version: String },
     /// Server → Client: game world state ready to load.
     GameLoad,
     /// Server → Client: start game loop.
@@ -71,12 +73,23 @@ pub enum Packet {
     GameEnd { reason: u8 },
     /// Server ↔ Client: mod file verification (filename, CRC32).
     GameMod { filename: String, crc: u32 },
-    /// Server ↔ Client: UI notification message.
-    GameMessage { message: String, emoticon: u8 },
-    /// Server ↔ Client: chat message broadcast.
-    GameChat { message: String },
+    /// Server ↔ Client: UI notification message (string-cached).
+    GameMessage { message: CachedString, emoticon: u8 },
+    /// Server ↔ Client: chat message broadcast (string-cached).
+    GameChat { message: CachedString },
     /// Server → Client: weather change.
     GameWeather { weather: u32 },
+    /// Server → Client: authoritative game clock (STR CalendarService).
+    /// Sent on join + whenever it changes (time advances server-side).
+    GameTime {
+        year: u32,
+        month: u32,
+        day: u32,
+        hour: u32,
+        time_scale: f32,
+    },
+    /// Server → Client: server rules on join (STR ServerSettings).
+    ServerSettings { pvp_enabled: bool },
     /// Server → Client: global variable update.
     GameGlobal { global: u32, value: i32 },
     /// Server → Client: player base race ID.
@@ -92,7 +105,7 @@ pub enum Packet {
         id: NetworkID,
         ref_id: u32,
         base_id: u32,
-        name: String,
+        name: CachedString,
         game_pos: [f32; 3],
         net_pos: [f32; 3],
         angle: [f32; 3],
@@ -108,7 +121,7 @@ pub enum Packet {
     UpdateAngle { id: NetworkID, angle: [f32; 2] },
     UpdateScale { id: NetworkID, scale: f32 },
     UpdateCell { id: NetworkID, cell: u32, pos: [f32; 3] },
-    UpdateName { id: NetworkID, name: String },
+    UpdateName { id: NetworkID, name: CachedString },
     UpdateLock { id: NetworkID, lock: u32 },
     UpdateOwner { id: NetworkID, owner: u32 },
     UpdateActivate { id: NetworkID, actor: NetworkID },
@@ -175,7 +188,41 @@ pub enum Packet {
     UpdateActorDead { id: NetworkID, dead: bool, limbs: u16, cause: i8 },
     UpdateActorValue { id: NetworkID, base: bool, index: u8, value: f32 },
     UpdateFireWeapon { id: NetworkID, weapon: u32 },
-    UpdateActorIdle { id: NetworkID, idle: u32, name: String },
+    /// Client → Server → Clients: actor cast a spell (STR NotifySpellCast).
+    /// Caster may be a player or an owned NPC; the server relays to everyone.
+    SpellCast {
+        id: NetworkID,
+        spell: u32,
+        /// Casting source: weapon (0), left hand (1), right hand (2), other.
+        source: i32,
+        dual: bool,
+        target: NetworkID,
+    },
+    UpdateActorIdle { id: NetworkID, idle: u32, name: CachedString },
+
+    // ===== Ownership (STR OwnershipTransferEvent pattern) =====
+    /// Client → Server: request simulation ownership of an actor.
+    OwnershipClaim { id: NetworkID },
+    /// Server → Client: you own `id` — simulate it, send its updates.
+    OwnershipGranted { id: NetworkID },
+    /// Server → Client: ownership of `id` released (owner left) — may reclaim.
+    OwnershipReleased { id: NetworkID },
+
+    // ===== Actor differential state (STR Differential.h pattern) =====
+    /// Differential actor-state update: only changed fields present; the
+    /// receiver merges into its last-known state. One packet instead of N
+    /// per state-change burst (entering combat flips weapon+alerted+sneaking
+    /// together).
+    ActorStateDelta {
+        id: NetworkID,
+        idle: Option<u32>,
+        moving: Option<u8>,
+        moving_xy: Option<u8>,
+        weapon: Option<u8>,
+        alerted: Option<bool>,
+        sneaking: Option<bool>,
+        firing: Option<bool>,
+    },
 
     // ===== Combat =====
     /// Bridge → Server: actor hit event. Server validates + calculates damage.
@@ -250,7 +297,7 @@ pub enum Packet {
         scale: f32,
     },
     UpdateControl { id: NetworkID, control: u8, key: u8 },
-    UpdateInterior { id: NetworkID, cell: String, spawn: bool },
+    UpdateInterior { id: NetworkID, cell: CachedString, spawn: bool },
     UpdateExterior { id: NetworkID, world: u32, x: i32, y: i32, spawn: bool },
     UpdateContext { id: NetworkID, cells: [u32; 9], spawn: bool },
     UpdateConsole { id: NetworkID, enabled: bool },
@@ -398,4 +445,45 @@ pub enum Packet {
         players: u32,
         max_players: u32,
     },
+}
+
+impl Packet {
+    /// Server-side pre-send pass: bind every `CachedString::Plain` field to
+    /// this session's [`StringTable`] so repeats go out as 2-byte ids.
+    /// Idempotent — `Inline`/`Id` fields pass through untouched.
+    pub fn finalize_strings(&mut self, table: &mut StringTable) {
+        match self {
+            Packet::GameMessage { message, .. } => {
+                if let CachedString::Plain(s) = message {
+                    *message = CachedString::intern(table, std::mem::take(s));
+                }
+            }
+            Packet::GameChat { message } => {
+                if let CachedString::Plain(s) = message {
+                    *message = CachedString::intern(table, std::mem::take(s));
+                }
+            }
+            Packet::ObjectNew { name, .. } => {
+                if let CachedString::Plain(s) = name {
+                    *name = CachedString::intern(table, std::mem::take(s));
+                }
+            }
+            Packet::UpdateName { name, .. } => {
+                if let CachedString::Plain(s) = name {
+                    *name = CachedString::intern(table, std::mem::take(s));
+                }
+            }
+            Packet::UpdateActorIdle { name, .. } => {
+                if let CachedString::Plain(s) = name {
+                    *name = CachedString::intern(table, std::mem::take(s));
+                }
+            }
+            Packet::UpdateInterior { cell, .. } => {
+                if let CachedString::Plain(s) = cell {
+                    *cell = CachedString::intern(table, std::mem::take(s));
+                }
+            }
+            _ => {}
+        }
+    }
 }

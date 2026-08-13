@@ -14,6 +14,7 @@
 //!
 //! Resource: https://github.com/ianpatt/fose/blob/master/common/GameAPI.cpp
 
+pub mod address;
 pub mod animation;
 pub mod detour;
 pub mod memory;

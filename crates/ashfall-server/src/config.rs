@@ -27,6 +27,9 @@ pub struct ServerSection {
     pub master_port: u16,
     #[serde(default = "default_game_type")]
     pub game_type: String,
+    /// Player-vs-player combat allowed (broadcast to clients via ServerSettings).
+    #[serde(default)]
+    pub pvp_enabled: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -69,6 +72,7 @@ impl Default for ServerConfig {
                 port: default_port(),
                 connections: default_connections(),
                 announce: default_announce(),
+                pvp_enabled: false,
                 master_port: 1660,
                 game_type: default_game_type(),
             },
@@ -130,6 +134,7 @@ impl ServerConfig {
                     "announce" => config.server.announce = value.to_string(),
                     "master_port" => config.server.master_port = value.parse().unwrap_or(1660),
                     "game_type" => config.server.game_type = value.to_string(),
+                    "pvp_enabled" => config.server.pvp_enabled = value.eq_ignore_ascii_case("true") || value == "1",
                     "scripts_path" => config.scripts.path = PathBuf::from(value),
                     "db_path" => config.database.path = PathBuf::from(value),
                     "tick_rate" => config.game.tick_rate = value.parse().unwrap_or(30),

@@ -17,6 +17,28 @@ use std::net::SocketAddr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::time::{interval, Duration};
 
+/// Advance the game clock by one game hour. Hour-granular clock with lazy
+/// rollover: 30-day months, 12-month years (ponytail: no real calendar —
+/// Fallout's time-of-day matters, not its astronomy).
+fn advance_hour(t: &mut GameTime) {
+    t.hour += 1;
+    if t.hour < 24 {
+        return;
+    }
+    t.hour = 0;
+    t.day += 1;
+    if t.day <= 30 {
+        return;
+    }
+    t.day = 1;
+    t.month += 1;
+    if t.month <= 12 {
+        return;
+    }
+    t.month = 1;
+    t.year += 1;
+}
+
 /// The dedicated server.
 pub struct DedicatedServer {
     pub config: ServerConfig,
@@ -33,6 +55,9 @@ pub struct DedicatedServer {
     last_quest_stages: HashMap<u32, u16>,
     /// Last game clock seen — tick sync notifies scripts on change.
     last_game_time: Option<GameTime>,
+    /// Fractional game-hours accrued but not yet rolled into the hour-granular
+    /// clock (30× scale ≈ 2 real minutes per game hour — sub-hour drift here).
+    time_accum: f32,
 }
 
 impl DedicatedServer {
@@ -94,11 +119,22 @@ impl DedicatedServer {
             last_weather,
             last_quest_stages,
             last_game_time,
+            time_accum: 0.0,
         })
     }
 
     fn allocate_session_id(&self) -> NetworkID {
         NetworkID::new(self.next_guid.fetch_add(1, Ordering::SeqCst))
+    }
+
+    /// Send a reliable packet to a session, binding string-cache fields
+    /// against that session's dictionary first (STR StringCache: repeats go
+    /// out as 2-byte ids).
+    async fn send(&mut self, addr: SocketAddr, mut packet: Packet) {
+        if let Some(mut s) = self.sessions.get_mut(&addr) {
+            packet.finalize_strings(&mut s.value_mut().string_table);
+        }
+        let _ = self.network.send_reliable(addr, &packet).await;
     }
 
     /// Main server loop — blocks until shutdown.
@@ -148,12 +184,40 @@ impl DedicatedServer {
         // Sync server-authored world-state deltas (weather, quest stages)
         self.sync_world_state().await;
 
+        // Advance the authoritative game clock (STR CalendarService: time
+        // flows server-side at time_scale × real time; scripts override via
+        // set_game_time and the advance continues from there).
+        if let Some(gt) = self.script_engine.game_time.clone() {
+            let delta_secs = self.config.tick_interval_ms() as f32 / 1000.0;
+            self.time_accum += delta_secs * gt.get_scale() / 3600.0;
+            if self.time_accum >= 1.0 {
+                self.time_accum -= 1.0;
+                let mut now = gt.get();
+                advance_hour(&mut now);
+                gt.set(now);
+            }
+        }
+
         // Notify scripts when the game clock changed
         if let Some(gt) = self.script_engine.game_time.clone() {
             let now = gt.get();
             if self.last_game_time != Some(now) {
                 self.last_game_time = Some(now);
                 self.script_engine.notify_game_time(now);
+                // Broadcast the clock to clients (join-time send in handle_auth).
+                let addrs: Vec<SocketAddr> = self
+                    .sessions
+                    .iter()
+                    .filter(|e| e.value().is_ingame())
+                    .map(|e| *e.key())
+                    .collect();
+                let pkt = Packet::GameTime {
+                    year: now.year, month: now.month, day: now.day, hour: now.hour,
+                    time_scale: gt.get_scale(),
+                };
+                for a in &addrs {
+                    self.send(*a, pkt.clone()).await;
+                }
             }
         }
 
@@ -186,7 +250,7 @@ impl DedicatedServer {
         for effect in effects {
             match effect {
                 ScriptEffect::PrivateChat { player_id, message } => {
-                    let pkt = Packet::GameChat { message };
+                    let pkt = Packet::GameChat { message: message.into() };
                     let targets: Vec<SocketAddr> = self
                         .sessions
                         .iter()
@@ -194,11 +258,11 @@ impl DedicatedServer {
                         .map(|e| *e.key())
                         .collect();
                     for addr in targets {
-                        let _ = self.network.send_reliable(addr, &pkt).await;
+                        self.send(addr, pkt.clone()).await;
                     }
                 }
                 ScriptEffect::BroadcastChat { message } => {
-                    let pkt = Packet::GameChat { message };
+                    let pkt = Packet::GameChat { message: message.into() };
                     let addrs: Vec<SocketAddr> = self
                         .sessions
                         .iter()
@@ -206,7 +270,7 @@ impl DedicatedServer {
                         .map(|e| *e.key())
                         .collect();
                     for addr in addrs {
-                        let _ = self.network.send_reliable(addr, &pkt).await;
+                        self.send(addr, pkt.clone()).await;
                     }
                 }
                 ScriptEffect::Kick { player_id } => {
@@ -217,7 +281,7 @@ impl DedicatedServer {
                         .map(|e| *e.key())
                         .collect();
                     for addr in targets {
-                        let _ = self.network.send_reliable(addr, &Packet::GameEnd { reason: Reason::Quit as u8 }).await;
+                        self.send(addr, Packet::GameEnd { reason: Reason::Quit as u8 }).await;
                         self.disconnect(addr).await;
                     }
                 }
@@ -229,7 +293,7 @@ impl DedicatedServer {
                         .map(|e| *e.key())
                         .collect();
                     for addr in addrs {
-                        let _ = self.network.send_reliable(addr, &pkt).await;
+                        self.send(addr, pkt.clone()).await;
                     }
                 }
             }
@@ -239,20 +303,18 @@ impl DedicatedServer {
     /// Broadcast server-authored world-state deltas (weather, quest stages)
     /// to ingame clients. Catches script-driven changes between ticks.
     async fn sync_world_state(&mut self) {
-        let ingame_addrs = || -> Vec<SocketAddr> {
-            self.sessions
-                .iter()
-                .filter(|e| e.value().is_ingame())
-                .map(|e| *e.key())
-                .collect()
-        };
-
         let weather = self.dispatcher.weather.get();
         if weather != self.last_weather {
             self.last_weather = weather;
             let pkt = Packet::GameWeather { weather };
-            for addr in ingame_addrs() {
-                let _ = self.network.send_reliable(addr, &pkt).await;
+            let addrs: Vec<SocketAddr> = self
+                .sessions
+                .iter()
+                .filter(|e| e.value().is_ingame())
+                .map(|e| *e.key())
+                .collect();
+            for addr in addrs {
+                self.send(addr, pkt.clone()).await;
             }
         }
 
@@ -260,8 +322,14 @@ impl DedicatedServer {
             if self.last_quest_stages.get(&quest_id) != Some(&stage) {
                 self.last_quest_stages.insert(quest_id, stage);
                 let pkt = Packet::QuestStage { quest_id, stage };
-                for addr in ingame_addrs() {
-                    let _ = self.network.send_reliable(addr, &pkt).await;
+                let addrs: Vec<SocketAddr> = self
+                    .sessions
+                    .iter()
+                    .filter(|e| e.value().is_ingame())
+                    .map(|e| *e.key())
+                    .collect();
+                for addr in addrs {
+                    self.send(addr, pkt.clone()).await;
                 }
                 // Script on_quest_stage notification (covers script- and
                 // client-driven changes alike).
@@ -305,7 +373,8 @@ impl DedicatedServer {
 
             // Script chat gate: on_player_chat may block the message.
             if let Packet::GameChat { message } = &packet {
-                if !self.script_engine.dispatch_chat(player_id, message) {
+                let msg = message.resolve(&mut session.string_table);
+                if !self.script_engine.dispatch_chat(player_id, &msg) {
                     return;
                 }
             }
@@ -448,13 +517,13 @@ impl DedicatedServer {
             }
         }
 
-        // Send responses to this client
-        for pkt in &responses {
-            let _ = self.network.send_reliable(addr, pkt).await;
+        // Send responses to this client (string-cache bound per-recipient)
+        for pkt in responses {
+            self.send(addr, pkt).await;
         }
 
         // Broadcast to all other clients
-        for pkt in &broadcasts {
+        for pkt in broadcasts {
             let targets: Vec<SocketAddr> = self
                 .sessions
                 .iter()
@@ -463,7 +532,7 @@ impl DedicatedServer {
                 .collect();
 
             for target in &targets {
-                let _ = self.network.send_reliable(*target, pkt).await;
+                self.send(*target, pkt.clone()).await;
             }
         }
 
@@ -474,8 +543,10 @@ impl DedicatedServer {
 
     /// Handle a new GameAuth connection.
     async fn handle_auth(&mut self, addr: SocketAddr, packet: Packet) {
-        let (name, password) = match &packet {
-            Packet::GameAuth { name, password } => (name.clone(), password.clone()),
+        let (name, password, version) = match &packet {
+            Packet::GameAuth { name, password, version } => {
+                (name.clone(), password.clone(), version.clone())
+            }
             _ => return,
         };
 
@@ -483,7 +554,7 @@ impl DedicatedServer {
         if self.sessions.len() >= self.config.server.connections {
             tracing::warn!("Connection rejected: server full from {addr}");
             let end = Packet::GameEnd { reason: 5 }; // ponytail: full
-            let _ = self.network.send_reliable(addr, &end).await;
+            self.send(addr, end).await;
             return;
         }
 
@@ -493,27 +564,27 @@ impl DedicatedServer {
         if !self.script_engine.dispatch_auth(&name, &password) {
             tracing::warn!("Script denied auth for {name} from {addr}");
             let end = Packet::GameEnd { reason: Reason::Denied as u8 };
-            let _ = self.network.send_reliable(addr, &end).await;
+            self.send(addr, end).await;
             return;
         }
 
         let (session, responses) = self.dispatcher.handle_connection(
-            addr, name.clone(), password, session_id,
+            addr, name.clone(), password, version, session_id,
         );
 
         let mut session = match session {
             Some(s) => s,
             None => {
                 for pkt in responses {
-                    let _ = self.network.send_reliable(addr, &pkt).await;
+                    self.send(addr, pkt).await;
                 }
                 return;
             }
         };
 
         // Send initial responses (GameLoad)
-        for pkt in &responses {
-            let _ = self.network.send_reliable(addr, pkt).await;
+        for pkt in responses {
+            self.send(addr, pkt).await;
         }
 
         // G8: Create player object in registry — spawn cell from script callback
@@ -531,14 +602,31 @@ impl DedicatedServer {
         if let Some(arc) = self.dispatcher.registry.get(player_id) {
             let guard = arc.read();
             if let Some(p) = guard.as_any().downcast_ref::<crate::world::objects::Player>() {
-                let _ = self.network.send_reliable(addr, &p.to_new_packet()).await;
+                self.send(addr, p.to_new_packet()).await;
             }
         }
 
-        // Send world state (weather, globals, quests, existing players, cell objects)
+        // Insert the session before world-state sends so the string cache
+        // finalize pass binds names to this connection (first sight → Inline).
+        // The reliable channel was already bootstrapped on first contact in
+        // NetworkManager::try_recv — do NOT re-register it here.
         let world_packets = self.dispatcher.send_world_state(&session);
-        for pkt in &world_packets {
-            let _ = self.network.send_reliable(addr, pkt).await;
+        self.sessions.insert(addr, session);
+        for pkt in world_packets {
+            self.send(addr, pkt).await;
+        }
+
+        // Server rules + authoritative game clock on join (STR ServerSettings /
+        // CalendarService: join-time send, then change broadcasts from the tick).
+        self.send(addr, Packet::ServerSettings {
+            pvp_enabled: self.config.server.pvp_enabled,
+        }).await;
+        if let Some(gt) = self.script_engine.game_time.clone() {
+            let t = gt.get();
+            self.send(addr, Packet::GameTime {
+                year: t.year, month: t.month, day: t.day, hour: t.hour,
+                time_scale: gt.get_scale(),
+            }).await;
         }
 
         // Broadcast PlayerNew to all existing players
@@ -553,16 +641,11 @@ impl DedicatedServer {
                 let player_pkt = p.to_new_packet();
                 for other_addr in &other_addrs {
                     if *other_addr != addr {
-                        let _ = self.network.send_reliable(*other_addr, &player_pkt).await;
+                        self.send(*other_addr, player_pkt.clone()).await;
                     }
                 }
             }
         }
-
-        // Insert session (network channel was bootstrapped on first contact
-        // in NetworkManager::try_recv — do NOT re-register here, that would
-        // reset the mid-handshake reliable channel).
-        self.sessions.insert(addr, session);
 
         tracing::info!("Player {name} (id={player_id}) connected from {addr}");
     }
@@ -586,6 +669,26 @@ impl DedicatedServer {
                 self.script_engine.notify_disconnect(pid.as_u64(), 4);
             }
 
+            // Release simulation ownership of every actor this player owned,
+            // and tell the survivors so they can reclaim (STR OwnershipTransfer).
+            if let Some(pid) = session.player_id {
+                let released = self.dispatcher.registry.release_player_owned(pid);
+                if !released.is_empty() {
+                    let addrs: Vec<SocketAddr> = self
+                        .sessions
+                        .iter()
+                        .filter(|e| e.value().is_ingame())
+                        .map(|e| *e.key())
+                        .collect();
+                    for id in released {
+                        let pkt = Packet::OwnershipReleased { id };
+                        for a in &addrs {
+                            self.send(*a, pkt.clone()).await;
+                        }
+                    }
+                }
+            }
+
             // Remove player object
             if let Some(pid) = session.player_id {
                 self.dispatcher.registry.remove(pid);
@@ -593,5 +696,32 @@ impl DedicatedServer {
 
             self.network.remove_session(addr);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_advance_hour_rolls_over() {
+        let mut t = GameTime { year: 2277, month: 8, day: 17, hour: 9 };
+        advance_hour(&mut t);
+        assert_eq!((t.year, t.month, t.day, t.hour), (2277, 8, 17, 10));
+
+        // Day rollover
+        let mut t = GameTime { year: 2277, month: 8, day: 17, hour: 23 };
+        advance_hour(&mut t);
+        assert_eq!((t.year, t.month, t.day, t.hour), (2277, 8, 18, 0));
+
+        // Month rollover (30-day months)
+        let mut t = GameTime { year: 2277, month: 8, day: 30, hour: 23 };
+        advance_hour(&mut t);
+        assert_eq!((t.year, t.month, t.day, t.hour), (2277, 9, 1, 0));
+
+        // Year rollover
+        let mut t = GameTime { year: 2277, month: 12, day: 30, hour: 23 };
+        advance_hour(&mut t);
+        assert_eq!((t.year, t.month, t.day, t.hour), (2278, 1, 1, 0));
     }
 }

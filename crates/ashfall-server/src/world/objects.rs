@@ -5,6 +5,7 @@
 
 use ashfall_core::id::NetworkID;
 use ashfall_core::protocol::Packet;
+use ashfall_core::string_cache::CachedString;
 use ashfall_core::types::{GameObject, ObjectKind};
 use std::any::Any;
 use std::collections::HashMap;
@@ -78,7 +79,7 @@ impl Object {
             id: self.id(),
             ref_id: self.ref_data.ref_id,
             base_id: self.ref_data.base_id,
-            name: self.name.clone(),
+            name: CachedString::Plain(self.name.clone()),
             game_pos: self.game_pos,
             net_pos: self.net_pos,
             angle: self.angle,

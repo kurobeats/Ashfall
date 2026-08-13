@@ -2,6 +2,7 @@
 
 use ashfall_core::id::NetworkID;
 use ashfall_core::protocol::Packet;
+use ashfall_core::string_cache::StringTable;
 use std::net::SocketAddr;
 use std::time::Instant;
 
@@ -30,6 +31,9 @@ pub struct Session {
     pub bytes_recv: u64,
     /// Anti-replay: last seen reliable sequence number.
     pub last_seq: Option<u16>,
+    /// String dictionary for this connection — the server assigns ids, the
+    /// client learns them from `Inline` payloads (see `ashfall_core::string_cache`).
+    pub string_table: StringTable,
 }
 
 impl Session {
@@ -47,6 +51,7 @@ impl Session {
             bytes_sent: 0,
             bytes_recv: 0,
             last_seq: None,
+            string_table: StringTable::new(),
         }
     }
 

@@ -17,6 +17,9 @@ pub struct ObjectRegistry {
     deleted: DashMap<NetworkID, ()>,
     ref_to_id: DashMap<u32, NetworkID>,
     cell_refs: DashMap<u32, Vec<NetworkID>>,
+    /// Simulation ownership: actor id → owning player id (STR OwnershipTransfer).
+    /// The owner may mutate the actor via client packets; everyone else renders.
+    owners: DashMap<NetworkID, NetworkID>,
     next_id: AtomicU64,
 }
 
@@ -28,6 +31,7 @@ impl ObjectRegistry {
             deleted: DashMap::new(),
             ref_to_id: DashMap::new(),
             cell_refs: DashMap::new(),
+            owners: DashMap::new(),
             next_id: AtomicU64::new(1),
         }
     }
@@ -73,6 +77,7 @@ impl ObjectRegistry {
             let kind = guard.kind();
             self.type_counts.entry(kind).and_modify(|c| *c = c.saturating_sub(1));
             self.deleted.insert(id, ());
+            self.owners.remove(&id);
 
             // Remove from cell_refs
             // ponytail: scan all cell_refs to remove this id.
@@ -90,6 +95,42 @@ impl ObjectRegistry {
 
     pub fn is_deleted(&self, id: NetworkID) -> bool {
         self.deleted.contains_key(&id)
+    }
+
+    // ── simulation ownership (STR OwnershipTransfer pattern) ──
+
+    /// Owning player id of an actor, if any.
+    pub fn owner_of(&self, id: NetworkID) -> Option<NetworkID> {
+        self.owners.get(&id).map(|r| *r.value())
+    }
+
+    /// Assign simulation ownership. Returns true if it was unowned.
+    pub fn set_owner(&self, id: NetworkID, player_id: NetworkID) -> bool {
+        if self.owners.contains_key(&id) {
+            return false;
+        }
+        self.owners.insert(id, player_id);
+        true
+    }
+
+    /// Release ownership, returning the released actor ids.
+    pub fn take_owner(&self, id: NetworkID) -> bool {
+        self.owners.remove(&id).is_some()
+    }
+
+    /// Release every actor owned by `player_id` (on disconnect).
+    /// Returns the released actor ids so callers can broadcast the release.
+    pub fn release_player_owned(&self, player_id: NetworkID) -> Vec<NetworkID> {
+        let released: Vec<NetworkID> = self
+            .owners
+            .iter()
+            .filter(|e| *e.value() == player_id)
+            .map(|e| *e.key())
+            .collect();
+        for id in &released {
+            self.owners.remove(id);
+        }
+        released
     }
 
     /// Register a reference ID → NetworkID mapping.

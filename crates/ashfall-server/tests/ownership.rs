@@ -513,3 +513,142 @@ fn test_item_condition_out_of_range_rejected() {
     let guard = arc.read();
     assert_eq!(guard.as_any().downcast_ref::<Item>().unwrap().condition, 75.0);
 }
+
+// ═══════════════════════════════════════════════════════════════
+// STR port: simulation ownership transfer + differential state
+// ═══════════════════════════════════════════════════════════════
+
+use ashfall_core::protocol::Packet;
+
+fn actor_new_packet(id: u64, ref_id: u32) -> Packet {
+    Packet::ActorNew {
+        id: NetworkID::new(id),
+        ref_id,
+        base_id: 0x1234,
+        values: Default::default(),
+        base_values: Default::default(),
+        race: 0,
+        age: 0,
+        idle: 0,
+        moving: 0,
+        moving_xy: 0,
+        weapon: 0,
+        female: false,
+        alerted: false,
+        sneaking: false,
+        dead: false,
+        death_limbs: 0,
+        death_cause: 0,
+        scale: 1.0,
+    }
+}
+
+#[test]
+fn test_actor_new_grants_ownership_to_sender() {
+    let registry = Arc::new(ObjectRegistry::new());
+    let alice = session(1, Some(NetworkID::new(10)));
+
+    let (response, broadcast) = actor::handle_actor_new(&registry, &alice, &actor_new_packet(100, 0x500));
+    assert_eq!(response, Some(Packet::OwnershipGranted { id: NetworkID::new(100) }), "sender gets ownership");
+    assert!(broadcast.is_some(), "others get the ActorNew to render");
+    assert_eq!(registry.owner_of(NetworkID::new(100)), Some(NetworkID::new(10)));
+
+    // Second client reporting the same actor (same ref_id, different id) → rejected.
+    let bob = session(2, Some(NetworkID::new(20)));
+    let (response2, _) = actor::handle_actor_new(&registry, &bob, &actor_new_packet(101, 0x500));
+    assert!(response2.is_none(), "duplicate ref_id rejected");
+
+    // Same actor id re-reported → rejected (already owned).
+    let (response3, _) = actor::handle_actor_new(&registry, &bob, &actor_new_packet(100, 0x501));
+    assert!(response3.is_none(), "already-owned actor rejected");
+}
+
+#[test]
+fn test_actor_mutation_gated_by_ownership() {
+    let registry = Arc::new(ObjectRegistry::new());
+    let alice = session(1, Some(NetworkID::new(10)));
+    let bob = session(2, Some(NetworkID::new(20)));
+    actor::handle_actor_new(&registry, &alice, &actor_new_packet(100, 0x500));
+
+    // Owner (alice) may mutate the NPC.
+    assert!(actor::handle_actor_state(&registry, &alice, NetworkID::new(100), 1, 2, 3, 4, true, false, false).is_some());
+    // Non-owner (bob) may not.
+    assert!(actor::handle_actor_state(&registry, &bob, NetworkID::new(100), 9, 9, 9, 9, true, true, true).is_none());
+    assert!(actor::handle_actor_value(&registry, &alice, NetworkID::new(100), false, 0x14, 50.0).is_some());
+    assert!(actor::handle_actor_value(&registry, &bob, NetworkID::new(100), false, 0x14, 50.0).is_none());
+
+    // Spell casts: owner relays, non-owner rejected (STR NotifySpellCast).
+    assert!(actor::handle_spell_cast(&registry, &alice, NetworkID::new(100), 0x001234, 1, false, NetworkID::new(20)).is_some());
+    assert!(actor::handle_spell_cast(&registry, &bob, NetworkID::new(100), 0x001234, 1, false, NetworkID::new(20)).is_none());
+    // Own player may always cast.
+    assert!(actor::handle_spell_cast(&registry, &bob, NetworkID::new(20), 0x005678, 2, true, NetworkID::new(10)).is_some());
+}
+
+#[test]
+fn test_actor_state_delta_applies_present_fields_only() {
+    let registry = Arc::new(ObjectRegistry::new());
+    let alice = session(1, Some(NetworkID::new(10)));
+    actor::handle_actor_new(&registry, &alice, &actor_new_packet(100, 0x500));
+
+    // Delta with only `alerted` present.
+    let delta = actor::handle_actor_state_delta(
+        &registry, &alice, NetworkID::new(100),
+        None, None, None, None, Some(true), None, None,
+    );
+    assert!(delta.is_some());
+    assert_eq!(delta.unwrap(), Packet::ActorStateDelta {
+        id: NetworkID::new(100), idle: None, moving: None, moving_xy: None, weapon: None,
+        alerted: Some(true), sneaking: None, firing: None,
+    });
+
+    // Non-owner delta rejected.
+    let bob = session(2, Some(NetworkID::new(20)));
+    assert!(actor::handle_actor_state_delta(
+        &registry, &bob, NetworkID::new(100),
+        Some(5), None, None, None, None, None, None,
+    ).is_none(), "non-owner delta rejected");
+}
+
+#[test]
+fn test_ownership_claim_and_disconnect_release() {
+    let registry = Arc::new(ObjectRegistry::new());
+    let alice = session(1, Some(NetworkID::new(10)));
+    let bob = session(2, Some(NetworkID::new(20)));
+    actor::handle_actor_new(&registry, &alice, &actor_new_packet(100, 0x500));
+
+    // Claim while owned → rejected.
+    assert!(actor::handle_ownership_claim(&registry, &bob, NetworkID::new(100)).is_none());
+
+    // Alice leaves: her owned actors are released.
+    let released = registry.release_player_owned(NetworkID::new(10));
+    assert_eq!(released, vec![NetworkID::new(100)]);
+    assert_eq!(registry.owner_of(NetworkID::new(100)), None);
+
+    // Bob can now claim it.
+    let grant = actor::handle_ownership_claim(&registry, &bob, NetworkID::new(100));
+    assert_eq!(grant, Some(Packet::OwnershipGranted { id: NetworkID::new(100) }));
+    assert_eq!(registry.owner_of(NetworkID::new(100)), Some(NetworkID::new(20)));
+
+    // Claiming an unknown actor → rejected.
+    assert!(actor::handle_ownership_claim(&registry, &bob, NetworkID::new(999)).is_none());
+}
+
+#[test]
+fn test_owner_released_when_actor_removed() {
+    let registry = Arc::new(ObjectRegistry::new());
+    let alice = session(1, Some(NetworkID::new(10)));
+    actor::handle_actor_new(&registry, &alice, &actor_new_packet(100, 0x500));
+    assert!(registry.owner_of(NetworkID::new(100)).is_some());
+
+    registry.remove(NetworkID::new(100));
+    assert!(registry.owner_of(NetworkID::new(100)).is_none(), "remove clears ownership");
+    assert!(registry.is_deleted(NetworkID::new(100)));
+}
+
+#[test]
+fn test_session_string_table_wired() {
+    let mut s = session(99, None);
+    assert!(s.string_table.is_empty());
+    let id = s.string_table.intern("Vault101");
+    assert_eq!(s.string_table.lookup(id), Some("Vault101"));
+}

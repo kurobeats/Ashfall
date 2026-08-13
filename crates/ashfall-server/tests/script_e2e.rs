@@ -76,6 +76,7 @@ async fn test_config() -> ServerConfig {
             announce: "127.0.0.1".into(),
             master_port: free_port(),
             game_type: "fo3".into(),
+            pvp_enabled: false,
         },
         scripts: ScriptSection { path: dir },
         database: DatabaseSection { path: db_path },
@@ -176,6 +177,7 @@ async fn test_script_auth_gate_on_wire() {
         sock.send_reliable(&Packet::GameAuth {
             name: "bob".into(),
             password: String::new(),
+            version: ashfall_core::constants::DEDICATED_VERSION.into(),
         })
         .await;
 
@@ -209,13 +211,15 @@ async fn test_two_client_chat_relay() {
             .send_reliable(&Packet::GameAuth {
                 name: "alice".into(),
                 password: String::new(),
-            })
-            .await;
+            version: ashfall_core::constants::DEDICATED_VERSION.into(),
+        })
+        .await;
 
         let mut bob = TestClient::connect(port).await;
         bob.send_reliable(&Packet::GameAuth {
             name: "carol".into(),
             password: String::new(),
+            version: ashfall_core::constants::DEDICATED_VERSION.into(),
         })
         .await;
 
@@ -252,7 +256,8 @@ async fn test_two_client_chat_relay() {
                 // Stale spawn-welcome / PlayerNew packets may still be in
                 // alice's buffer — keep scanning until bob's relay arrives.
                 if let Packet::GameChat { message } = pkt {
-                    if message == "hello alice" {
+                    use ashfall_core::string_cache::StringTable;
+                    if message.resolve(&mut StringTable::new()) == "hello alice" {
                         saw_relay = true;
                         break;
                     }
@@ -277,6 +282,7 @@ async fn test_script_world_and_spawn_effects_on_wire() {
         sock.send_reliable(&Packet::GameAuth {
             name: "alice".into(),
             password: String::new(),
+            version: ashfall_core::constants::DEDICATED_VERSION.into(),
         })
         .await;
 
@@ -291,7 +297,8 @@ async fn test_script_world_and_spawn_effects_on_wire() {
                         saw_weather = weather == 0x00012345;
                     }
                     Packet::GameChat { message } => {
-                        saw_welcome = message == "Hello from script!";
+                        use ashfall_core::string_cache::StringTable;
+                        saw_welcome = message.resolve(&mut StringTable::new()) == "Hello from script!";
                     }
                     _ => {}
                 }
@@ -318,6 +325,7 @@ async fn test_script_hit_gate_on_wire() {
         sock.send_reliable(&Packet::GameAuth {
             name: "alice".into(),
             password: String::new(),
+            version: ashfall_core::constants::DEDICATED_VERSION.into(),
         })
         .await;
 

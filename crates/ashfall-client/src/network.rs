@@ -147,7 +147,7 @@ mod tests {
     };
 
     fn chat(message: &str) -> Packet {
-        Packet::GameChat { message: message.to_string() }
+        Packet::GameChat { message: message.into() }
     }
 
     /// Parse a wire frame: returns (channel_byte, reliable_seq, owned payload).

@@ -4,7 +4,8 @@
 
 use ashfall_core::id::NetworkID;
 use ashfall_core::protocol::Packet;
-use std::collections::HashMap;
+use ashfall_core::string_cache::StringTable;
+use std::collections::{HashMap, HashSet};
 
 /// A client-side object — owned data, no locks.
 /// ponytail: several fields are written by apply_packet but not yet read
@@ -35,6 +36,8 @@ pub enum ClientObject {
         health: f32,
         alerted: bool,
         sneaking: bool,
+        moving: u8,
+        weapon: u8,
     },
     Player {
         name: String,
@@ -58,6 +61,11 @@ pub struct ClientRegistry {
     pub globals: HashMap<u32, i32>,
     /// Per-entity render-behind interpolation buffers.
     interp: HashMap<NetworkID, crate::world::state::InterpBuffer>,
+    /// String dictionary — the server assigns ids, `Inline` payloads teach
+    /// the client the mapping, `Id` references resolve against it.
+    pub string_table: StringTable,
+    /// Actors this client simulates (server-granted, STR OwnershipTransfer).
+    pub owned_actors: HashSet<NetworkID>,
 }
 
 impl ClientRegistry {
@@ -68,6 +76,8 @@ impl ClientRegistry {
             weather: 0,
             globals: HashMap::new(),
             interp: HashMap::new(),
+            string_table: StringTable::new(),
+            owned_actors: HashSet::new(),
         }
     }
 
@@ -77,6 +87,7 @@ impl ClientRegistry {
             Packet::ObjectNew {
                 id, name, net_pos, angle, scale, cell, enabled, ..
             } => {
+                let name = name.resolve(&mut self.string_table);
                 self.interp
                     .entry(*id)
                     .or_insert_with(crate::world::state::InterpBuffer::new)
@@ -84,10 +95,16 @@ impl ClientRegistry {
                 self.objects.insert(
                     *id,
                     ClientObject::Object {
-                        ref_id: 0, base_id: 0, name: name.clone(),
+                        ref_id: 0, base_id: 0, name,
                         pos: *net_pos, angle: *angle, scale: *scale, cell: *cell, enabled: *enabled,
                     },
                 );
+            }
+            Packet::UpdateName { id, name } => {
+                let name = name.resolve(&mut self.string_table);
+                if let Some(ClientObject::Object { name: n, .. }) = self.objects.get_mut(id) {
+                    *n = name;
+                }
             }
             Packet::UpdatePos { id, pos } => { self.update_pos(*id, *pos); }
             Packet::ObjectRemove { id, .. } => { self.objects.remove(id); self.interp.remove(id); }
@@ -109,12 +126,27 @@ impl ClientRegistry {
                 let health = values.get(&0x14).copied().unwrap_or(100.0);
                 self.objects.insert(*id, ClientObject::Actor {
                     pos: [0.0; 3], angle: [0.0; 3], dead: *dead, health, alerted: false, sneaking: false,
+                    moving: 0, weapon: 0,
                 });
             }
-            Packet::UpdateActorState { id, alerted, sneaking, .. } => {
-                if let Some(ClientObject::Actor { alerted: a, sneaking: s, .. }) = self.objects.get_mut(id) {
-                    *a = *alerted; *s = *sneaking;
+            Packet::UpdateActorState { id, alerted, sneaking, moving, weapon, .. } => {
+                if let Some(ClientObject::Actor { alerted: a, sneaking: s, moving: m, weapon: w, .. }) = self.objects.get_mut(id) {
+                    *a = *alerted; *s = *sneaking; *m = *moving; *w = *weapon;
                 }
+            }
+            Packet::ActorStateDelta { id, moving, weapon, alerted, sneaking, .. } => {
+                if let Some(ClientObject::Actor { moving: m, weapon: w, alerted: a, sneaking: s, .. }) = self.objects.get_mut(id) {
+                    if let Some(v) = moving { *m = *v; }
+                    if let Some(v) = weapon { *w = *v; }
+                    if let Some(v) = alerted { *a = *v; }
+                    if let Some(v) = sneaking { *s = *v; }
+                }
+            }
+            Packet::OwnershipGranted { id } => {
+                self.owned_actors.insert(*id);
+            }
+            Packet::OwnershipReleased { id } => {
+                self.owned_actors.remove(id);
             }
             Packet::UpdateActorValue { id, index, value, .. } => {
                 if let Some(ClientObject::Actor { health, .. }) = self.objects.get_mut(id) {
@@ -224,4 +256,69 @@ mod tests {
         reg.apply_packet(&Packet::ObjectRemove { id, silent: true });
         assert!(!reg.interp.contains_key(&id), "buffer dropped on despawn");
     }
+
+    #[test]
+    fn test_object_name_string_cache_resolved() {
+        use ashfall_core::string_cache::CachedString;
+        let mut reg = ClientRegistry::new();
+        let id = NetworkID::new(11);
+
+        // First sight: Inline { id, value } — client learns the mapping.
+        reg.apply_packet(&Packet::ObjectNew {
+            id, ref_id: 0x100, base_id: 0x200,
+            name: CachedString::Inline { id: 3, value: "Vault101Door".into() },
+            game_pos: [0.0, 0.0, 0.0], net_pos: [0.0, 0.0, 0.0],
+            angle: [0.0; 3], scale: 1.0, cell: 1, enabled: true, lock: 0, owner: 0,
+        });
+        match reg.objects.get(&id).unwrap() {
+            ClientObject::Object { name, .. } => assert_eq!(name, "Vault101Door"),
+            _ => panic!("expected object"),
+        }
+
+        // Repeat: Id only — resolves against the learned table.
+        reg.apply_packet(&Packet::UpdateName { id, name: CachedString::Id(3) });
+        match reg.objects.get(&id).unwrap() {
+            ClientObject::Object { name, .. } => assert_eq!(name, "Vault101Door", "Id resolved via table"),
+            _ => panic!("expected object"),
+        }
+        assert_eq!(reg.string_table.lookup(3), Some("Vault101Door"));
+    }
+
+    #[test]
+    fn test_actor_state_delta_merges_present_fields() {
+        let mut reg = ClientRegistry::new();
+        let id = NetworkID::new(12);
+        reg.apply_packet(&Packet::ActorNew {
+            id, ref_id: 0x500, base_id: 0x1234, values: Default::default(),
+            base_values: Default::default(), race: 0, age: 0, idle: 0, moving: 0,
+            moving_xy: 0, weapon: 0, female: false, alerted: false, sneaking: false,
+            dead: false, death_limbs: 0, death_cause: 0, scale: 1.0,
+        });
+
+        // Delta touches only weapon + sneaking; moving/alerted must survive.
+        reg.apply_packet(&Packet::ActorStateDelta {
+            id, idle: None, moving: None, moving_xy: None,
+            weapon: Some(0x2A), alerted: None, sneaking: Some(true), firing: None,
+        });
+        match reg.objects.get(&id).unwrap() {
+            ClientObject::Actor { weapon, sneaking, moving, alerted, .. } => {
+                assert_eq!(*weapon, 0x2A);
+                assert!(*sneaking);
+                assert_eq!(*moving, 0, "untouched field kept");
+                assert!(!*alerted, "untouched field kept");
+            }
+            _ => panic!("expected actor"),
+        }
+    }
+
+    #[test]
+    fn test_ownership_sets_tracked() {
+        let mut reg = ClientRegistry::new();
+        let id = NetworkID::new(13);
+        reg.apply_packet(&Packet::OwnershipGranted { id });
+        assert!(reg.owned_actors.contains(&id));
+        reg.apply_packet(&Packet::OwnershipReleased { id });
+        assert!(!reg.owned_actors.contains(&id));
+    }
 }
+

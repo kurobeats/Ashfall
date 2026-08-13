@@ -35,7 +35,7 @@ fn fid(id: u32) -> FormID {
 
 #[test]
 fn test_game_auth() {
-    roundtrip(&Packet::GameAuth { name: "VaultDweller".into(), password: "101".into() });
+    roundtrip(&Packet::GameAuth { name: "VaultDweller".into(), password: "101".into(), version: "0.1a".into() });
 }
 
 #[test]
@@ -605,13 +605,121 @@ fn test_unreliable_routing() {
 #[test]
 fn test_max_name_size() {
     let name = "A".repeat(constants::MAX_PLAYER_NAME);
-    roundtrip(&Packet::GameAuth { name, password: "".into() });
+    roundtrip(&Packet::GameAuth { name, password: "".into(), version: constants::DEDICATED_VERSION.into() });
+}
+
+#[test]
+fn test_game_time_roundtrip() {
+    roundtrip(&Packet::GameTime { year: 2277, month: 8, day: 17, hour: 9, time_scale: 30.0 });
+    roundtrip(&Packet::GameTime { year: 2281, month: 12, day: 1, hour: 23, time_scale: 0.0 });
+}
+
+#[test]
+fn test_server_settings_roundtrip() {
+    roundtrip(&Packet::ServerSettings { pvp_enabled: true });
+    roundtrip(&Packet::ServerSettings { pvp_enabled: false });
+}
+
+#[test]
+fn test_spell_cast_roundtrip() {
+    roundtrip(&Packet::SpellCast {
+        id: nid(7),
+        spell: 0x001234,
+        source: 1,
+        dual: true,
+        target: nid(3),
+    });
 }
 
 #[test]
 fn test_max_chat_length() {
     let message = "B".repeat(constants::MAX_CHAT_LENGTH);
-    roundtrip(&Packet::GameChat { message });
+    roundtrip(&Packet::GameChat { message: message.into() });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Ownership transfer
+// ═══════════════════════════════════════════════════════════════
+
+#[test]
+fn test_ownership_packets_roundtrip() {
+    roundtrip(&Packet::OwnershipClaim { id: nid(7) });
+    roundtrip(&Packet::OwnershipGranted { id: nid(7) });
+    roundtrip(&Packet::OwnershipReleased { id: nid(7) });
+}
+
+#[test]
+fn test_actor_state_delta_roundtrip() {
+    // Full delta
+    roundtrip(&Packet::ActorStateDelta {
+        id: nid(3),
+        idle: Some(0x1F),
+        moving: Some(2),
+        moving_xy: Some(1),
+        weapon: Some(0x2A),
+        alerted: Some(true),
+        sneaking: Some(false),
+        firing: Some(true),
+    });
+    // Minimal delta (one field)
+    roundtrip(&Packet::ActorStateDelta {
+        id: nid(3),
+        idle: None,
+        moving: None,
+        moving_xy: None,
+        weapon: None,
+        alerted: None,
+        sneaking: Some(true),
+        firing: None,
+    });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// String cache
+// ═══════════════════════════════════════════════════════════════
+
+#[test]
+fn test_string_cache_finalize_repeats_become_ids() {
+    use ashfall_core::string_cache::{CachedString, StringTable};
+
+    let mut table = StringTable::new();
+    let mut first = Packet::GameChat { message: "hi".into() };
+    first.finalize_strings(&mut table);
+    // First sight: Inline (id + bytes).
+    let Packet::GameChat { message } = &first else { panic!() };
+    assert!(matches!(message, CachedString::Inline { id: 0, .. }));
+
+    let mut second = Packet::GameChat { message: "hi".into() };
+    second.finalize_strings(&mut table);
+    // Repeat: id only, smaller on the wire.
+    let Packet::GameChat { message } = &second else { panic!() };
+    assert_eq!(message, &CachedString::Id(0));
+
+    let plain = postcard::to_stdvec(&Packet::GameChat { message: CachedString::Plain("hi".into()) }).unwrap();
+    let id_only = postcard::to_stdvec(&second).unwrap();
+    assert!(id_only.len() < plain.len(), "id-only must beat plain bytes");
+
+    // Round-trips: a client resolves Inline then Id against its own table.
+    let wire = postcard::to_stdvec(&first).unwrap();
+    let decoded: Packet = postcard::from_bytes(&wire).unwrap();
+    let mut client_table = StringTable::new();
+    let Packet::GameChat { message } = decoded else { panic!() };
+    assert_eq!(message.resolve(&mut client_table), "hi");
+    let wire2 = postcard::to_stdvec(&second).unwrap();
+    let decoded2: Packet = postcard::from_bytes(&wire2).unwrap();
+    let Packet::GameChat { message } = decoded2 else { panic!() };
+    assert_eq!(message.resolve(&mut client_table), "hi");
+}
+
+#[test]
+fn test_finalize_strings_skips_already_cached() {
+    use ashfall_core::string_cache::StringTable;
+    let mut table = StringTable::new();
+    let mut p = Packet::GameChat { message: "x".into() };
+    p.finalize_strings(&mut table);
+    let snapshot = p.clone();
+    p.finalize_strings(&mut table); // second pass: no-op, no re-intern
+    assert_eq!(p, snapshot);
 }
 
 // ═══════════════════════════════════════════════════════════════

@@ -3,6 +3,7 @@
 use ashfall_core::id::NetworkID;
 use ashfall_core::math::is_valid_angle3;
 use ashfall_core::protocol::Packet;
+use ashfall_core::string_cache::CachedString;
 use crate::anti_cheat::AntiCheat;
 use crate::session::Session;
 use crate::world::objects::{Actor, Container, Object, Player};
@@ -10,9 +11,13 @@ use crate::world::registry::ObjectRegistry;
 use std::sync::Arc;
 use std::time::Duration;
 
-/// A client may only mutate entities it owns — its own player object.
-fn owned(session: &Session, id: NetworkID) -> bool {
-    session.player_id == Some(id)
+/// A client may mutate entities it owns: its own player object, or actors
+/// the server granted it simulation ownership of (STR OwnershipTransfer).
+fn owned(registry: &Arc<ObjectRegistry>, session: &Session, id: NetworkID) -> bool {
+    if session.player_id == Some(id) {
+        return true;
+    }
+    registry.owner_of(id) == session.player_id
 }
 
 /// Read the position of any position-bearing entity (Object, Actor, Player).
@@ -63,7 +68,7 @@ pub fn handle_update_pos(
     id: NetworkID,
     pos: [f32; 3],
 ) -> Option<Packet> {
-    if !owned(session, id) {
+    if !owned(registry, session, id) {
         tracing::warn!("Rejected UpdatePos for {id} from {} (not owner)", session.player_name);
         return None;
     }
@@ -92,7 +97,7 @@ pub fn handle_update_angle(
     id: NetworkID,
     angle: [f32; 2],
 ) -> Option<Packet> {
-    if !owned(session, id) {
+    if !owned(registry, session, id) {
         return None;
     }
     let angle3 = [angle[0], 0.0, angle[1]];
@@ -117,7 +122,7 @@ pub fn handle_update_cell(
     cell: u32,
     pos: [f32; 3],
 ) -> Option<Packet> {
-    if !owned(session, id) {
+    if !owned(registry, session, id) {
         return None;
     }
     with_entity_mut(registry, id, |obj| {
@@ -135,15 +140,17 @@ pub fn handle_update_name(
     registry: &Arc<ObjectRegistry>,
     session: &Session,
     id: NetworkID,
-    name: String,
+    name: CachedString,
 ) -> Option<Packet> {
-    if !owned(session, id) {
+    if !owned(registry, session, id) {
         return None;
     }
+    // Client sends Plain; Id/Inline are meaningless inbound.
+    let CachedString::Plain(name) = name else { return None };
     with_entity_mut(registry, id, |obj| {
         obj.name = name.clone();
     });
-    Some(Packet::UpdateName { id, name })
+    Some(Packet::UpdateName { id, name: name.into() })
 }
 
 /// Handle UpdateScale.
@@ -153,7 +160,7 @@ pub fn handle_update_scale(
     id: NetworkID,
     scale: f32,
 ) -> Option<Packet> {
-    if !owned(session, id) {
+    if !owned(registry, session, id) {
         return None;
     }
     if !AntiCheat::validate_scale(scale) {
@@ -188,7 +195,13 @@ pub fn handle_object_new(
     }
 
     let mut obj = Object::new(id, ref_id, base_id, cell);
-    obj.name = name;
+    // CachedString → stored string: Plain/Inline carry bytes, Id is unusable
+    // from a client (the server is the only id assigner) — treat as unnamed.
+    obj.name = match name {
+        ashfall_core::string_cache::CachedString::Plain(s)
+        | ashfall_core::string_cache::CachedString::Inline { value: s, .. } => s,
+        ashfall_core::string_cache::CachedString::Id(_) => String::new(),
+    };
     obj.game_pos = game_pos;
     obj.net_pos = net_pos;
     obj.angle = angle;

@@ -297,6 +297,21 @@ PRs within a phase often parallelizable unless noted.
 
 **362 tests, 0 warnings** (lib + test targets). See `docs/external-ingestion-plan.md` for per-item status.
 
+### Phase 11: SkyrimTogetherReborn reuse (items 1–4) ✅
+
+| Item | What shipped | Files |
+|------|-------------|-------|
+| 1. Address library / thiscall | `AutoPtr` (lazy cached address), `select_candidate` (prologue-signature build selection), `call_thiscall_0..3` (x86 thiscall at explicit addr, edx preserved; x64 `extern "system"` fallback). `fo3_lookup_addr` refactored onto it. | `crates/ashfall-bridge/src/hooks/address.rs`, `hooks/vtable.rs` |
+| 2. Differential state | `ActorStateDelta` — presence-optional actor state (STR Differential.h pattern): one packet per state burst, receiver merges. Server applies + relays owner-gated; client merges into `ClientObject::Actor`. | `protocol/mod.rs`, `handlers/actor.rs`, client `world/registry.rs` |
+| 3. StringCache | `StringTable` + `CachedString` (Plain/Inline{id,value}/Id). Server assigns ids per-session, `Packet::finalize_strings` binds in the send path (dedicated.rs `send()`), repeats go out as 2-byte ids. Wired into ObjectNew/UpdateName/UpdateActorIdle/GameChat/GameMessage/UpdateInterior. | `ashfall-core/src/string_cache.rs`, `protocol/mod.rs`, `dedicated.rs`, client registry/dispatch |
+| 4. Ownership transfer | `OwnershipClaim/Granted/Released` packets + registry owner map. ActorNew grants sender ownership (dedup by ref_id); mutations gated to own player OR sim owner; disconnect releases all owned actors + broadcasts release. Client tracks `owned_actors`; bridge hooks: `Game::claim_ownership()` / `Game::owns()`. | `protocol/mod.rs`, `world/registry.rs`, `handlers/actor.rs`, `handlers/object.rs`, `dedicated.rs`, client `game.rs`/`registry.rs` |
+
+390 tests, 0 warnings. Ownership/delta rules proven in `tests/ownership.rs` (5 handler-level tests); string-cache wire semantics in `string_cache.rs` unit tests + `wire_format.rs`. Next: bridge `events.rs` NPC-spawn reporting → `claim_ownership()` wiring.
+
+| 5. Time/settings/spell/version | `GameTime` (authoritative clock, advances server-side at time_scale, 30-day-month rollover, join-send + change-broadcast — STR CalendarService), `ServerSettings { pvp_enabled }` (config → join broadcast), `SpellCast` (owner-gated relay, STR NotifySpellCast), `GameAuth.version` (reject mismatch, STR AuthenticationRequest). | `protocol/mod.rs`, `dedicated.rs`, `config.rs`, `handlers/auth.rs`, `handlers/actor.rs`, client `game.rs`/`dispatch.rs` |
+
+396 tests, 0 warnings.
+
 P3+P4 can run in parallel (both depend on P2). P6+P7 can run in parallel after P5+P7 foundation ready. P10 can start after P7 IPC module (PR79).
 
 ---
