@@ -194,6 +194,10 @@ pub fn flush_npc_diff() -> Vec<(u8, u32)> {
 mod tests {
     use super::*;
 
+    /// The live-collector tests poke the shared CURRENT/LAST statics — they
+    /// must not run interleaved with each other (parallel test threads).
+    static TEST_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+
     #[test]
     fn test_first_observation_all_added() {
         let mut seen = HashSet::new();
@@ -275,6 +279,7 @@ mod tests {
 
     #[test]
     fn test_collect_ref_ids_feeds_diff() {
+        let _g = TEST_LOCK.lock().unwrap();
         reset_known();
         collect_ref_ids(&[0x200, 0x201]);
         let events = flush_npc_diff();
@@ -285,6 +290,7 @@ mod tests {
     #[test]
     fn test_collect_and_flush_emits_events() {
         use ashfall_core::event::NpcSpawnEvent;
+        let _g = TEST_LOCK.lock().unwrap();
         reset_known();
 
         // The engine processes two actors this frame (formIDs from the fake
