@@ -93,8 +93,16 @@ impl IpcClient {
         }
     }
 
-    /// Drain any engine EVENT frames received so far.
+    /// Drain any engine EVENT frames received so far. Reads whatever is
+    /// buffered on the transport first (non-blocking) — events arrive from
+    /// the bridge independently of command round-trips, so pollers must
+    /// actually read the socket.
     pub fn poll_events(&mut self) -> Vec<ashfall_core::event::PipeFrame> {
+        let mut buf = vec![0u8; 4096];
+        let n = self.transport.try_read(&mut buf);
+        if n > 0 {
+            self.ingest(&buf[..n]);
+        }
         std::mem::take(&mut self.event_buf)
     }
 

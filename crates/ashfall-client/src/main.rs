@@ -1,4 +1,6 @@
 mod config;
+#[cfg(test)]
+mod coop_loop;
 mod dispatch;
 mod game;
 mod ipc;

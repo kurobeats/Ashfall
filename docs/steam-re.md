@@ -273,3 +273,17 @@ the Anniversary build (downgrade covers it).
 
 **kFOSE** (lStewieAl/kFOSE) is the kNVSE animation fork for the classic
 build — confirms the classic build is the modding baseline post-2023.
+
+## FOSE source — provenance confirmed (online 2026-08-13)
+
+The original FOSE source (deleted from GitHub) is archived at
+**fose.silverlock.org** (`beta/fose_v1_3_beta2.7z` — full src tree + the
+1.7/1.7ng DLLs). The `FALLOUT_VERSION_1_7` block in GameAPI.cpp matches
+Ashfall's `fo3_17` table **exactly** (LookupFormByID 0x455190, ExtractArgs
+0x517950, CreateFormInstance 0x43CDA0, ConsoleManager 0x62B5D0, DataHandler
+0x106CDCC) — the table is now triple-confirmed (FOSE source + xFOSE + live
+binary). The `1_7ng` block is the 2010 NoGore variant (ConsoleManager
+0x62B490), NOT the 2023 Anniversary build — no shortcut there. The version
+blocks show FO3 address drift across releases (1.0→1.7: LookupFormByID
+0x454CC0→0x455190 etc.) — per-site semantic re-derivation is the only way
+for the Anniversary build.

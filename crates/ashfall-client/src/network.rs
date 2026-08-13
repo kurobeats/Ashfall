@@ -48,16 +48,19 @@ impl ClientNetwork {
 
         let channel = Channel::from_packet(packet);
         let payload = postcard::to_stdvec(packet)?;
-        let is_unreliable = Channel::is_unreliable(packet);
 
         let mut buf = Vec::with_capacity(HEADER_SIZE + 3 + payload.len());
-        let seq = self.send_seq;
-        self.send_seq = self.send_seq.wrapping_add(1);
+        let is_unreliable = Channel::is_unreliable(packet);
 
         if is_unreliable {
             buf.extend_from_slice(&(payload.len() as u16).to_le_bytes());
             buf.push(channel as u8);
         } else {
+            // Only reliable sends consume the reliable sequence space —
+            // unreliable frames carry no seq, so bumping here would leave
+            // holes the server's reassembly stalls on.
+            let seq = self.send_seq;
+            self.send_seq = self.send_seq.wrapping_add(1);
             let seq_bytes = encode_varint_seq(seq);
             buf.extend_from_slice(&((seq_bytes.len() + payload.len()) as u16).to_le_bytes());
             buf.push(CHANNEL_RELIABLE_FLAG | channel as u8);

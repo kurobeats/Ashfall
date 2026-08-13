@@ -531,6 +531,7 @@ impl DedicatedServer {
 
         // Broadcast to all other clients
         for pkt in broadcasts {
+
             let targets: Vec<SocketAddr> = self
                 .sessions
                 .iter()

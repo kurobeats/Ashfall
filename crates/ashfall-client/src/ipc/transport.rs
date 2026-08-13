@@ -55,6 +55,15 @@ impl IpcTransport {
         matches!(self, IpcTransport::Stub)
     }
 
+    /// Non-blocking read of whatever is buffered right now (0 when nothing).
+    pub fn try_read(&self, buf: &mut [u8]) -> usize {
+        match self {
+            IpcTransport::Tcp(stream) => stream.try_read(buf).unwrap_or(0),
+            IpcTransport::Unix(stream) => stream.try_read(buf).unwrap_or(0),
+            IpcTransport::Stub => 0,
+        }
+    }
+
     /// Send raw bytes.
     pub async fn send(&mut self, data: &[u8]) {
         match self {

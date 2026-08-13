@@ -162,11 +162,13 @@ impl Game {
     pub async fn poll_bridge(&mut self) -> anyhow::Result<()> {
         let Some(ipc) = self.ipc.as_mut() else { return Ok(()) };
         let frames = ipc.poll_events();
+        tracing::info!("poll_bridge: {} event frames", frames.len());
         if frames.is_empty() {
             return Ok(());
         }
         let Some(local) = self.local_player_id else { return Ok(()) };
         let packets = crate::sync::events_to_packets(&frames, local);
+        tracing::info!("poll_bridge: {} packets to send", packets.len());
         for pkt in packets {
             self.send_reliable(pkt).await?;
         }
