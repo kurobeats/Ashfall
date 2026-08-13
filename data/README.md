@@ -71,3 +71,27 @@ path = "./data/fallout3/fallout3.sqlite3"   # or falloutnv/falloutnv.sqlite3
 [server]
 game_type = "fo3"                            # or "fnv"
 ```
+
+## Load-order verification (mod policy)
+
+The server can require clients to match a load order (optional — off by
+default). Print the ready-to-paste config lines for a game's files:
+
+```bash
+cargo run -p ashfall-server -- --list-mod-crc data/fallout3
+# mod = "Fallout3.esm:C092218B"
+# mod = "Anchorage.esm:A4BA9D10"
+# ...
+```
+
+Then paste into `[server]` config:
+
+```ini
+mod = "Fallout3.esm:C092218B"
+mod = "Anchorage.esm:A4BA9D10"
+```
+
+Clients whose load order differs (wrong file, order, or CRC) are rejected at
+connect. CRCs are IEEE CRC-32 of the raw file bytes — the same implementation
+on both sides (`ashfall_core::crc32`), verified byte-for-byte against zlib on
+every file above. Empty `mod` list = no policy.

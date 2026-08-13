@@ -1,177 +1,195 @@
-# Ashfall
+# ☢️ Ashfall
 
-**Rust multiplayer mod for Fallout 3 / Fallout: New Vegas.** Server-authoritative dedicated server with WASM scripting, UDP networking, SQLite persistence, and an egui client browser. Started as a recreation of [vaultmp-extended](https://github.com/massdivide/vaultmp-extended), got bigger, fast.
+**Play Fallout 3 / Fallout: New Vegas with your friends.** A co-op multiplayer
+mod for the classic Bethesda games — host a server, connect with your crew,
+and explore the wasteland together. Built from scratch in Rust, inspired by
+the old vaultmp project and its successors.
 
-[![Status](https://img.shields.io/badge/phases-1%E2%80%9310%20complete-brightgreen)](#status)
-[![Tests](https://img.shields.io/badge/tests-396%20passed-brightgreen)](https://github.com/kurobeats/Ashfall/actions)
+[![Tests](https://img.shields.io/badge/tests-449%20passed-brightgreen)](#status)
 [![License](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
-[![Work in Progress](https://img.shields.io/badge/status-work%20in%20progress-orange)](#whats-left)
-
-> **All 34 items of the external ingestion plan complete** ([docs/external-ingestion-plan.md](./docs/external-ingestion-plan.md)): NVSE plugin interface fixes, real VTable getters, a fully functional reliability layer (ACK/NACK, RTO retransmit, send window, rate limiting, varint framing), an ESM/ESP → SQLite import tool, and a zero-warning build.
->
-> **Bridge:** full memory patching system (SafeWrite*, VTable access, trampoline detours), GECK opcode interception engine with 11 default handlers, 36 pipe command opcodes, 7 event sink types, 110 tests, plus the full classic-FO3 multiplayer patch table + 34 detour recipes (`hooks/vaultmp`) and the remote-actor animation state machine (`hooks/animation`). Proton runtime-tested live (2026-08-07/08, game host) — see [What's Left](#whats-left) + [docs/proton-testing.md](./docs/proton-testing.md).
->
-> **NVMP lineage ingestion** ([vaultmp](https://github.com/foxtacles/vaultmp) + [mojave-online](https://github.com/knork-fork/mojave-online), both MIT): full classic-Steam FO3 multiplayer patch table + 34 byte-exact detour recipes (`hooks/vaultmp`), remote-actor animation state machine (`hooks/animation`, vaultmp `net_SetActorState` semantics), render-behind interpolation buffer with extrapolation (`ashfall-client` `world::state`, mojave-online semantics), 2,580-function GECK script index + host-function roadmap (`docs/geck/`), NVMP server-mod ESPs (`data/plugins/`), and a vaultmp-dump ↔ SQLite cross-checker (`scripts/verify-esm-dumps.py`). 396 tests, zero warnings.
->
-> **Server hardening + game-mode hooks:** ItemNew is server-authoritative (client minting rejected), item condition capped (anti-cheat), Punch packet wired to `on_actor_punch` with ownership checks, and new WASM host functions (`resurrect_actor`, `lock_object`, `unlock_object`, `set_faction_relation` — shared `FactionMatrix` so script instances see each other). Client gained a top-down world view (interpolated positions projected to a canvas) and the `OP_PLAY_GROUP` IPC constant. CI added (build + test + clippy + i686 Windows cross-build).
->
-> **Both games imported + verified against real GOG binaries** (FO3 1.7.0.3, FNV 1.4.0.525(a)): full ESM/DLC → SQLite import (one transaction, ~35s), load-order `--import-index`, dump-corpus verification green, and both address tables re-verified statically on the actual executables — the GOG FO3 exe IS the classic build the tables were made against.
+[![Status](https://img.shields.io/badge/status-co-op%20MVP%20in%20progress-orange)](#status)
 
 ---
 
-## Quick Start
+## What is this?
 
-Three terminals, no game needed:
+Ashfall is a **server-authoritative multiplayer mod** — a dedicated server
+owns the world, and players connect to it. Your game still runs the real
+Fallout 3/NV on your machine (through Steam/GOG); Ashfall syncs players,
+position, combat, chat, and world state between them. Think
+Skyrim Together, but for the Capital Wasteland and the Mojave.
+
+**The stack, in one line:** Rust server (UDP + SQLite + WASM scripting),
+a native Linux client with a server browser, and a small DLL injected into
+the game that lets it talk to the client.
+
+---
+
+## What works right now
+
+This is an honest status. The plumbing is done; the polish is coming.
+
+| Area | Status |
+|------|--------|
+| **Connect & play together** | ✅ Two players can connect, authenticate, see each other, and sync position/state over the network (real, tested) |
+| **Dedicated server** | ✅ Run your own — UDP reliability layer, sessions, anti-cheat validation, persistence, master-server browser listing |
+| **Chat** | ✅ In-game chat relayed by the server |
+| **Server-side rules** | ✅ PvP on/off, game clock (time of day syncs to players), load-order check, player limits |
+| **Owned NPC simulation** | ✅ Ownership protocol — whoever's near an NPC simulates it, handoff on disconnect (the game-side hooks that feed it are the next RE step) |
+| **Mod support** | ✅ Full ESM/ESP import → server database (both games + all DLC verified); optional load-order verification |
+| **Scripted game modes** | ✅ WASM scripting — servers can run custom game modes written in Rust/WASM |
+| **Combat** | ✅ Server-authoritative damage with Fallout's DR/DT formula |
+| **GUI** | 🚧 Client has a server browser + chat + top-down world view. A 3D view isn't there yet — the game window itself is your view. |
+| **NPC sync in-game** | 🚧 The bridge DLL hooks are being verified against the current Steam build (reverse-engineering work — see [What's Left](#whats-left)) |
+
+**The goal:** vanilla co-op — your group playing the actual game together,
+no mods required, on either Fallout 3 or New Vegas.
+
+---
+
+## Quick start (no game needed)
+
+Three terminals. This runs the full stack with a fake "game" — enough to see
+the auth → world-load → sync flow work.
 
 ```bash
-# Terminal 1 — master server
+# 1. Master server (lists servers for the browser)
 cargo run -p ashfall-master
 
-# Terminal 2 — dedicated server
+# 2. Dedicated server
 cargo run -p ashfall-server
 
-# Terminal 3 — client (stub mode)
+# 3. Client (stub mode — no Fallout required)
 cargo run -p ashfall-client
 ```
 
-Client connects to `127.0.0.1:1770`. Stub mode sends canned data — enough to verify the full auth→load→sync flow without Fallout running.
-
-**With Proton/Wine:** see the [Proton Setup Guide](./docs/proton-setup.md).
-
----
-
-## Status
-
-**Phases 1–10 complete. 396 tests, 0 failures. Zero-warning build** (lib + test targets).
-
-| Phase | What's built |
-|-------|-------------|
-| 1. Protocol | 140+ packet variants — physics, combat damage, NPC AI, quests, dialogue, FO3/FNV globals, cell snapshots. FormID type. 71 wire format tests. |
-| 2. Server | UDP networking with a real reliability layer — ACK/NACK control frames, Jacobson/Karels RTO with exponential-backoff retransmission, 32-packet send window, per-channel priority queues (System > Game > Chat), per-address token-bucket rate limiting, varint sequence framing. Session state machine. Object registry. Packet dispatch routing all 140+ variants. Verified by real-UDP loss simulation (50/50 packets in order under 25% loss). |
-| 3. Sync | 9-cell visibility grid with enter/leave diff. Position, angle, velocity, actor state, item, container sync. Combat resolution (Fallout damage formula). NPC AI packages + faction hostility. |
-| 4. Persistence | SQLite — 17 tables. Records, weapons, NPCs, quest stages, dialogue flags, karma, reputation (FNV), hardcore stats, factions. Startup load at boot. **ESM/ESP import tool** (`ashfall-server --import-esm Fallout3.esm --import-game fo3 --import-db data/fallout3/fallout3.sqlite3`) populates all tables from plugin files via a native TES4 parser. |
-| 5. Scripting | wasmtime v22 engine. **All 35 callbacks dispatched** — auth/chat/spawn/hit-gate/equip/activate/item/death/quest/time/cell/window/dialogue/lock + actor sub-events; **all 56 host functions real** (world/quest/chat/items/combat/GUI/meta, incl. `resurrect_actor`/`lock_object`/`unlock_object`/`set_faction_relation` added 2026-08-07). Timers, script effect queue (chat/kick/packet broadcast), **real Rust-compiled freeroam WASM game mode builds and runs end-to-end** (wasm32 via rustup; SDK macros emit `#[link(wasm_import_module = "env")]`). 19 WAT runtime tests + 5 e2e wire tests. SDK crate. |
-| 6. GUI | eframe/egui app. Server browser with direct connect. Chat overlay. Server-authored widget manager (windows, buttons, edits, checkboxes, lists). |
-| 7. Client | UDP networking. Connection flow (auth→load→ingame). Client object registry. Handlers for all packet categories. Background 30Hz poll loop. |
-| 8. Master | UDP server registry. Announce/query/cull lifecycle. Client integration for server browser population. |
-| 9. Security | Anti-cheat validator — position bounds, velocity caps, teleport detection, item count limits, damage bounds, sequence nonces, FormID whitelist. **Handler ownership enforcement**: clients may only mutate their own player object (movement, actor state/value/death, controls, combat hits) and their own inventory items (item→container→player chain); world/NPC objects are server-authoritative. 22 ownership/PvP/item tests. |
-| 10. Bridge | Memory patching system (SafeWrite*, VTable access, trampoline detours). 36 command opcodes (Tier 1-4). GECK opcode interception engine (11 default handlers, direct-indexed static table). Real VTable getters (cell, enabled, name, lock, parent cell, combat target — FO3/FNV aware). 7 event sink types + pipe event frames. **110 tests** (incl. vaultmp patch-recipe + animation state machine suites). **Every hardcoded constant verified against the real GOG 1.7.0.3 binaries with two independent tools** (r2 + python/objdump/headers — see scripts/re/) — 4 wrong opcodes and 2 wrong field offsets were found and fixed; FOSE/NVSE plugin ABI corrected to the real interface layout. **Re-verified 2026-08-07 on the actual GOG downloads** (FO3 + FNV exes): call-site counts match (FO3 lookup 883, FNV extract-args 480, ...) — the GOG FO3 exe IS the classic Steam-era build, so the vaultmp recipes apply as-is. Bridge cross-compiles to i686 Windows and runs under wine (TCP pipe protocol round-trip verified, no game needed). |
-
-## What's Left
-
-- **Co-op game mode content** — the full script stack now works (host functions, callbacks, real WASM builds); next is writing actual game modes: co-op quest logic, NPC AI behaviors, custom rules on top of the freeroam example.
-- **Proton runtime testing** — **big progress on the Steam build** (2026-08-07/08, live on the game host): image dump pipeline works (PE-header based), Steam `LookupFormByID` re-derived at **0x711EF0** (form map 0x1224B84) and auto-selected by prologue signature, **cdecl + thiscall convention bugs found and fixed** (vtable thiscall shims validated under wine). **Live with a loaded save**: `OP_GET_POS` returns real coords `(42878.5, -72844.4, 11118.6)`, angle/cell/field getters work, lookup + vtable probe green. **Steam respawn-disable patch applied + live-verified (2026-08-08)**: sites 0x9C43A5 (predicate NOP), 0x8C9CE0→0x8C9D5D (guard jump), 0x8C9D52 (==2-path flag-write NOP) — player stays dead on the ground, position frozen 5+ min, respawn flag + death-handled flag both stay clear, no SP death menu, game stable; byte-guarded `vaultmp::apply_steam_respawn()` runs from `hooks::install()` (safe no-op on non-Steam builds). **Still blocked on**: vtable-call getters (`get_base`, `get_actor_value`) — the Steam TESObjectREFR vtable layout differs from xFOSE at index 4 (destructor, not GetBaseForm); next step is locating the real GetBaseForm slot / baseForm field via `OP_PROBE_FORM` (obj-field scan for the player base form 0x707). GOG 1.7.0.3 = classic table confirmed byte-for-byte. See [docs/steam-re.md](./docs/steam-re.md) + [docs/proton-testing.md](./docs/proton-testing.md) + [scripts/re/README.md](./scripts/re/README.md).
-- **Proton integration testing** — end-to-end test with real Fallout running under Proton/Wine.
-- **Windows native client** — currently Linux-only. Bridge DLL already cross-compiles for Windows.
-- **Client world renderer** — the GUI layer renders a top-down world view (interpolated positions projected to a canvas, X right / Z up, centered on the local player — `world::view` + `ui/world_view`), but there is no 3D view yet. `on_actor_punch` now has a wire source (Punch packet).
-- **Bridge animation executor** — `hooks::animation` (remote-actor PlayGroup state machine) is tested and ready; the `OP_PLAY_GROUP` pipe command exists on both bridge (0x0028 → `hooks::play_group`) and client IPC. Wiring it into the game needs the engine-side PlayGroup dispatcher (classic Steam `0x45F704`, or re-derived per build) — the GOG build matches the classic table.
-- **Item ownership chain** — items are server-authoritative: client ItemNew rejected, count/condition capped (condition ≤ 100), equipped gated by the item→container→player chain (`handlers/item.rs`).
-
-> ✅ ESM reader tool: **done** — `ashfall-server --import-esm Fallout3.esm --import-game fo3 --import-db data/fallout3/fallout3.sqlite3` populates all 17 tables from plugin files. **Verified against the real game**: base game + all 5 DLC esms (GOG 1.7.0.3, 276MB master) import in **~35s total** — 124,540 records, 299 unique weapons, 3,613 NPCs (NPC_+CREA), 1,317 quests, 451 factions, 747k world references. Import was originally ~4h for the master alone: **per-record autocommit now wrapped in one transaction** (`esm_import.rs`). Requires real-binary fixes: 24-byte record headers, TES4 16-byte tail, and zlib decompression for compressed records (flag 0x00040000, data = [u32 size][zlib]).
->
-> ✅ Verification corpus: **green** — `scripts/verify-esm-dumps.py` against the vaultmp `other/data3` dumps: every dump formID present in the DB (0 missing across weapons/refs/races/terminals; NPC_ dump count 2,717 all present + 886 CREA). DLC esms import with `--import-index 1..5` so their placeholder formIDs (all authored at 0x01) don't collide in one DB — the engine normally rewrites that byte by load order at runtime.
->
-> ✅ New Vegas: **imported + verified** — FalloutNV.esm + 5 story DLC + 4 pre-order packs (GOG 1.4.0.525(a), md5 `0f374bae...`) → `data/falloutnv/falloutnv.sqlite3`: 141,502 records, 496 weapons, 6,455 NPCs, 3,028 items, 772 factions, 427,089 refs. Counts exceed the old documented run (488 weapons / 380,497 refs) because `--import-index` recovers cross-DLC collisions. FNV exe statically verified: `fnv_14` table holds on this binary (EXTRACT_ARGS 0x5ACCB0 = 480 call sites, CREATE_FORM_INSTANCE 7, CONSOLE 32, GET_FORM_BY_ID 43; form map 0x11C54C0 = data global). Quirk: GRA.esm authors some refs at hi=0 (overrides, correct) and one at hi=2 (1-in-427k collision with HonestHearts — acceptable).
->
-> ✅ ESP import path: **verified** — the four NVMP server-mod ESPs (`data/plugins/`) import cleanly without masters (285/41/54/62 records; overrides only, base stats come from the master ESM).
+The client connects to `127.0.0.1:1770`. Stub mode feeds canned data so the
+whole loop runs without the game installed.
 
 ---
 
-## Build
+## Running a server for real
+
+Point the server at your game's data, import it once, then run:
 
 ```bash
-git clone https://github.com/YOUR_ORG/ashfall.git
-cd ashfall
+# One-time import (Fallout 3, base + DLCs)
+cargo run -p ashfall-server -- --import-esm data/fallout3/Fallout3.esm \
+    --import-game fo3 --import-db data/fallout3/fallout3.sqlite3 --import-index 0
+# ...repeat with --import-index 1..5 for each DLC
 
-cargo build --release
-cargo test --workspace   # 396 tests
+# Then run the server
+cargo run -p ashfall-server
 ```
 
-Optional: cross-compile bridge DLL for Proton (`sudo apt install mingw-w64`):
+**Server config** (`~/.config/ashfall/server.ini`, ini or TOML):
 
-```bash
-rustup target add i686-pc-windows-gnu
-cargo build --release --target i686-pc-windows-gnu -p ashfall-bridge
-cargo build --release --target i686-pc-windows-gnu -p ashfall-bridge-proxy
+```ini
+[server]
+host = 0.0.0.0
+port = 1770
+connections = 8
+game_type = fo3        ; fo3 or fnv
+pvp_enabled = true     ; allow players to fight each other
+time_scale = 30        ; how fast game time flows
+mod = "Fallout3.esm:C092218B"   ; optional: require this load order
 ```
 
-> ⚠️ FO3/FNV are **32-bit** executables — real Proton injection needs
-> `i686-pc-windows-gnu` (see [docs/proton-setup.md](./docs/proton-setup.md)).
+`ashfall-server --list-mod-crc <game-data-dir>` prints the exact `mod =`
+lines for your files, so you don't hand-type CRCs.
+
+**Playing with a real game under Proton/Wine:** see the
+[Proton Setup Guide](./docs/proton-setup.md) — it covers the injected bridge
+DLL and where saves live.
 
 ---
 
-## Architecture
+## The tech (for the curious)
 
 ```
-┌─────────────┐     UDP     ┌──────────────┐     UDP     ┌────────────┐
-│ ashfall-     │◄──────────►│ ashfall-      │◄──────────►│ ashfall-   │
-│ master       │            │ server        │            │ client     │
-│ (registry)   │            │ (authority)   │            │ (egui)     │
-└─────────────┘            └──────┬────────┘            └─────┬──────┘
-                                  │                           │
-                          ┌───────┴───────┐          ┌───────┴───────┐
-                          │ wasmtime      │          │ TCP loopback  │
-                          │ (scripts)     │          │ 127.0.0.1:1771│
-                          ├───────────────┤          └───────┬───────┘
-                          │ SQLite        │                  │
-                          │ (persistence) │          ┌───────┴───────┐
-                          └───────────────┘          │ Proton/Wine   │
-                                                     │ ┌───────────┐ │
-                        Native Linux (all)           │ │bridge.dll │ │
-                                                     │ │(MinGW)    │ │
-                                                     │ └─────┬─────┘ │
-                                                     │ ┌─────┴─────┐ │
-                                                     │ │Fallout3   │ │
-                                                     │ │.exe       │ │
-                                                     │ └───────────┘ │
-                                                     └───────────────┘
+┌──────────┐   UDP    ┌───────────┐   UDP    ┌─────────┐   TCP    ┌──────────────┐
+│ master   │◄────────►│ server    │◄────────►│ client  │◄────────►│ bridge.dll   │
+│ (browser │          │ (authority│          │ (egui)  │ 1771     │ (in game,    │
+│  listing)│          │  + WASM)  │          │         │          │  Proton/Wine)│
+└──────────┘          └───────────┘          └─────────┘          └──────────────┘
 ```
 
-- **Server-authoritative** — server owns all game state. Clients send input; server validates and broadcasts.
-- **3 ordered channels** (System, Game, Chat) + 1 unordered for position/physics updates.
-- **30 Hz tick rate** with 9-cell grid for visibility management.
-- **postcard** binary serialization over custom UDP reliability layer.
-- **wasmtime** v22 for sandboxed WASM game mode scripts.
+- **Server-authoritative** — the server owns all game state; clients send
+  input, the server validates and broadcasts. No trust-the-client.
+- **Custom UDP reliability layer** — ACK/NACK, retransmission, send window,
+  rate limiting (RakNet semantics, no RakNet). 3 ordered channels + 1
+  fire-and-forget for positions.
+- **SQLite persistence** — the full game world (records, NPCs, weapons,
+  quests, factions) imported natively from your ESM/ESP files.
+- **WASM game modes** — sandboxed scripts drive server rules (auth gates,
+  spawn logic, chat commands, custom quests).
+- **Real Fallout engine hooks** — a small DLL (injected via dinput8 proxy)
+  reads/writes the live game: positions, actor state, combat, respawn
+  behavior. The Steam-build reverse engineering lives in
+  [docs/steam-re.md](./docs/steam-re.md).
 
-Full architecture: [architecture.md](./docs/architecture.md) | Implementation plan: [impl-plan.md](./docs/impl-plan.md)
+Full architecture: [docs/architecture.md](./docs/architecture.md)
+
+---
+
+## Status & roadmap
+
+**Phases 1–10 complete, 449 tests, zero warnings.** The phase-by-phase record
+lives in [docs/impl-plan.md](./docs/impl-plan.md). Recent highlights:
+
+- Ownership transfer, string compression, and differential state sync
+  (ported from Skyrim Together Reborn)
+- Game clock sync, PvP enforcement, entity streaming, mod policy
+- A working bridge→client event pipeline (the co-op loop's transport)
+- Verified ESM import for both games + all DLC (real GOG binaries)
+- Live Proton testing: Steam respawn-disable patch applied and verified on
+  the game host
+
+### What's left
+
+- **NPC sync in-game** — the bridge hooks that report NPCs in your cell and
+  the per-frame player-state feed are the remaining reverse-engineering work
+  (verified against the current Steam build on the game host)
+- **3D client view** — today the client shows a top-down projection; the
+  game window is the real view
+- **Windows-native client** — currently Linux-only (the bridge DLL already
+  cross-compiles)
+- **Co-op game modes** — the script stack works; actual game modes (shared
+  quests, custom rules) are content work on top of it
 
 ---
 
 ## Contributing
 
-**Vibe coding very welcome.** AI-assisted code, LLM-generated PRs, prompt-engineering — all fair game. One hard rule:
+**Vibe coding very welcome** — AI-assisted code, LLM-generated PRs, prompt
+engineering, all fair game. One hard rule:
 
-> **It must pass tests.** No untested code lands on `main`. Stub mode means you can test the full client+server stack without the game running.
-
-### Quick flow
+> **It must pass tests.** No untested code lands on `main`. Stub mode means
+> you can exercise the whole client+server stack without the game running.
 
 ```bash
-git checkout -b ashfall-phase{phase}-pr{number}-{desc}
-# Work
-$EDITOR ...
-# Verify
-cargo test -p ashfall-server
+cargo test --workspace   # 449 tests
 cargo clippy -- -D warnings
 cargo fmt -- --check
-# Push
-git push origin ...
 ```
 
-### Where to start
-
-| Skill | Good task |
-|-------|-----------|
-| Rust beginner | constants, math, wire format tests |
-| Networking | UDP sockets, reliability layer, session management |
-| Database | SQLite schema, CRUD, startup load |
-| WASM / compilers | wasmtime engine, host functions, callbacks |
-| GUI / gamedev | egui widgets, server browser, chat UI |
-| Reverse engineering | Gamebryo VTable hooks, Proton bridge (Phase 10) |
-
-For details: [Implementation Plan](./docs/impl-plan.md). Stuck? Open a discussion or issue.
+Good first tasks: wire-format tests, client UI, WASM game-mode content,
+networking edge cases, and (if you enjoy reverse engineering) the Steam-build
+hook work — see [docs/steam-re.md](./docs/steam-re.md) for the handoff notes.
 
 ---
 
+## Docs
+
+| Doc | What it covers |
+|-----|----------------|
+| [architecture.md](./docs/architecture.md) | Full design: crates, protocol, reliability, server/client/bridge |
+| [impl-plan.md](./docs/impl-plan.md) | Phase-by-phase record + what's left |
+| [proton-setup.md](./docs/proton-setup.md) | Building + injecting the bridge, running under Proton |
+| [steam-re.md](./docs/steam-re.md) | Steam-build reverse-engineering notes + next-session handoff |
+| [geck/](./docs/geck/) | 2,580-function GECK/NVSE script index |
+
 ## License
 
-GPL-3.0.
+GPL-3.0. Not affiliated with Bethesda Softworks or Obsidian Entertainment.
+Fallout is a trademark of Bethesda Softworks.

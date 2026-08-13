@@ -282,8 +282,16 @@ Responsibilities:
   race matching, fire/activate/PlaceAtMe interception — byte-exact recipes from
   vaultmp, valid for the classic FO3 build (which the GOG exe matches).
 - Drive remote-actor animations (`hooks::animation`): actor-state → PlayGroup opcodes.
+- **Address library** (`hooks::address`, STR TiltedReverse port): `AutoPtr`
+  (lazy resolve-once cached address), `select_candidate` (per-build address
+  selection by prologue signature — GOG vs Steam), and `call_thiscall_0..3`
+  (x86 thiscall at an explicit address, edx preserved). `fo3_lookup_addr`
+  uses it to pick the right `LookupFormByID` per build.
 - Expose TCP server on `127.0.0.1:1771` (loopback-only, no external exposure).
-- Encode/decode pipe protocol (same opcodes: `PIPE_OP_COMMAND`, `PIPE_OP_RETURN`, etc.).
+- Encode/decode pipe protocol (length-prefixed frames: `PIPE_OP_COMMAND`,
+  `PIPE_OP_RETURN`, `PIPE_OP_EVENT`, etc. — see `ashfall_core::event`).
+- Queue + push engine event frames to the native client (event queue drained
+  in the connection loop; `report_player_state()` samples the local player).
 - Communicate with native `ashfall-client` over TCP.
 
 ### 2.4 IPC Transport
@@ -540,165 +548,32 @@ impl ObjectRegistry {
 
 ### 3.1 Packet Enum
 
-```rust
-// crates/ashfall-core/src/protocol/mod.rs
+The `Packet` enum in `crates/ashfall-core/src/protocol/mod.rs` is the single
+source of truth (140+ variants, flat serde enum, postcard-encoded). This doc
+lists the categories and the post-2026-08 additions; field-level detail lives
+in the source.
 
-use serde::{Serialize, Deserialize};
-use crate::id::NetworkID;
-use std::collections::HashMap;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[repr(u8)]
-pub enum Channel {
-    System = 0,
-    Game   = 1,
-    Chat   = 2,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum Packet {
-    // === System ===
-    GameStart,
-    GameLoad,
-    GameEnd { reason: u8 },
-    GameAuth { name: String, password: String },
-    GameMod { filename: String, crc: u32 },
-    GameMessage { message: String, emoticon: u8 },
-    GameChat { message: String },
-    GameWeather { weather: u32 },
-    GameGlobal { global: u32, value: i32 },
-    GameBase { player_base: u32 },
-    GameDeleted { deleted: HashMap<u32, Vec<u32>> },
-
-    // === Object ===
-    ObjectNew {
-        id: NetworkID,
-        ref_id: u32,
-        base_id: u32,
-        name: String,
-        pos: [f32; 3],
-        net_pos: [f32; 3],
-        angle: [f32; 3],
-        cell: u32,
-        enabled: bool,
-        lock: u32,
-        owner: u32,
-    },
-    VolatileNew { id: NetworkID, base_id: u32, pos: [f32; 3] },
-    ObjectRemove { id: NetworkID, silent: bool },
-    UpdatePos { id: NetworkID, pos: [f32; 3] },
-    UpdateAngle { id: NetworkID, angle: [f32; 2] },
-    UpdateCell { id: NetworkID, cell: u32, pos: [f32; 3] },
-    UpdateName { id: NetworkID, name: String },
-    UpdateLock { id: NetworkID, lock: u32 },
-    UpdateOwner { id: NetworkID, owner: u32 },
-    UpdateActivate { id: NetworkID, actor: NetworkID },
-    UpdateSound { id: NetworkID, sound: u32 },
-
-    // === Item ===
-    ItemNew {
-        id: NetworkID,
-        ref_id: u32,
-        base_id: u32,
-        container: NetworkID,
-        count: u32,
-        condition: f32,
-        equipped: bool,
-        silent: bool,
-        stick: bool,
-    },
-    UpdateItemCount { id: NetworkID, count: u32, silent: bool },
-    UpdateItemCondition { id: NetworkID, condition: f32, health: u32 },
-    UpdateItemEquipped { id: NetworkID, equipped: bool, silent: bool, stick: bool },
-
-    // === Container ===
-    ContainerNew { id: NetworkID, ref_id: u32, base_id: u32 },
-    ItemListNew { id: NetworkID, items: Vec<NetworkID> },
-
-    // === Actor ===
-    ActorNew {
-        id: NetworkID,
-        ref_id: u32,
-        base_id: u32,
-        values: HashMap<u8, f32>,
-        base_values: HashMap<u8, f32>,
-        race: u32,
-        age: i32,
-        idle: u32,
-        moving: u8,
-        moving_xy: u8,
-        weapon: u8,
-        female: bool,
-        alerted: bool,
-        sneaking: bool,
-        dead: bool,
-        death_limbs: u16,
-        death_cause: i8,
-    },
-    UpdateActorState {
-        id: NetworkID,
-        idle: u32,
-        moving: u8,
-        moving_xy: u8,
-        weapon: u8,
-        alerted: bool,
-        sneaking: bool,
-        firing: bool,
-    },
-    UpdateActorRace { id: NetworkID, race: u32, age: i32, delta_age: i32 },
-    UpdateActorSex { id: NetworkID, female: bool },
-    UpdateActorDead { id: NetworkID, dead: bool, limbs: u16, cause: i8 },
-    UpdateActorValue { id: NetworkID, base: bool, index: u8, value: f32 },
-    UpdateFireWeapon { id: NetworkID, weapon: u32 },
-    UpdateActorIdle { id: NetworkID, idle: u32, name: String },
-
-    // === Player ===
-    PlayerNew {
-        id: NetworkID,
-        ref_id: u32,
-        base_id: u32,
-        controls: HashMap<u8, (u8, bool)>,
-    },
-    UpdateControl { id: NetworkID, control: u8, key: u8 },
-    UpdateInterior { id: NetworkID, cell: String, spawn: bool },
-    UpdateExterior { id: NetworkID, world: u32, x: i32, y: i32, spawn: bool },
-    UpdateContext { id: NetworkID, cells: [u32; 9], spawn: bool },
-    UpdateConsole { id: NetworkID, enabled: bool },
-
-    // === Window / GUI ===
-    WindowNew { id: NetworkID, parent: NetworkID, label: String, pos: [f32; 4], size: [f32; 4], locked: bool, visible: bool, text: String },
-    WindowRemove { id: NetworkID },
-    ButtonNew { id: NetworkID, parent: NetworkID, label: String, pos: [f32; 4], size: [f32; 4], locked: bool, visible: bool, text: String },
-    TextNew { id: NetworkID, parent: NetworkID, label: String, pos: [f32; 4], size: [f32; 4], locked: bool, visible: bool, text: String },
-    EditNew { id: NetworkID, parent: NetworkID, label: String, pos: [f32; 4], size: [f32; 4], locked: bool, visible: bool, text: String, max_len: u32, validation: String },
-    CheckboxNew { id: NetworkID, parent: NetworkID, label: String, pos: [f32; 4], size: [f32; 4], locked: bool, visible: bool, text: String, selected: bool },
-    RadioButtonNew { id: NetworkID, parent: NetworkID, label: String, pos: [f32; 4], size: [f32; 4], locked: bool, visible: bool, text: String, selected: bool, group: u32 },
-    ListNew { id: NetworkID, parent: NetworkID, label: String, pos: [f32; 4], size: [f32; 4], locked: bool, visible: bool, text: String, multiselect: bool },
-    ListItemNew { id: NetworkID, container: NetworkID, text: String, selected: bool },
-    ListItemRemove { id: NetworkID },
-    UpdateWindowPos { id: NetworkID, pos: [f32; 4] },
-    UpdateWindowSize { id: NetworkID, size: [f32; 4] },
-    UpdateWindowVisible { id: NetworkID, visible: bool },
-    UpdateWindowLocked { id: NetworkID, locked: bool },
-    UpdateWindowText { id: NetworkID, text: String },
-    UpdateEditMaxLen { id: NetworkID, max_len: u32 },
-    UpdateEditValidation { id: NetworkID, validation: String },
-    UpdateCheckboxSelected { id: NetworkID, selected: bool },
-    UpdateRadioButtonSelected { id: NetworkID, previous: NetworkID, selected: bool },
-    UpdateRadioButtonGroup { id: NetworkID, group: u32 },
-    UpdateListMultiSelect { id: NetworkID, multiselect: bool },
-    UpdateListItemSelected { id: NetworkID, selected: bool },
-    UpdateListItemText { id: NetworkID, text: String },
-    UpdateWindowMode { enabled: bool },
-    UpdateWindowClick { id: NetworkID },
-    UpdateWindowReturn { id: NetworkID },
-
-    // === Master server ===
-    MasterQuery,
-    MasterAnnounce { name: String, map: String, players: u32, max_players: u32, rules: HashMap<String, String>, mod_files: Vec<String> },
-    MasterUpdate { name: String, map: String, players: u32, max_players: u32 },
-}
-```
+Categories:
+- **System**: `GameStart/Load/End/Auth/Mod/Message/Chat/Weather/Global/Base/Deleted`,
+  quest + dialogue flags, karma, reputation, hardcore stats. `GameAuth` now
+  carries the client **version** (mismatch → rejected); `GameModList` carries
+  the client's full load order for the mod policy.
+- **Object / Item / Container / Actor / Player**: create + field-level update
+  packets. String fields (`ObjectNew.name`, `UpdateName`, `UpdateActorIdle.name`,
+  `GameChat.message`, `GameMessage.message`, `UpdateInterior.cell`) are
+  `CachedString` — the server interns them per-connection (see §8.3).
+- **Combat / physics / projectiles**: `ActorHit` → server resolver →
+  `ActorDamaged`/`ActorDeathExt`; `SpellCast` (owner-gated relay, STR
+  `NotifySpellCast` shape); `UpdateVelocity` on the unreliable channel.
+- **Ownership (STR OwnershipTransfer)**: `OwnershipClaim` (client → server),
+  `OwnershipGranted` / `OwnershipReleased` (server → client). Who simulates
+  which NPC; the owner's state updates relay, everyone else renders.
+- **Actor differential state (STR Differential.h)**: `ActorStateDelta` — all
+  fields optional; only changed fields present, receiver merges into its last
+  known state.
+- **World**: `GameTime` (authoritative clock, join-send + change broadcast),
+  `ServerSettings` (pvp rule on join), `CellSnapshot`, window/GUI widgets.
+- **Master server**: `MasterQuery/Announce/Update`.
 
 ### 3.2 Wire Format
 
@@ -777,20 +652,27 @@ under 25% randomized loss.
 ### 4.1 Server State
 
 ```rust
-// crates/ashfall-server/src/dedicated.rs
+// crates/ashfall-server/src/dedicated.rs (simplified)
 
 pub struct DedicatedServer {
     config: ServerConfig,
-    registry: Arc<ObjectRegistry>,
-    sessions: DashMap<NetworkID, Arc<Session>>,
-    db: Database,
-    script_engine: ScriptEngine,
+    dispatcher: Dispatcher,          // registry, weather, globals, quests,
+                                     // factions, pos_history, pvp_enabled,
+                                     // expected_mods
+    sessions: DashMap<SocketAddr, Session>,  // per-session string_table
+    network: NetworkManager,         // UDP + reliability
+    script_engine: ScriptEngine,     // wasmtime + shared GameTimeState
     master_announcer: MasterAnnouncer,
-    weather: RwLock<u32>,
-    globals: DashMap<u32, i32>,
-    game_time: RwLock<GameTime>,
-    time_scale: RwLock<f32>,
+    // tick sync: last_weather, last_quest_stages, last_game_time, time_accum
 }
+```
+
+Config keys (`server.ini`, ini or TOML): `host`, `port`, `connections`,
+`announce`, `master_port`, `game_type` (fo3/fnv), `pvp_enabled` (enforced in
+combat), `mod` (repeatable: `mod = "Fallout3.esm:C092218B"` — the expected
+client load order, off when empty), `tick_rate`, `time_scale`, `scripts_path`,
+`db_path`. `ashfall-server --list-mod-crc <dir>` prints ready-to-paste `mod =`
+lines (IEEE CRC-32 of the raw file bytes, base master first).
 ```
 
 ### 4.2 Main Loop
@@ -1227,9 +1109,22 @@ Server owns truth. Client sends input (position, angles, controls), server valid
 - Chat/events: reliable ordered channel
 - Actor state changes: reliable ordered channel
 
-### 8.3 Delta Compression (Future)
+### 8.3 Bandwidth (done — STR Differential + StringCache)
 
-ponytail: skip initial; simple full state per update. Add delta compression when bandwidth problem proven.
+`ponytail:` originally deferred until bandwidth was proven a problem; the
+SkyrimTogetherReborn port made it cheap enough to ship now.
+
+- **`ActorStateDelta`** (STR `Differential.h` pattern): actor state changes are
+  batched into one packet with optional fields — only changed fields present,
+  the receiver merges into its last-known state. One packet per state burst
+  (entering combat flips weapon+alerted+sneaking together) instead of N.
+- **StringCache** (`ashfall_core::string_cache`): names, cell names, and chat
+  text repeat constantly (every cell entry re-sends the same object names).
+  The server is the sole id assigner: each connection keeps a `StringTable`;
+  the first sight of a string goes out as `Inline { id, value }`, repeats as a
+  2-byte `Id`. The binding happens per-recipient in the server send path
+  (`Packet::finalize_strings` in `dedicated.rs send()`), so object names in
+  cell handoffs compress after first sight.
 
 ### 8.4 Interpolation
 
@@ -1246,6 +1141,48 @@ fn interpolate_position(last: [f32; 3], current: [f32; 3], t: f32) -> [f32; 3] {
      last[2] + (current[2] - last[2]) * t]
 }
 ```
+
+### 8.5 Ownership Transfer (STR OwnershipTransferEvent pattern)
+
+Who simulates which NPC. The server is the authority: `ActorNew` grants the
+sender simulation ownership (first reporter wins; duplicate `ref_id` reports
+are rejected), tracked in a registry `owners` map (actor id → owning player
+id). The owner may mutate the actor via client packets; everyone else renders
+it. `OwnershipClaim` lets a client take over an *unowned* actor; on disconnect
+the server releases every owned actor and broadcasts `OwnershipReleased` so
+survivors can reclaim. NPCs register in their owner's cell, so `UpdateContext`
+enter/leave streaming carries them between players.
+
+### 8.6 Authoritative Game Clock + Server Rules
+
+- **GameTime** (STR `CalendarService`): the server owns the clock — `GameTime`
+  (year/month/day/hour) advances each tick at `time_scale × real time` (hour-
+  granular with a fractional accumulator, 30-day-month rollover; scripts can
+  override via `set_game_time`). Sent on join + broadcast on change; clients
+  display it.
+- **ServerSettings**: `pvp_enabled` from config is broadcast on join and
+  **enforced** in the combat resolver (player-on-player hits rejected when
+  off).
+
+### 8.7 Bridge Event Pipeline (the coop loop)
+
+`ashfall_core::event` defines a length-prefixed pipe frame
+(`[len][opcode][payload]`) so command responses and engine events share the
+bridge's TCP stream unambiguously. The bridge DLL queues event frames
+(`EVENT_PLAYER_STATE`, `EVENT_NPC_SPAWN`) and flushes them in its connection
+loop; `OP_REPORT_PLAYER_STATE` (0x00F7) samples the local player via the
+vtable getters. The client buffers interleaved events during command
+round-trips and `sync.rs` maps:
+
+- events → packets: own-player state → `UpdatePos/UpdateAngle/ActorStateDelta`
+  + health; NPC spawn → `ActorNew` + `OwnershipClaim` (ref-derived entity ids,
+  high bit set, never colliding with server ids)
+- packets → commands: remote `UpdatePos/UpdateAngle` → `OP_SET_POS/OP_SET_ANGLE`
+  applied to the local game (remote entities addressed by their `ref_id`)
+
+Wired into the client poll loop; stub IPC mode fails fast instead of hanging.
+The remaining game-side triggers (per-frame player-state hook, loaded-cell NPC
+enumeration) need live-verified RE on the Steam build — see `docs/steam-re.md`.
 
 ---
 
@@ -1417,6 +1354,10 @@ pub struct MasterServer {
 ---
 
 ## 11. Implementation Phases
+
+> The living phase-by-phase record is [docs/impl-plan.md](./impl-plan.md) —
+> phases 1–10 done + post-phase-10 ingestion and STR-reuse work, 449 tests.
+> The plan below is the original design sketch, kept for history.
 
 ### Phase 1: Core Protocol
 1. `ashfall-core` crate: types, constants, ID, math, Packet enum with serde
