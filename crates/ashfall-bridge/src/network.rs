@@ -154,6 +154,10 @@ pub fn run_server(addr: &str) {
     }
     let listener = listener.expect("bind retried 60x");
 
+    // 10 Hz NPC seen-set flush (STR cadence) — turns the collector's
+    // processed-actor set into spawn/remove event frames for the client.
+    crate::hooks::vaultmp::start_npc_flush_thread();
+
     // Accept one connection (single client)
     for stream in listener.incoming() {
         if !RUNNING.load(std::sync::atomic::Ordering::SeqCst) {

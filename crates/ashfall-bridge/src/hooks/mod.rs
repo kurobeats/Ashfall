@@ -130,6 +130,11 @@ pub fn install() {
     unsafe {
         vaultmp::apply_steam_respawn();
     }
+    // Actor-discovery detour (classic FO3: 0x6FAE90 AI predicate, verified
+    // 2026-08-13 — the engine's per-actor processing gate). Byte-guarded —
+    // no-op on Steam until the Steam AI-pause address is re-derived
+    // (steam-re.md remaining site groups).
+    vaultmp::apply_actor_discovery();
     // TODO: locate TESObjectREFR vtable, patch all hooks.
     // For Proton: same VTable layout as Windows — Wine mirrors the binary exactly.
 }

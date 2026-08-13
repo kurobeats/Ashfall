@@ -672,3 +672,117 @@ mod tests {
         }
     }
 }
+
+// ═══════════════════════════════════════════════════════════════
+// Actor discovery detour (classic FO3 only — Steam TBD, steam-re.md)
+// ═══════════════════════════════════════════════════════════════
+//
+// fcn.006FAE90 (`bool __thiscall Actor*`) is the engine's per-actor AI
+// processing gate: every actor the game processes passes through it every
+// frame, from HighProcess (ProcessLists high-actor processing) and the
+// player/combat paths (11 call sites, mapped on the GOG exe 2026-08-13).
+// Detouring it yields the active-actor list with NO ProcessLists layout
+// needed — STR's highActorHandleArray equivalent, driven by the engine
+// itself. Ref id is read at actor+0x0C (xFOSE-verified).
+//
+// The thunk preserves `this` (ecx) across the collector call, then falls
+// through to the original via the detour trampoline. The collector +
+// seen-set diff (STR VisitForms) lives in hooks::discovery.
+
+/// Classic FO3 AI predicate address (GOG 1.7.0.3, verified: entry `56 8B F1`).
+#[cfg(target_arch = "x86")]
+pub const AI_PREDICATE_FO3_CLASSIC: usize = 0x006F_AE90;
+/// Expected prologue: `push esi; mov esi, ecx`.
+#[cfg(target_arch = "x86")]
+const AI_PREDICATE_PROLOGUE: [u8; 3] = [0x56, 0x8B, 0xF1];
+
+
+/// The Rust collector called by the thunk (cdecl: actor on the stack).
+#[no_mangle]
+pub unsafe extern "C" fn ashfall_collect_actor_c(actor: usize) {
+    crate::hooks::discovery::collect_actor_ptr(actor);
+}
+
+#[cfg(target_arch = "x86")]
+// x86 thunk: `this` arrives in ecx. Push it as the collector's argument,
+// call, restore ecx, then run the original through the trampoline.
+core::arch::global_asm!(
+    ".globl ashfall_actor_collect_thunk",
+    "ashfall_actor_collect_thunk:",
+    "    push ecx",
+    "    push ecx",
+    "    call ashfall_collect_actor_c",
+    "    add esp, 4",
+    "    pop ecx",
+    "    jmp dword ptr [ashfall_trampoline_addr]",
+);
+
+/// Indirect pointer the thunk `jmp`s through (single writer on the apply
+/// thread, raw reader in asm — atomic for soundness, not synchronization).
+#[cfg(target_arch = "x86")]
+#[no_mangle]
+pub static ashfall_trampoline_addr: core::sync::atomic::AtomicU32 =
+    core::sync::atomic::AtomicU32::new(0);
+
+/// The installed detour (persists for the process lifetime).
+#[cfg(target_arch = "x86")]
+static DETOUR: std::sync::OnceLock<std::sync::Mutex<Option<super::detour::Detour>>> =
+    std::sync::OnceLock::new();
+
+// The Detour holds raw pointers; it is only ever touched on the game thread
+// (apply + collection), so a plain Mutex guard is sufficient.
+#[cfg(target_arch = "x86")]
+unsafe impl Send for super::detour::Detour {}
+
+/// Install the actor-discovery detour on the classic FO3 build. Byte-guarded
+/// like `apply_steam_respawn` — no-op on Steam (address TBD) and non-Windows.
+pub fn apply_actor_discovery() -> bool {
+    #[cfg(target_arch = "x86")]
+    {
+        // Prologue guard: only the classic build has `push esi; mov esi, ecx`
+        // at this address (Steam recompiled — garbage there).
+        if crate::hooks::read_bytes(AI_PREDICATE_FO3_CLASSIC, 3) != AI_PREDICATE_PROLOGUE {
+            return false; // Steam build (prologue mismatch) — no-op
+        }
+
+        let detour = DETOUR.get_or_init(|| std::sync::Mutex::new(None));
+        let mut guard = detour.lock().unwrap();
+        if guard.is_some() {
+            return true; // already installed
+        }
+
+        unsafe {
+            extern "C" {
+                fn ashfall_actor_collect_thunk();
+            }
+            let thunk = ashfall_actor_collect_thunk as *const u8;
+            let mut d = match super::detour::Detour::new(AI_PREDICATE_FO3_CLASSIC as *mut u8, thunk) {
+                Some(d) => d,
+                None => return false, // trampoline alloc failed (non-Windows)
+            };
+            let trampoline: usize = d.trampoline_ptr::<usize>();
+            ashfall_trampoline_addr.store(
+                trampoline as u32,
+                std::sync::atomic::Ordering::SeqCst,
+            );
+            d.install();
+            *guard = Some(d);
+        }
+        true
+    }
+    #[cfg(not(target_arch = "x86"))]
+    {
+        false // tests / x64 hosts — nothing to hook
+    }
+}
+
+/// Start the 10 Hz NPC-diff flush (STR cadence). Safe to call from the TCP
+/// server thread (not DllMain — no loader-lock issue).
+pub fn start_npc_flush_thread() {
+    std::thread::spawn(|| {
+        while crate::RUNNING.load(std::sync::atomic::Ordering::SeqCst) {
+            crate::hooks::discovery::flush_npc_diff();
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+    });
+}

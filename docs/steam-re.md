@@ -22,6 +22,40 @@ Auto-detection: `vtable::fo3_lookup_addr()` reads 0x455190 (`51 8b 0d` = GOG)
 vs 0x711EF0 (`55 8b ec 53` = Steam). Respawn patch is byte-guarded inside
 `vaultmp::apply_steam_respawn()` (no-op unless the Steam bytes are present).
 
+## Actor discovery (NPC sync) — GOG mapped, Steam TBD
+
+Session 2026-08-13 (r2 on battlecruiser.chaotic.lan, GOG Fallout3.exe):
+
+**Findings (classic/GOG):**
+
+| Item | Address | Notes |
+|---|---|---|
+| AI predicate `fcn.006FAE90` | **0x006FAE90** | `bool __thiscall(Actor*)` — the engine's per-actor AI processing gate. Entry `56 8B F1` (push esi; mov esi, ecx). 11 call sites: HighProcess + PlayerCharacter + combat/weather paths. Reads `[this+0xFC]` state (cmp 3/5), vtable `+0x214`, compares against PlayerCharacter singleton |
+| HighProcess (ProcessLists high-actor processing) | **method @ 0x732BF0** | vtable slot 0x29C, 2994 bytes, per-actor. ai_fix2/ai_fix3 recipes live in the predicate; ai_fix1 (0x72051E) is a sibling state machine; ai_fix4 (0x42FBDC) is the object-creation path |
+| PlayerCharacter singleton | **0x107A104** | hundreds of `mov ecx,[0x107A104]` sites (loaded as `this`); the predicate special-cases it. Bridge's `LOCAL_PLAYER_REF` is the ref id, this is the object |
+| RefID offset | +0x0C | xFOSE-verified, already in the bridge |
+
+**Dead ends (don't re-tread):** no direct `call [reg+0x29C]` and no E8-direct calls to HighProcess — dispatch is via a pointer field (the 12 `mov reg,[reg+0x29C]` sites are OTHER classes' member fields). xFOSE and STR (Skyrim/F4) do NOT document FO3's ProcessLists — the layout was never public.
+
+**The shortcut that landed:** the AI predicate IS the active-actor list —
+no ProcessLists layout needed. The bridge detours it (classic only,
+byte-guarded `56 8B F1` prologue): a thunk preserves `this` (ecx), calls
+the collector (reads formID at actor+0x0C), then runs the original through
+the trampoline. `hooks::discovery` keeps the seen-set (STR VisitForms diff)
+and a 10 Hz flush thread emits EVENT_NPC_SPAWN / EVENT_NPC_REMOVE frames
+-> client -> ActorNew + OwnershipClaim / ObjectRemove. Installed from
+`hooks::install()` (DllMain-safe: memory writes only; the flush thread
+starts from the TCP server thread).
+
+**Steam re-derivation task:** find the Steam twin of fcn.006FAE90 (the AI
+predicate). Method: the AI-pause recipe sites are already on the remaining-
+patches list; on Steam, locate by the same semantic anchors (predicate reads
+`[this+0xFC]` cmp 3/5 + PlayerCharacter compare — probe candidates live via
+OP_PROBE_CODE before patching, remember the dump is FLAT/+0xC00). Once found:
+same detour, same collector — no other changes needed. The Steam AI-pause
+patch sites in the vaultmp table (ai_fix1..4) are the natural anchor: find
+those first, the predicate is the function containing ai_fix2/ai_fix3.
+
 ## Open: vaultmp behavior-patch sites
 
 The 34 `hooks::vaultmp` recipes target classic addresses. The Steam recompile
