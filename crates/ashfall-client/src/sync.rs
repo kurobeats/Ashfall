@@ -9,7 +9,7 @@
 
 use ashfall_core::event::{
     decode_event, decode_npc_remove, decode_npc_spawn, decode_player_state, PipeFrame,
-    EVENT_NPC_REMOVE, EVENT_NPC_SPAWN, EVENT_PLAYER_STATE, PIPE_OP_EVENT,
+    EVENT_NPC_REMOVE, EVENT_NPC_SPAWN, EVENT_NPC_STATE, EVENT_PLAYER_STATE, PIPE_OP_EVENT,
 };
 use ashfall_core::id::NetworkID;
 use ashfall_core::protocol::Packet;
@@ -20,6 +20,16 @@ use crate::ipc::Param;
 /// Both the owning client and the server agree on the id without a handshake.
 pub fn entity_id(ref_id: u32) -> NetworkID {
     NetworkID::new(0x8000_0000u64 | ref_id as u64)
+}
+
+/// Recover the game ref id from a client-derived entity id.
+pub fn ref_of_entity(id: NetworkID) -> Option<u32> {
+    let v = id.as_u64();
+    if v & 0x8000_0000 != 0 {
+        Some((v & 0x7FFF_FFFF) as u32)
+    } else {
+        None
+    }
 }
 
 /// Bridge event frames → server packets.
@@ -83,6 +93,29 @@ pub fn events_to_packets(frames: &[PipeFrame], local_id: NetworkID) -> Vec<Packe
                     out.push(Packet::OwnershipClaim { id });
                 }
             }
+            EVENT_NPC_STATE => {
+                if let Some(e) = decode_player_state(data) {
+                    let id = entity_id(e.ref_id);
+                    out.push(Packet::UpdatePos { id, pos: e.pos });
+                    out.push(Packet::UpdateAngle { id, angle: [e.angle[0], e.angle[2]] });
+                    out.push(Packet::ActorStateDelta {
+                        id,
+                        idle: Some(e.idle),
+                        moving: Some(e.moving),
+                        moving_xy: Some(e.moving_xy),
+                        weapon: Some(e.weapon),
+                        alerted: Some(e.alerted),
+                        sneaking: Some(e.sneaking),
+                        firing: None,
+                    });
+                    out.push(Packet::UpdateActorValue {
+                        id,
+                        base: false,
+                        index: 0x14,
+                        value: e.health,
+                    });
+                }
+            }
             EVENT_NPC_REMOVE => {
                 if let Some(e) = decode_npc_remove(data) {
                     // Despawned / left view: tell the server to stop
@@ -121,6 +154,22 @@ pub fn packets_to_commands(
                     vec![Param::U32(ref_id), Param::F32(angle[0]), Param::F32(0.0), Param::F32(angle[1])],
                 ));
             }
+            // Actor value (health/AP/DR...) applied to the local copy.
+            Packet::UpdateActorValue { id, index, value, .. } if *id != local_id => {
+                let Some(ref_id) = resolve_ref(*id) else { continue };
+                out.push((
+                    crate::ipc::OP_SET_ACTOR_VALUE,
+                    vec![Param::U32(ref_id), Param::U8(*index), Param::F32(*value)],
+                ));
+            }
+            // Death applied to the local copy (respawn stays server-driven).
+            Packet::UpdateActorDead { id, dead: true, .. } if *id != local_id => {
+                let Some(ref_id) = resolve_ref(*id) else { continue };
+                out.push((
+                    crate::ipc::OP_KILL,
+                    vec![Param::U32(ref_id), Param::U32(0), Param::U8(0), Param::U8(0)],
+                ));
+            }
             _ => {}
         }
     }
@@ -131,14 +180,64 @@ pub fn packets_to_commands(
 mod tests {
     use super::*;
     use ashfall_core::event::{
-        encode_npc_remove_event, encode_npc_spawn_event, encode_player_state_event, NpcRemoveEvent,
-        NpcSpawnEvent, PlayerStateEvent,
+        encode_npc_remove_event, encode_npc_spawn_event, encode_npc_state_event,
+        encode_player_state_event, NpcRemoveEvent, NpcSpawnEvent, PlayerStateEvent,
     };
 
     #[test]
-    fn test_entity_id_roundtrip() {
-        assert_eq!(entity_id(0x14).as_u64(), 0x8000_0014);
+    fn test_npc_state_event_to_packets() {
+        let local = NetworkID::new(1);
+        let e = PlayerStateEvent {
+            ref_id: 0x1234, pos: [1.0, 2.0, 3.0], angle: [0.0, 0.0, 45.0],
+            idle: 0, moving: 1, moving_xy: 0, weapon: 0x2A,
+            alerted: true, sneaking: false, health: 55.0,
+        };
+        let frame = encode_npc_state_event(&e);
+        let (frames, _) = ashfall_core::event::split_frames(&frame);
+        let packets = events_to_packets(&frames, local);
+
+        let expected_id = entity_id(0x1234);
+        assert!(packets.iter().any(|p| matches!(p, Packet::UpdatePos { id, pos } if *id == expected_id && *pos == [1.0, 2.0, 3.0])));
+        assert!(packets.iter().any(|p| matches!(p, Packet::UpdateAngle { id, angle } if *id == expected_id && *angle == [0.0, 45.0])));
+        assert!(packets.iter().any(|p| matches!(p, Packet::ActorStateDelta { id, weapon: Some(w), moving: Some(m), .. } if *id == expected_id && *w == 0x2A && *m == 1)));
+        assert!(packets.iter().any(|p| matches!(p, Packet::UpdateActorValue { id, index: 0x14, value, .. } if *id == expected_id && *value == 55.0)));
+        // Must NOT target the local player id.
+        assert!(packets.iter().all(|p| {
+            match p {
+                Packet::UpdatePos { id, .. } | Packet::UpdateAngle { id, .. } | Packet::UpdateActorValue { id, .. } => *id != local,
+                Packet::ActorStateDelta { id, .. } => *id != local,
+                _ => true,
+            }
+        }));
+    }
+
+    #[test]
+    fn test_remote_values_and_death_to_commands() {
+        let local = NetworkID::new(1);
+        let remote = NetworkID::new(9);
+        let packets = vec![
+            Packet::UpdateActorValue { id: remote, base: false, index: 0x14, value: 40.0 },
+            Packet::UpdateActorDead { id: remote, dead: true, limbs: 0, cause: 1 },
+            // Local player's own value must NOT become a command.
+            Packet::UpdateActorValue { id: local, base: false, index: 0x14, value: 100.0 },
+        ];
+        let resolve = |id: NetworkID| if id == remote { Some(0x50) } else { None };
+        let cmds = packets_to_commands(&packets, local, resolve);
+        assert_eq!(cmds.len(), 2, "remote value + death only");
+        let (op0, p0) = &cmds[0];
+        assert_eq!(*op0, crate::ipc::OP_SET_ACTOR_VALUE);
+        assert!(matches!(p0[0], Param::U32(0x50)));
+        assert!(matches!(p0[1], Param::U8(0x14)), "index is a single byte");
+        assert!(matches!(p0[2], Param::F32(40.0)));
+        let (op1, _) = &cmds[1];
+        assert_eq!(*op1, crate::ipc::OP_KILL);
+    }
+
+    #[test]
+    fn test_entity_id_ref_roundtrip() {
         assert_eq!(entity_id(0x1234).as_u64(), 0x8000_1234);
+        assert_eq!(ref_of_entity(entity_id(0x1234)), Some(0x1234));
+        assert_eq!(ref_of_entity(NetworkID::new(7)), None, "server ids have no ref");
     }
 
     #[test]

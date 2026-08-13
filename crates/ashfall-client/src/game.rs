@@ -138,6 +138,22 @@ impl Game {
             );
             self.pending_commands.extend(cmds);
         }
+        // Ownership changes → tell the bridge to (un)track the NPC so its
+        // simulation state gets sampled and relayed (the owner's half of
+        // NPC sync).
+        match &packet {
+            Packet::OwnershipGranted { id } => {
+                if let Some(ref_id) = crate::sync::ref_of_entity(*id) {
+                    self.pending_commands.push((crate::ipc::OP_TRACK_ACTOR, vec![crate::ipc::Param::U32(ref_id)]));
+                }
+            }
+            Packet::OwnershipReleased { id } => {
+                if let Some(ref_id) = crate::sync::ref_of_entity(*id) {
+                    self.pending_commands.push((crate::ipc::OP_UNTRACK_ACTOR, vec![crate::ipc::Param::U32(ref_id)]));
+                }
+            }
+            _ => {}
+        }
         dispatch::dispatch(self, &packet);
     }
 
@@ -223,5 +239,35 @@ impl Game {
             self.send_reliable(Packet::UpdateWindowClick { id }).await?;
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::ClientConfig;
+
+    #[test]
+    fn test_ownership_grant_queues_track_command() {
+        let mut g = Game::new(ClientConfig::default());
+        g.local_player_id = Some(NetworkID::new(1));
+
+        let npc_id = crate::sync::entity_id(0x1234);
+        g.handle_packet(Packet::OwnershipGranted { id: npc_id });
+
+        let has_track = g.pending_commands.iter().any(|(op, params)| {
+            *op == crate::ipc::OP_TRACK_ACTOR
+                && matches!(params.first(), Some(crate::ipc::Param::U32(0x1234)))
+        });
+        assert!(has_track, "grant → bridge tracks the NPC");
+        assert!(g.registry.owned_actors.contains(&npc_id));
+
+        g.handle_packet(Packet::OwnershipReleased { id: npc_id });
+        let has_untrack = g.pending_commands.iter().any(|(op, params)| {
+            *op == crate::ipc::OP_UNTRACK_ACTOR
+                && matches!(params.first(), Some(crate::ipc::Param::U32(0x1234)))
+        });
+        assert!(has_untrack, "release → bridge untracks");
+        assert!(!g.registry.owned_actors.contains(&npc_id));
     }
 }

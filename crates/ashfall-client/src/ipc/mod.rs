@@ -18,7 +18,7 @@
 mod commands;
 mod transport;
 
-pub use commands::{CommandResult, Param, OP_SET_ANGLE, OP_SET_POS};
+pub use commands::{CommandResult, Param, OP_KILL, OP_SET_ANGLE, OP_SET_ACTOR_VALUE, OP_SET_POS, OP_TRACK_ACTOR, OP_UNTRACK_ACTOR};
 pub use transport::{IpcMode, IpcTransport};
 
 use std::collections::VecDeque;

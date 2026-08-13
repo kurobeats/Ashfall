@@ -77,6 +77,61 @@ pub fn report_player_state() -> Vec<u8> {
 static LAST_REPORT: LazyLock<Mutex<Option<std::time::Instant>>> =
     LazyLock::new(|| Mutex::new(None));
 
+/// NPCs this client owns (simulates) — sampled each tick and reported as
+/// EVENT_NPC_STATE so the server relays the owner's simulation. The client
+/// commands TRACK on OwnershipGranted, UNTRACK on OwnershipReleased.
+static TRACKED_ACTORS: LazyLock<Mutex<Vec<u32>>> = LazyLock::new(|| Mutex::new(Vec::new()));
+
+/// Start tracking an NPC (owned) — sample its state at the 10 Hz cadence.
+pub fn track_actor(ref_id: u32) {
+    let mut tracked = TRACKED_ACTORS.lock().unwrap();
+    if !tracked.contains(&ref_id) {
+        tracked.push(ref_id);
+    }
+}
+
+/// Stop tracking an NPC (ownership released / despawned).
+pub fn untrack_actor(ref_id: u32) {
+    TRACKED_ACTORS.lock().unwrap().retain(|&r| r != ref_id);
+}
+
+/// Sample every tracked NPC's state and queue EVENT_NPC_STATE frames.
+/// Non-Windows (tests): getters return defaults — the frame is the contract.
+pub fn sample_tracked() {
+    use ashfall_core::event::{encode_npc_state_event, PlayerStateEvent};
+    let tracked: Vec<u32> = TRACKED_ACTORS.lock().unwrap().clone();
+    for ref_id in tracked {
+        let pos = crate::hooks::get_pos(ref_id);
+        let angle = crate::hooks::get_angle(ref_id);
+        let (idle, moving, weapon, moving_xy, alerted, sneaking) =
+            crate::hooks::get_actor_state(ref_id);
+        let health = crate::hooks::get_actor_value(ref_id, 0x14);
+        let event = PlayerStateEvent {
+            ref_id,
+            pos,
+            angle,
+            idle,
+            moving,
+            moving_xy,
+            weapon,
+            alerted,
+            sneaking,
+            health,
+        };
+        push_event_frame(encode_npc_state_event(&event));
+    }
+}
+
+/// Snapshot of tracked actors (tests).
+pub fn tracked_actors() -> Vec<u32> {
+    TRACKED_ACTORS.lock().unwrap().clone()
+}
+
+/// Reset tracking (tests).
+pub fn reset_tracked() {
+    TRACKED_ACTORS.lock().unwrap().clear();
+}
+
 /// Sample the player at most every 100ms (10 Hz). Returns the event frame
 /// when a sample was due, None otherwise. The future per-frame game-loop
 /// hook calls this every frame and sends whatever comes back.

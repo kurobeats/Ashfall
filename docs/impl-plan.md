@@ -318,6 +318,8 @@ PRs within a phase often parallelizable unless noted.
 
 Remaining (needs game host RE — steam-re.md): the per-frame game-loop hook that calls `report_player_state_due()` (10 Hz throttle — STR RunLocalUpdates cadence), and the ProcessLists active-actor enumeration feeding `hooks::discovery::npc_diff` (STR VisitForms seen-set pattern, pure + tested: added→EVENT_NPC_SPAWN, gone→EVENT_NPC_REMOVE→ObjectRemove). Load-order bridge reporting explicitly deprioritized — MVP targets vanilla games.
 
+| 11. Owned-NPC sync halves | **Owned-NPC reporting**: `OP_TRACK_ACTOR`/`OP_UNTRACK_ACTOR` (0x00F6/0x00F5) + bridge tracked set; the 10 Hz flush samples tracked refs → `EVENT_NPC_STATE` (same layout as player-state, new tag) → client → `UpdatePos/Angle/ActorStateDelta/UpdateActorValue` for the ref-derived entity id. Client queues TRACK on `OwnershipGranted`, UNTRACK on `OwnershipReleased`. **Remote application**: `packets_to_commands` now also maps `UpdateActorValue` → `OP_SET_ACTOR_VALUE` (with 1-byte index, new `Param::U8`) and `UpdateActorDead` → `OP_KILL`. | bridge `network.rs`/`commands.rs`, core `event.rs`, client `sync.rs`/`game.rs`/`ipc` |
+
 Admin/ban system: explicitly skipped per project direction.
 
 **449 tests, 0 warnings** (2026-08-13).

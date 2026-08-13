@@ -782,6 +782,7 @@ pub fn start_npc_flush_thread() {
     std::thread::spawn(|| {
         while crate::RUNNING.load(std::sync::atomic::Ordering::SeqCst) {
             crate::hooks::discovery::flush_npc_diff();
+            crate::network::sample_tracked();
             std::thread::sleep(std::time::Duration::from_millis(100));
         }
     });

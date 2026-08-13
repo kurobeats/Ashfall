@@ -17,6 +17,9 @@ pub const OP_FIRE_WEAPON: u32 = 0x000D;
 pub const OP_GET_NAME: u32 = 0x000E;
 pub const OP_SET_NAME: u32 = 0x000F;
 pub const OP_PLAY_GROUP: u32 = 0x0028;
+pub const OP_KILL: u32 = 0x0023;
+pub const OP_TRACK_ACTOR: u32 = 0x00F6;
+pub const OP_UNTRACK_ACTOR: u32 = 0x00F5;
 
 /// A parameter to a game engine command.
 #[derive(Debug, Clone)]
@@ -26,6 +29,8 @@ pub enum Param {
     F32(f32),
     Bool(bool),
     Str(String),
+    /// Single byte (actor-value index, limb, cause).
+    U8(u8),
 }
 
 impl Param {
@@ -35,6 +40,7 @@ impl Param {
             Param::U32(v) => buf.extend_from_slice(&v.to_le_bytes()),
             Param::I32(v) => buf.extend_from_slice(&v.to_le_bytes()),
             Param::F32(v) => buf.extend_from_slice(&v.to_le_bytes()),
+            Param::U8(v) => buf.push(*v),
             Param::Bool(v) => buf.push(if *v { 1 } else { 0 }),
             Param::Str(s) => {
                 let bytes = s.as_bytes();

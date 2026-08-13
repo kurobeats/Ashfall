@@ -218,3 +218,56 @@ fn test_reporter_throttles_to_10hz() {
     std::thread::sleep(std::time::Duration::from_millis(120));
     assert!(network::report_player_state_due().is_some(), "sample after window due");
 }
+
+#[test]
+fn test_track_and_sample_npc_state() {
+    let _ = network::take_event_frames(); // drain leftovers from other tests
+    network::reset_tracked();
+    assert!(network::tracked_actors().is_empty());
+
+    // Track two NPCs (dedup on repeat).
+    network::track_actor(0x1234);
+    network::track_actor(0x1234);
+    network::track_actor(0x5678);
+    let tracked = network::tracked_actors();
+    assert_eq!(tracked.len(), 2);
+    assert!(tracked.contains(&0x1234) && tracked.contains(&0x5678));
+
+    // Sample → two EVENT_NPC_STATE frames queued (stub getters → defaults).
+    network::sample_tracked();
+    let frames = network::take_event_frames();
+    assert_eq!(frames.len(), 2, "one frame per tracked actor");
+    for frame in &frames {
+        let (fs, _) = ashfall_core::event::split_frames(frame);
+        let (event_type, data) = ashfall_core::event::decode_event(&fs[0].payload).expect("event");
+        assert_eq!(event_type, ashfall_core::event::EVENT_NPC_STATE);
+        let e = ashfall_core::event::decode_player_state(data).expect("state");
+        assert!(tracked.contains(&e.ref_id));
+    }
+
+    // Untrack both → no more frames.
+    network::untrack_actor(0x1234);
+    network::untrack_actor(0x5678);
+    network::sample_tracked();
+    assert!(network::take_event_frames().is_empty());
+    network::reset_tracked();
+}
+
+#[test]
+fn test_track_untrack_commands() {
+    network::reset_tracked();
+    let result = ashfall_bridge::commands::execute(
+        ashfall_bridge::commands::opcodes::OP_TRACK_ACTOR,
+        &0x1234u32.to_le_bytes(),
+    );
+    assert_eq!(result, vec![1], "track acknowledged");
+    assert!(network::tracked_actors().contains(&0x1234));
+
+    let result = ashfall_bridge::commands::execute(
+        ashfall_bridge::commands::opcodes::OP_UNTRACK_ACTOR,
+        &0x1234u32.to_le_bytes(),
+    );
+    assert_eq!(result, vec![1]);
+    assert!(network::tracked_actors().is_empty());
+    network::reset_tracked();
+}

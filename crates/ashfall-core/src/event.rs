@@ -29,6 +29,11 @@ pub const EVENT_NPC_SPAWN: u32 = 8;
 /// so the server stops replicating it. STR `ActorRemovedEvent` equivalent.
 pub const EVENT_NPC_REMOVE: u32 = 9;
 
+/// State sample of a tracked (owned) NPC (bridge → client): the client
+/// relays it as UpdatePos/ActorStateDelta/UpdateActorValue so the server
+/// broadcasts the owner's simulation to everyone.
+pub const EVENT_NPC_STATE: u32 = 10;
+
 /// NPC that left the player's view (despawned / out of range).
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -119,6 +124,15 @@ pub fn encode_npc_remove_event(e: &NpcRemoveEvent) -> Vec<u8> {
     let mut payload = Vec::with_capacity(4 + std::mem::size_of::<NpcRemoveEvent>());
     payload.extend_from_slice(&EVENT_NPC_REMOVE.to_le_bytes());
     payload.extend_from_slice(unsafe { core::slice::from_raw_parts(e as *const _ as *const u8, std::mem::size_of::<NpcRemoveEvent>()) });
+    encode_frame(PIPE_OP_EVENT, &payload)
+}
+
+/// Encode a tracked-NPC state sample (same layout as the player-state event,
+/// different tag so the client routes it to the NPC's entity id).
+pub fn encode_npc_state_event(e: &PlayerStateEvent) -> Vec<u8> {
+    let mut payload = Vec::with_capacity(4 + std::mem::size_of::<PlayerStateEvent>());
+    payload.extend_from_slice(&EVENT_NPC_STATE.to_le_bytes());
+    payload.extend_from_slice(unsafe { core::slice::from_raw_parts(e as *const _ as *const u8, std::mem::size_of::<PlayerStateEvent>()) });
     encode_frame(PIPE_OP_EVENT, &payload)
 }
 
@@ -230,6 +244,20 @@ mod tests {
         let (event_type, data) = decode_event(&frames[0].payload).unwrap();
         assert_eq!(event_type, EVENT_NPC_REMOVE);
         assert_eq!(decode_npc_remove(data).unwrap(), e);
+    }
+
+    #[test]
+    fn test_npc_state_roundtrip() {
+        let e = PlayerStateEvent {
+            ref_id: 0x1234, pos: [1.0, 2.0, 3.0], angle: [0.0, 0.0, 90.0],
+            idle: 0, moving: 2, moving_xy: 1, weapon: 0x2A,
+            alerted: true, sneaking: false, health: 80.0,
+        };
+        let frame = encode_npc_state_event(&e);
+        let (frames, _) = split_frames(&frame);
+        let (event_type, data) = decode_event(&frames[0].payload).unwrap();
+        assert_eq!(event_type, EVENT_NPC_STATE);
+        assert_eq!(decode_player_state(data).unwrap(), e);
     }
 
     #[test]

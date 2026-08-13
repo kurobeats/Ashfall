@@ -59,6 +59,8 @@ pub mod opcodes {
     /// Temporary debug: report what save dir the GAME process resolves.
     pub const OP_PROBE_SAVES: u32          = 0x00FE;
     pub const OP_REPORT_PLAYER_STATE: u32  = 0x00F7; // debug: emit a player-state event
+    pub const OP_TRACK_ACTOR: u32          = 0x00F6; // sample this ref at 10 Hz
+    pub const OP_UNTRACK_ACTOR: u32        = 0x00F5; // stop sampling this ref
     /// Temporary debug: dump unpacked image (SteamStub analysis).
     pub const OP_DUMP_IMAGE: u32           = 0x00FC;
     /// Temporary debug: read-only form probe (lookup + vtable, no calls).
@@ -451,6 +453,16 @@ pub fn execute(func: u32, params: &[u8]) -> Vec<u8> {
         }
         OP_REPORT_PLAYER_STATE => {
             crate::network::report_player_state()
+        }
+        OP_TRACK_ACTOR => {
+            let Some(ref_id) = read_u32(params, 0) else { return vec![] };
+            crate::network::track_actor(ref_id);
+            vec![1]
+        }
+        OP_UNTRACK_ACTOR => {
+            let Some(ref_id) = read_u32(params, 0) else { return vec![] };
+            crate::network::untrack_actor(ref_id);
+            vec![1]
         }
         OP_DUMP_IMAGE => {
             crate::hooks::dump_image()
