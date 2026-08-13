@@ -25,6 +25,17 @@ pub const EVENT_PLAYER_STATE: u32 = 7;
 /// reports it as ActorNew + claims simulation ownership.
 pub const EVENT_NPC_SPAWN: u32 = 8;
 
+/// NPC left the player's view (bridge → client): the client sends ObjectRemove
+/// so the server stops replicating it. STR `ActorRemovedEvent` equivalent.
+pub const EVENT_NPC_REMOVE: u32 = 9;
+
+/// NPC that left the player's view (despawned / out of range).
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct NpcRemoveEvent {
+    pub ref_id: u32,
+}
+
 /// Own-player state sample.
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -103,6 +114,14 @@ pub fn encode_npc_spawn_event(e: &NpcSpawnEvent) -> Vec<u8> {
     encode_frame(PIPE_OP_EVENT, &payload)
 }
 
+/// Encode an NPC-remove event frame.
+pub fn encode_npc_remove_event(e: &NpcRemoveEvent) -> Vec<u8> {
+    let mut payload = Vec::with_capacity(4 + std::mem::size_of::<NpcRemoveEvent>());
+    payload.extend_from_slice(&EVENT_NPC_REMOVE.to_le_bytes());
+    payload.extend_from_slice(unsafe { core::slice::from_raw_parts(e as *const _ as *const u8, std::mem::size_of::<NpcRemoveEvent>()) });
+    encode_frame(PIPE_OP_EVENT, &payload)
+}
+
 /// Decode an event frame's payload into (event_type, event_bytes).
 pub fn decode_event(payload: &[u8]) -> Option<(u32, &[u8])> {
     if payload.len() < 4 {
@@ -126,6 +145,14 @@ pub fn decode_npc_spawn(data: &[u8]) -> Option<NpcSpawnEvent> {
         return None;
     }
     Some(unsafe { core::ptr::read_unaligned(data.as_ptr() as *const NpcSpawnEvent) })
+}
+
+/// Decode an NPC-remove event payload.
+pub fn decode_npc_remove(data: &[u8]) -> Option<NpcRemoveEvent> {
+    if data.len() < std::mem::size_of::<NpcRemoveEvent>() {
+        return None;
+    }
+    Some(unsafe { core::ptr::read_unaligned(data.as_ptr() as *const NpcRemoveEvent) })
 }
 
 #[cfg(test)]
@@ -193,6 +220,16 @@ mod tests {
         let (event_type, data) = decode_event(&frames[0].payload).unwrap();
         assert_eq!(event_type, EVENT_NPC_SPAWN);
         assert_eq!(decode_npc_spawn(data).unwrap(), e);
+    }
+
+    #[test]
+    fn test_npc_remove_roundtrip() {
+        let e = NpcRemoveEvent { ref_id: 0x1234 };
+        let frame = encode_npc_remove_event(&e);
+        let (frames, _) = split_frames(&frame);
+        let (event_type, data) = decode_event(&frames[0].payload).unwrap();
+        assert_eq!(event_type, EVENT_NPC_REMOVE);
+        assert_eq!(decode_npc_remove(data).unwrap(), e);
     }
 
     #[test]

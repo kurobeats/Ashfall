@@ -17,6 +17,7 @@
 pub mod address;
 pub mod animation;
 pub mod detour;
+pub mod discovery;
 pub mod memory;
 pub mod opcode;
 pub mod vaultmp;

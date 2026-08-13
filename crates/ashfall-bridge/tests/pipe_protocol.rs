@@ -207,3 +207,14 @@ fn test_bridge_server_pushes_event_over_tcp() {
     let e = ashfall_core::event::decode_player_state(data).expect("player state");
     assert_eq!(e.ref_id, network::LOCAL_PLAYER_REF);
 }
+
+#[test]
+fn test_reporter_throttles_to_10hz() {
+    // Immediate samples flow; a sample within 100ms is skipped.
+    let first = network::report_player_state_due();
+    assert!(first.is_some(), "first sample due");
+    let second = network::report_player_state_due();
+    assert!(second.is_none(), "second sample within 100ms throttled");
+    std::thread::sleep(std::time::Duration::from_millis(120));
+    assert!(network::report_player_state_due().is_some(), "sample after window due");
+}

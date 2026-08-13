@@ -8,8 +8,8 @@
 //!   local game via OP_SET_POS/OP_SET_ANGLE.
 
 use ashfall_core::event::{
-    decode_event, decode_npc_spawn, decode_player_state, PipeFrame, EVENT_NPC_SPAWN,
-    EVENT_PLAYER_STATE, PIPE_OP_EVENT,
+    decode_event, decode_npc_remove, decode_npc_spawn, decode_player_state, PipeFrame,
+    EVENT_NPC_REMOVE, EVENT_NPC_SPAWN, EVENT_PLAYER_STATE, PIPE_OP_EVENT,
 };
 use ashfall_core::id::NetworkID;
 use ashfall_core::protocol::Packet;
@@ -83,6 +83,13 @@ pub fn events_to_packets(frames: &[PipeFrame], local_id: NetworkID) -> Vec<Packe
                     out.push(Packet::OwnershipClaim { id });
                 }
             }
+            EVENT_NPC_REMOVE => {
+                if let Some(e) = decode_npc_remove(data) {
+                    // Despawned / left view: tell the server to stop
+                    // replicating it (STR ActorRemovedEvent → removal).
+                    out.push(Packet::ObjectRemove { id: entity_id(e.ref_id), silent: false });
+                }
+            }
             _ => {}
         }
     }
@@ -123,7 +130,10 @@ pub fn packets_to_commands(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ashfall_core::event::{encode_npc_spawn_event, encode_player_state_event, NpcSpawnEvent, PlayerStateEvent};
+    use ashfall_core::event::{
+        encode_npc_remove_event, encode_npc_spawn_event, encode_player_state_event, NpcRemoveEvent,
+        NpcSpawnEvent, PlayerStateEvent,
+    };
 
     #[test]
     fn test_entity_id_roundtrip() {
@@ -164,6 +174,17 @@ mod tests {
         assert!(packets.iter().any(|p| matches!(p, Packet::ActorNew { id, ref_id, base_id, .. } if *id == expected_id && *ref_id == 0x1234 && *base_id == 0x5678)));
         assert!(packets.iter().any(|p| matches!(p, Packet::OwnershipClaim { id } if *id == expected_id)));
         assert!(packets.iter().any(|p| matches!(p, Packet::UpdatePos { id, pos } if *id == expected_id && *pos == [5.0, 6.0, 7.0])));
+    }
+
+    #[test]
+    fn test_npc_remove_event_to_packets() {
+        let local = NetworkID::new(1);
+        let e = NpcRemoveEvent { ref_id: 0x1234 };
+        let frame = encode_npc_remove_event(&e);
+        let (frames, _) = ashfall_core::event::split_frames(&frame);
+        let packets = events_to_packets(&frames, local);
+
+        assert!(packets.iter().any(|p| matches!(p, Packet::ObjectRemove { id, .. } if *id == entity_id(0x1234))));
     }
 
     #[test]

@@ -71,6 +71,27 @@ pub fn report_player_state() -> Vec<u8> {
     frame
 }
 
+/// Last player-state sample time — the per-frame hook calls
+/// [`report_player_state_due`], which throttles to 10 Hz (STR
+/// `RunLocalUpdates`: `cDelayBetweenSnapshots = 100ms`).
+static LAST_REPORT: LazyLock<Mutex<Option<std::time::Instant>>> =
+    LazyLock::new(|| Mutex::new(None));
+
+/// Sample the player at most every 100ms (10 Hz). Returns the event frame
+/// when a sample was due, None otherwise. The future per-frame game-loop
+/// hook calls this every frame and sends whatever comes back.
+pub fn report_player_state_due() -> Option<Vec<u8>> {
+    let mut last = LAST_REPORT.lock().unwrap();
+    let now = std::time::Instant::now();
+    if let Some(prev) = *last {
+        if now.duration_since(prev) < std::time::Duration::from_millis(100) {
+            return None;
+        }
+    }
+    *last = Some(now);
+    Some(report_player_state())
+}
+
 /// Encode a pipe command: [PIPE_OP_COMMAND][key:4B LE][func:4B LE][param_count:1B][params...]
 /// Frames are length-prefixed ([len:2][opcode][payload]) so responses and
 /// events share the stream unambiguously.
