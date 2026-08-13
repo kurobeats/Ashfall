@@ -824,6 +824,17 @@ pub fn apply_fnv_frame_hook() -> bool {
                 unsafe { std::mem::transmute(FNV_FRAME_ORIGINAL_CALL) };
             let result = orig();
             crate::network::report_player_state_due();
+            // FNV NPC discovery: enumerate the ActorProcessManager actor
+            // tiers (AnhNVSE layout, 0x011E0E80) and feed the collector —
+            // the 10 Hz flush turns the diff into spawn/remove events.
+            let reader = |addr: usize| -> u32 {
+                if addr == 0 {
+                    return 0;
+                }
+                unsafe { *(addr as *const u32) }
+            };
+            let refs = crate::hooks::discovery::fnv_enumerate_actors(reader);
+            crate::hooks::discovery::collect_ref_ids(&refs);
             result
         }
         crate::hooks::memory::write_rel_call(FNV_FRAME_HOOK_SITE, fnv_frame_hook as *const () as usize);

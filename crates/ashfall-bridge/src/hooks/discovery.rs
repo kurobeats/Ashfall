@@ -30,6 +30,61 @@ pub const LOCAL_PLAYER_REF: u32 = 0x14;
 /// form id from the actor pointer the AI predicate hands us.
 pub const REFR_REFID_OFFSET: usize = 0x0C;
 
+/// FNV ActorProcessManager object address (AnhNVSE GameProcess.cpp:
+/// `g_actorProcessManager = (ActorProcessManager*)0x011E0E80` — the object
+/// lives at this fixed address; the game passes it as `this`, confirmed on
+/// the GOG 1.4.0.525 binary via `mov ecx, 0x11e0e80` sites).
+/// ponytail: FNV-only; never deref on FO3.
+pub const FNV_ACTOR_PROCESS_MANAGER: usize = 0x011E_0E80;
+/// First actor tier: `ActorList { tList<Actor> head; Node* tail }` — the
+/// tList head is a ListNode { Actor* data@+0; Node* next@+4 }. Confirmed by
+/// the manager's own count method reading `[this+4]` (0x977540).
+/// Other tiers (lowActors @ +0x0C/+0x18, highActors @ +0x5C per AnhNVSE's
+/// "needs recalc" header) are host-verify candidates — start with the
+/// confirmed tier, extend once live-probed.
+pub const FNV_FIRST_ACTOR_LIST: usize = FNV_ACTOR_PROCESS_MANAGER + 0x00;
+
+/// Hard cap on list nodes (a corrupted `next` chain must not loop forever).
+const LIST_NODE_CAP: usize = 4096;
+
+/// Walk a tList chain: head.next → nodes { data@+0, next@+4 }, collecting
+/// each actor's ref id (formID at +0x0C). `reader` abstracts memory access
+/// so the walk is unit-testable.
+pub fn walk_actor_list(head: usize, reader: impl Fn(usize) -> u32, out: &mut Vec<u32>) {
+    let mut next = reader(head + 4) as usize;
+    let mut guard = 0;
+    while next != 0 && guard < LIST_NODE_CAP {
+        guard += 1;
+        let actor = reader(next) as usize;
+        if actor != 0 {
+            let ref_id = reader(actor + REFR_REFID_OFFSET);
+            if ref_id != 0 && ref_id != LOCAL_PLAYER_REF {
+                out.push(ref_id);
+            }
+        }
+        next = reader(next + 4) as usize;
+    }
+}
+
+/// Enumerate the FNV actor lists (the discovery source for FNV — replaces
+/// the FO3 AI-predicate detour: the per-frame main-loop hook feeds this).
+pub fn fnv_enumerate_actors(reader: impl Fn(usize) -> u32) -> Vec<u32> {
+    let mut out = Vec::new();
+    walk_actor_list(FNV_FIRST_ACTOR_LIST, reader, &mut out);
+    out.sort_unstable();
+    out.dedup();
+    out
+}
+
+/// Feed ref ids into the collector (called from the FNV frame hook each
+/// frame — the 10 Hz flush diffs CURRENT against the last snapshot).
+pub fn collect_ref_ids(ref_ids: &[u32]) {
+    let mut current = CURRENT.lock().unwrap();
+    for &r in ref_ids {
+        current.insert(r);
+    }
+}
+
 /// Diff the current observed ref ids against the seen set.
 /// Returns (added, removed); the seen set is updated in place.
 /// Removals are returned in the same pass (STR dispatches them first so the
@@ -177,6 +232,54 @@ mod tests {
         let (added, _) = npc_diff(&mut seen, &[LOCAL_PLAYER_REF, 0x100]);
         assert_eq!(added, vec![0x100], "local player filtered out");
         assert!(!seen.contains(&LOCAL_PLAYER_REF));
+    }
+
+    #[test]
+    fn test_fnv_actor_list_walk() {
+        // Fake memory: manager → list head at FNV_FIRST_ACTOR_LIST.
+        // Node layout: { data@+0, next@+4 }; head { data=0, next@+4 }.
+        use std::collections::HashMap;
+        let mut mem: HashMap<usize, u32> = HashMap::new();
+        fn read(mem: &HashMap<usize, u32>, a: usize) -> u32 {
+            mem.get(&a).copied().unwrap_or(0)
+        }
+        let head = FNV_FIRST_ACTOR_LIST;
+        let n1 = 0x3000usize; // heap-ish node addresses
+        let n2 = 0x3100usize;
+        // Nodes: actor ptrs + next chain.
+        mem.insert(n1, 0x5000); // node1.data = actor A
+        mem.insert(n1 + 4, n2 as u32);
+        mem.insert(n2, 0x5100); // node2.data = actor B
+        mem.insert(n2 + 4, 0); // end of chain
+        // Actors: refid at +0x0C (0x100 / player).
+        mem.insert(0x5000 + REFR_REFID_OFFSET, 0x100);
+        mem.insert(0x5100 + REFR_REFID_OFFSET, LOCAL_PLAYER_REF);
+        // Head: data = 0 (unused), next = n1.
+        mem.insert(head, 0);
+        mem.insert(head + 4, n1 as u32);
+
+        let actors = fnv_enumerate_actors(|a| read(&mem, a));
+        assert_eq!(actors, vec![0x100], "player filtered, deduped, sorted");
+
+        // Empty list → nothing.
+        mem.remove(&(head + 4));
+        let actors = fnv_enumerate_actors(|a| read(&mem, a));
+        assert!(actors.is_empty());
+
+        // Cyclic chain → cap saves us.
+        mem.insert(head + 4, n1 as u32);
+        mem.insert(n1 + 4, n1 as u32); // self-loop
+        let actors = fnv_enumerate_actors(|a| read(&mem, a));
+        assert!(actors.len() <= 1, "cycle bounded by node cap");
+    }
+
+    #[test]
+    fn test_collect_ref_ids_feeds_diff() {
+        reset_known();
+        collect_ref_ids(&[0x200, 0x201]);
+        let events = flush_npc_diff();
+        assert_eq!(events.len(), 2, "both collected spawn");
+        reset_known();
     }
 
     #[test]
