@@ -70,33 +70,26 @@ pub enum CommandResult {
 }
 
 impl CommandResult {
-    /// Decode from the pipe protocol response format.
-    /// Response: [opcode:1B][key:4B][result...]
+    /// Decode a command result from the raw result bytes (the RETURN frame
+    /// payload minus its 4-byte key).
     pub fn decode(data: &[u8]) -> Self {
-        if data.len() < 5 {
-            return CommandResult::Error("response too short".into());
-        }
-        let _opcode = data[0];
-        let _key = u32::from_le_bytes([data[1], data[2], data[3], data[4]]);
-        let payload = &data[5..];
-
-        if payload.is_empty() {
+        if data.is_empty() {
             return CommandResult::Success;
         }
 
         // ponytail: simple decode — first byte is type tag, rest is data.
         // Full implementation in PR99.
-        if payload.len() >= 12 {
+        if data.len() >= 12 {
             // Heuristic: if payload is multiples of 4, decode as floats
-            let count = payload.len() / 4;
+            let count = data.len() / 4;
             let mut floats = Vec::with_capacity(count);
             for i in 0..count.min(3) {
                 let start = i * 4;
                 floats.push(f32::from_le_bytes([
-                    payload[start],
-                    payload[start + 1],
-                    payload[start + 2],
-                    payload[start + 3],
+                    data[start],
+                    data[start + 1],
+                    data[start + 2],
+                    data[start + 3],
                 ]));
             }
             CommandResult::Floats(floats)

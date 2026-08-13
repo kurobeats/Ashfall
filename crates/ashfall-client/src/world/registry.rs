@@ -30,6 +30,7 @@ pub enum ClientObject {
         equipped: bool,
     },
     Actor {
+        ref_id: u32,
         pos: [f32; 3],
         angle: [f32; 3],
         dead: bool,
@@ -40,6 +41,7 @@ pub enum ClientObject {
         weapon: u8,
     },
     Player {
+        ref_id: u32,
         name: String,
         pos: [f32; 3],
         angle: [f32; 3],
@@ -85,7 +87,7 @@ impl ClientRegistry {
     pub fn apply_packet(&mut self, packet: &Packet) {
         match packet {
             Packet::ObjectNew {
-                id, name, net_pos, angle, scale, cell, enabled, ..
+                id, ref_id, name, net_pos, angle, scale, cell, enabled, ..
             } => {
                 let name = name.resolve(&mut self.string_table);
                 self.interp
@@ -95,7 +97,7 @@ impl ClientRegistry {
                 self.objects.insert(
                     *id,
                     ClientObject::Object {
-                        ref_id: 0, base_id: 0, name,
+                        ref_id: *ref_id, base_id: 0, name,
                         pos: *net_pos, angle: *angle, scale: *scale, cell: *cell, enabled: *enabled,
                     },
                 );
@@ -122,10 +124,10 @@ impl ClientRegistry {
             Packet::UpdateItemEquipped { id, equipped, .. } => {
                 if let Some(ClientObject::Item { equipped: e, .. }) = self.objects.get_mut(id) { *e = *equipped; }
             }
-            Packet::ActorNew { id, values, dead, .. } => {
+            Packet::ActorNew { id, ref_id, values, dead, .. } => {
                 let health = values.get(&0x14).copied().unwrap_or(100.0);
                 self.objects.insert(*id, ClientObject::Actor {
-                    pos: [0.0; 3], angle: [0.0; 3], dead: *dead, health, alerted: false, sneaking: false,
+                    ref_id: *ref_id, pos: [0.0; 3], angle: [0.0; 3], dead: *dead, health, alerted: false, sneaking: false,
                     moving: 0, weapon: 0,
                 });
             }
@@ -156,9 +158,9 @@ impl ClientRegistry {
             Packet::UpdateActorDead { id, dead, .. } => {
                 if let Some(ClientObject::Actor { dead: d, .. }) = self.objects.get_mut(id) { *d = *dead; }
             }
-            Packet::PlayerNew { id, .. } => {
+            Packet::PlayerNew { id, ref_id, .. } => {
                 self.objects.insert(*id, ClientObject::Player {
-                    name: format!("Player_{id}"), pos: [0.0; 3], angle: [0.0; 3], health: 100.0,
+                    ref_id: *ref_id, name: format!("Player_{id}"), pos: [0.0; 3], angle: [0.0; 3], health: 100.0,
                 });
             }
             _ => {}
@@ -178,6 +180,19 @@ impl ClientRegistry {
     }
 
     pub fn object_count(&self) -> usize { self.objects.len() }
+
+    /// Game ref id for a server entity (captured from its New packet), if
+    /// known — used to address engine commands for remote entities.
+    pub fn ref_of(&self, id: NetworkID) -> Option<u32> {
+        match self.objects.get(&id) {
+            Some(ClientObject::Object { ref_id, .. })
+            | Some(ClientObject::Actor { ref_id, .. })
+            | Some(ClientObject::Player { ref_id, .. }) => {
+                if *ref_id != 0 { Some(*ref_id) } else { None }
+            }
+            _ => None,
+        }
+    }
 
     /// Interpolated position of an object: render-behind buffer with
     /// extrapolation (mojave-online semantics — see `world::state`), falling

@@ -3,6 +3,7 @@ mod dispatch;
 mod game;
 mod ipc;
 mod network;
+mod sync;
 mod ui;
 mod world;
 
@@ -38,6 +39,10 @@ impl eframe::App for AppState {
                     if let Ok(packets) = rt.block_on(game.poll()) {
                         for pkt in packets { game.handle_packet(pkt); }
                     }
+                    // Bridge → server (own-player state) + server → bridge
+                    // (remote positions applied to the local game).
+                    let _ = rt.block_on(game.poll_bridge());
+                    let _ = rt.block_on(game.flush_commands());
                     // Flush server-GUI clicks back to the server
                     let _ = rt.block_on(game.flush_gui_clicks());
                 }

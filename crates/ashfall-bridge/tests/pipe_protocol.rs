@@ -1,8 +1,13 @@
 //! Pipe protocol round-trip tests.
 //!
-//! Wire format (matching vaultmp pipe protocol):
-//!   Request:  [PIPE_OP_COMMAND(1B)][key(4B LE)][func(4B LE)][param_count(1B)][params...]
-//!   Response: [PIPE_OP_RETURN(1B)][key(4B LE)][result...]
+//! Wire format (length-prefixed frames so responses and events share the
+//! stream unambiguously — see `ashfall_core::event`):
+//! ```text
+//! Frame:    [len:2 LE][opcode:1][payload...]
+//! Command:  payload = [key:4B LE][func:4B LE][param_count:1B][params...]
+//! Response: payload = [key:4B LE][result...]
+//! Event:    payload = [event_type:4B LE][event data...]
+//! ```
 
 use ashfall_bridge::network;
 
@@ -28,20 +33,23 @@ fn test_pipe_command_roundtrip() {
 
     let cmd = network::encode_pipe_command(key, func, &params);
 
-    // Verify structure
-    assert_eq!(cmd[0], network::PIPE_OP_COMMAND);
-    assert_eq!(u32::from_le_bytes([cmd[1], cmd[2], cmd[3], cmd[4]]), key);
-    assert_eq!(u32::from_le_bytes([cmd[5], cmd[6], cmd[7], cmd[8]]), func);
-    assert_eq!(cmd[9], 4); // param_count = 4 bytes for ref_id
-    assert_eq!(&cmd[10..14], &0x42u32.to_le_bytes());
+    // Verify frame structure: [len][opcode][key][func][count][params]
+    assert_eq!(cmd[2], network::PIPE_OP_COMMAND);
+    let (frames, rest) = ashfall_core::event::split_frames(&cmd);
+    assert!(rest.is_empty(), "one complete frame");
+    assert_eq!(frames.len(), 1);
+    let payload = &frames[0].payload;
+    assert_eq!(u32::from_le_bytes([payload[0], payload[1], payload[2], payload[3]]), key);
+    assert_eq!(u32::from_le_bytes([payload[4], payload[5], payload[6], payload[7]]), func);
+    assert_eq!(payload[8], 4); // param_count = 4 bytes for ref_id
+    assert_eq!(&payload[9..13], &0x42u32.to_le_bytes());
 
     // Encode response
     let result = vec![0u8; 12]; // GET_POS returns 12 bytes (3 f32s)
     let response = network::encode_pipe_return(key, &result);
-
-    assert_eq!(response[0], network::PIPE_OP_RETURN);
-    assert_eq!(u32::from_le_bytes([response[1], response[2], response[3], response[4]]), key);
-    assert_eq!(response.len(), 1 + 4 + 12);
+    let (frames, _) = ashfall_core::event::split_frames(&response);
+    assert_eq!(frames[0].opcode, network::PIPE_OP_RETURN);
+    assert_eq!(response.len(), 2 + 1 + 4 + 12);
 }
 
 #[test]
@@ -50,8 +58,6 @@ fn test_pipe_return_encoding() {
     let result = vec![1, 2, 3, 4]; // 4-byte success result
 
     let encoded = network::encode_pipe_return(key, &result);
-
-    // Decode
     let decoded = network::decode_pipe_return(&encoded);
     assert!(decoded.is_some());
     let (opcode, decoded_key, decoded_result) = decoded.unwrap();
@@ -63,7 +69,7 @@ fn test_pipe_return_encoding() {
 
 #[test]
 fn test_pipe_return_decode_short() {
-    // 5 bytes is too short (need 1 opcode + 4 key)
+    // Truncated frame (no length prefix) → None.
     assert!(network::decode_pipe_return(&[0x03, 0x01, 0x00]).is_none());
 }
 
@@ -71,7 +77,6 @@ fn test_pipe_return_decode_short() {
 fn test_pipe_return_decode_empty_result() {
     let key = 99u32;
     let encoded = network::encode_pipe_return(key, &[]);
-
     let decoded = network::decode_pipe_return(&encoded);
     assert!(decoded.is_some());
     let (opcode, decoded_key, decoded_result) = decoded.unwrap();
@@ -103,43 +108,102 @@ fn test_pipe_command_all_opcodes() {
 #[test]
 fn test_pipe_command_e2e_get_pos() {
     // Full end-to-end: encode GET_POS → dispatch through execute → decode response
-    // GET_POS with ref_id=1 returns [0.0; 3] from stub hooks
     let key = 5u32;
     let func = 0x0001u32; // OP_GET_POS
     let params = 1u32.to_le_bytes().to_vec();
 
     let cmd = network::encode_pipe_command(key, func, &params);
+    let (frames, _) = ashfall_core::event::split_frames(&cmd);
+    let payload = &frames[0].payload;
 
-    // Parse command like dispatch() does
-    let opcode = cmd[0];
-    assert_eq!(opcode, network::PIPE_OP_COMMAND);
-
-    let parsed_key = u32::from_le_bytes([cmd[1], cmd[2], cmd[3], cmd[4]]);
+    let parsed_key = u32::from_le_bytes([payload[0], payload[1], payload[2], payload[3]]);
     assert_eq!(parsed_key, key);
-
-    let parsed_func = u32::from_le_bytes([cmd[5], cmd[6], cmd[7], cmd[8]]);
+    let parsed_func = u32::from_le_bytes([payload[4], payload[5], payload[6], payload[7]]);
     assert_eq!(parsed_func, func);
-
-    let param_count = cmd[9] as usize;
+    let param_count = payload[8] as usize;
     assert_eq!(param_count, 4);
-
-    let parsed_params = &cmd[10..];
+    let parsed_params = &payload[9..];
     assert_eq!(parsed_params, &1u32.to_le_bytes());
 
     // Execute
     let result = ashfall_bridge::commands::execute(parsed_func, parsed_params);
-
     // GET_POS stub returns [0.0; 3] = 12 zero bytes
     assert_eq!(result.len(), 12);
 
     // Encode response
     let response = network::encode_pipe_return(key, &result);
-
-    // Decode
     let decoded = network::decode_pipe_return(&response);
     assert!(decoded.is_some());
     let (op, dk, dr) = decoded.unwrap();
     assert_eq!(op, network::PIPE_OP_RETURN);
     assert_eq!(dk, key);
     assert_eq!(dr, result);
+}
+
+#[test]
+fn test_report_player_state_emits_event_frame() {
+    // The debug reporter queues an EVENT_PLAYER_STATE frame (the client's
+    // coop loop consumes it). On non-Windows the getters return defaults, but
+    // the frame structure is the contract.
+    let frame = network::report_player_state();
+    assert_eq!(frame[2], network::PIPE_OP_EVENT);
+    let (frames, _) = ashfall_core::event::split_frames(&frame);
+    assert_eq!(frames.len(), 1);
+    let (event_type, data) = ashfall_core::event::decode_event(&frames[0].payload).expect("event header");
+    assert_eq!(event_type, ashfall_core::event::EVENT_PLAYER_STATE);
+    let e = ashfall_core::event::decode_player_state(data).expect("player state");
+    assert_eq!(e.ref_id, network::LOCAL_PLAYER_REF);
+    assert_eq!(e.pos, [0.0; 3], "stub getters return defaults");
+}
+
+#[test]
+fn test_command_queues_duplicate_event() {
+    // execute(OP_REPORT_PLAYER_STATE) returns the event frame bytes as its
+    // result (the response echoes what was queued).
+    let result = ashfall_bridge::commands::execute(
+        ashfall_bridge::commands::opcodes::OP_REPORT_PLAYER_STATE,
+        &[],
+    );
+    assert_eq!(result[2], network::PIPE_OP_EVENT, "response is the event frame");
+}
+
+#[test]
+fn test_bridge_server_pushes_event_over_tcp() {
+    use std::io::{Read, Write};
+    use std::net::{TcpListener, TcpStream};
+
+    // Pick a free port, then let run_server bind it.
+    let probe = TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = probe.local_addr().unwrap().port();
+    drop(probe);
+
+    let addr = format!("127.0.0.1:{port}");
+    let server_addr = addr.clone();
+    std::thread::spawn(move || network::run_server(&server_addr));
+    std::thread::sleep(std::time::Duration::from_millis(200));
+
+    let mut stream = TcpStream::connect(&addr).unwrap();
+    // Ask the bridge to report its player state: the response echoes the
+    // event frame AND the event is queued for the connection loop to push.
+    let cmd = network::encode_pipe_command(1, ashfall_bridge::commands::opcodes::OP_REPORT_PLAYER_STATE, &[]);
+    stream.write_all(&cmd).unwrap();
+
+    let mut buf = Vec::new();
+    let mut chunk = [0u8; 4096];
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    while buf.len() < 64 && std::time::Instant::now() < deadline {
+        match stream.read(&mut chunk) {
+            Ok(0) => break,
+            Ok(n) => buf.extend_from_slice(&chunk[..n]),
+            Err(_) => break,
+        }
+    }
+
+    let (frames, _) = ashfall_core::event::split_frames(&buf);
+    let events: Vec<_> = frames.iter().filter(|f| f.opcode == network::PIPE_OP_EVENT).collect();
+    assert!(!events.is_empty(), "event frame pushed to the client");
+    let (event_type, data) = ashfall_core::event::decode_event(&events[0].payload).expect("event header");
+    assert_eq!(event_type, ashfall_core::event::EVENT_PLAYER_STATE);
+    let e = ashfall_core::event::decode_player_state(data).expect("player state");
+    assert_eq!(e.ref_id, network::LOCAL_PLAYER_REF);
 }

@@ -50,6 +50,11 @@ pub async fn connect(mode: IpcMode) -> anyhow::Result<IpcTransport> {
 }
 
 impl IpcTransport {
+    /// Whether this transport is the canned-response stub (no real game).
+    pub fn is_stub(&self) -> bool {
+        matches!(self, IpcTransport::Stub)
+    }
+
     /// Send raw bytes.
     pub async fn send(&mut self, data: &[u8]) {
         match self {
@@ -75,10 +80,11 @@ impl IpcTransport {
                 stream.read(buf).await.unwrap_or(0)
             }
             IpcTransport::Stub => {
-                // Return a fake wakeup response
-                if buf.len() >= 5 {
-                    buf[0] = super::PIPE_SYS_WAKEUP;
-                    1
+                // Return a fake framed wakeup so the frame parser stays happy.
+                if buf.len() >= 3 {
+                    let frame = ashfall_core::event::encode_frame(super::PIPE_SYS_WAKEUP, &[]);
+                    buf[..frame.len()].copy_from_slice(&frame);
+                    frame.len()
                 } else {
                     0
                 }

@@ -47,6 +47,10 @@ pub struct Game {
     pub pvp_enabled: bool,
     /// Authoritative game clock (None until the first GameTime packet).
     pub game_time: Option<GameClock>,
+    /// Game-engine bridge (None in stub tests; connected from config).
+    pub ipc: Option<crate::ipc::IpcClient>,
+    /// Engine commands queued from remote packets, drained by `flush_commands`.
+    pub pending_commands: Vec<(u32, Vec<crate::ipc::Param>)>,
     pub reputation: HashMap<u32, i32>,
     pub hardcore_hunger: f32,
     pub hardcore_thirst: f32,
@@ -68,6 +72,8 @@ impl Game {
             karma: 0,
             pvp_enabled: false,
             game_time: None,
+            ipc: None,
+            pending_commands: Vec::new(),
             reputation: HashMap::new(),
             hardcore_hunger: 0.0,
             hardcore_thirst: 0.0,
@@ -81,6 +87,14 @@ impl Game {
         let network = ClientNetwork::connect(addr).await?;
         self.network = Some(network);
         self.connected_at = Some(Instant::now());
+        // Engine bridge (config ipc_mode: stub / tcp / unix). Stub mode is
+        // the default and always succeeds — the real game hooks in later.
+        let mode = match self.config.ipc_mode.as_str() {
+            "unix" => crate::ipc::IpcMode::Native { path: "/tmp/ashfall-ipc.sock".into() },
+            "tcp" => crate::ipc::IpcMode::Proton { port: self.config.ipc_port },
+            _ => crate::ipc::IpcMode::Stub,
+        };
+        self.ipc = Some(crate::ipc::IpcClient::connect(mode).await?);
         Ok(())
     }
 
@@ -115,7 +129,49 @@ impl Game {
 
     pub fn handle_packet(&mut self, packet: Packet) {
         self.registry.apply_packet(&packet);
+        // Remote entities → engine commands (applied on flush_commands).
+        if let Some(local) = self.local_player_id {
+            let cmds = crate::sync::packets_to_commands(
+                std::slice::from_ref(&packet),
+                local,
+                |id| self.registry.ref_of(id),
+            );
+            self.pending_commands.extend(cmds);
+        }
         dispatch::dispatch(self, &packet);
+    }
+
+    /// Drain engine events: bridge → packets → server (the coop loop's
+    /// client side). No-op when no bridge is connected.
+    pub async fn poll_bridge(&mut self) -> anyhow::Result<()> {
+        let Some(ipc) = self.ipc.as_mut() else { return Ok(()) };
+        let frames = ipc.poll_events();
+        if frames.is_empty() {
+            return Ok(());
+        }
+        let Some(local) = self.local_player_id else { return Ok(()) };
+        let packets = crate::sync::events_to_packets(&frames, local);
+        for pkt in packets {
+            self.send_reliable(pkt).await?;
+        }
+        Ok(())
+    }
+
+    /// Execute queued engine commands (remote positions/angles applied to
+    /// the local game).
+    pub async fn flush_commands(&mut self) -> anyhow::Result<()> {
+        let commands = std::mem::take(&mut self.pending_commands);
+        if commands.is_empty() {
+            return Ok(());
+        }
+        let Some(ipc) = self.ipc.as_mut() else {
+            self.pending_commands = commands; // no bridge yet — keep queued
+            return Ok(());
+        };
+        for (opcode, params) in commands {
+            let _ = ipc.execute(opcode, &params).await;
+        }
+        Ok(())
     }
 
     pub async fn send_reliable(&mut self, packet: Packet) -> anyhow::Result<()> {

@@ -58,6 +58,7 @@ pub mod opcodes {
     pub const OP_SET_RESTRAINED: u32       = 0x002A;
     /// Temporary debug: report what save dir the GAME process resolves.
     pub const OP_PROBE_SAVES: u32          = 0x00FE;
+    pub const OP_REPORT_PLAYER_STATE: u32  = 0x00F7; // debug: emit a player-state event
     /// Temporary debug: dump unpacked image (SteamStub analysis).
     pub const OP_DUMP_IMAGE: u32           = 0x00FC;
     /// Temporary debug: read-only form probe (lookup + vtable, no calls).
@@ -447,6 +448,9 @@ pub fn execute(func: u32, params: &[u8]) -> Vec<u8> {
         // ── Debug ──
         OP_PROBE_SAVES => {
             crate::hooks::probe_saves()
+        }
+        OP_REPORT_PLAYER_STATE => {
+            crate::network::report_player_state()
         }
         OP_DUMP_IMAGE => {
             crate::hooks::dump_image()
