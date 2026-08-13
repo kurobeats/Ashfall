@@ -1192,10 +1192,11 @@ round-trips and `sync.rs` maps:
   applied to the local game (remote entities addressed by their `ref_id`)
 
 Wired into the client poll loop; stub IPC mode fails fast instead of hanging.
-The remaining game-side triggers: the per-frame player-state hook (Steam
-frame-function RE), and — for the Steam build only — the twin of the AI
-predicate that the actor-discovery detour hooks (GOG 0x6FAE90 mapped +
-detoured 2026-08-13, byte-guarded; Steam address TBD). See
+The remaining game-side triggers: the per-frame player-state hook (frame-
+function RE) and live verification of the detours. The actor-discovery
+detour covers both builds — GOG 0x6FAE90 and Steam 0x7F9B70 (re-derived
+2026-08-13 from the flat dump via the `[reg+0xFC]` state-check fingerprint;
+`ai_predicate_site()` picks by prologue signature). See
 `docs/steam-re.md` for both.
 
 ---
@@ -1370,7 +1371,7 @@ pub struct MasterServer {
 ## 11. Implementation Phases
 
 > The living phase-by-phase record is [docs/impl-plan.md](./impl-plan.md) —
-> phases 1–10 done + post-phase-10 ingestion and STR-reuse work, 463 tests.
+> phases 1–10 done + post-phase-10 ingestion and STR-reuse work, 466 tests.
 > The plan below is the original design sketch, kept for history.
 
 ### Phase 1: Core Protocol

@@ -202,7 +202,7 @@ Everything client/server/bridge-side is built and tested. On the host:
    (AI predicate 0x6FAE90, byte-guarded) emits EVENT_NPC_SPAWN frames, then
    OP_TRACK_ACTOR → EVENT_NPC_STATE samples, and remote NPCs move via
    OP_SET_POS/OP_SET_ACTOR_VALUE.
-2. **Steam build**: re-derive the AI-predicate twin (anchor: the vaultmp
-   ai_fix sites live inside it — see docs/steam-re.md "Actor discovery"),
-   plus the frame-function address for the continuous player-state hook
-   (`report_player_state_due`). Remember the dump is FLAT (+0xC00 trap).
+2. **Steam build**: the AI-predicate twin is ALREADY re-derived (0x7F9B70,
+   steam-re.md) — live-probe it (OP_PROBE_CODE, FLAT/+0xC00 trap) then the
+   detour applies as-is. Remaining: the frame-function address for the
+   continuous player-state hook (`report_player_state_due`).
