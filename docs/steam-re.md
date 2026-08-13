@@ -17,6 +17,7 @@ pressure-vessel safe), stable across runs.
 | baseForm field | vtable 0x10 (WRONG) | **field +0x1C** | obj-field probe: +0x1C → form object with ID 0x7 (Player base) |
 | pos/angle/cell/scale/refID | fields | fields (+0x2C/0x30/0x34, +0x38, +0x3C, +0x0C) | live battery, game stable |
 | **Respawn disable** (patch sites) | 0x6D5965 / 0x78B230 | **0x9C43A5 / 0x8C9CE0→0x8C9D5D / 0x8C9D52** | semantic anchor (death-UI string → death flow) + probe-verified live; applied + behavior-verified 2026-08-08 |
+| **AI predicate** (actor-discovery detour) | 0x6FAE90 (`56 8B F1`) | **0x7F9B70** (`55 8B EC 51 57 8B F9`) | Steam re-derived 2026-08-13 from the flat dump via the `cmp [reg+0xFC],5/3` fingerprint (field survived the recompile). Structurally identical: `cmp byte [edi+0xF8],0`, state checks, player compare vs **0x123C674** (Steam PlayerCharacter singleton — classic 0x107A104), shared vtable slot +0x22C. Detour byte-guards both prologues and picks by signature (`ai_predicate_site`) |
 
 Auto-detection: `vtable::fo3_lookup_addr()` reads 0x455190 (`51 8b 0d` = GOG)
 vs 0x711EF0 (`55 8b ec 53` = Steam). Respawn patch is byte-guarded inside
@@ -255,11 +256,10 @@ missing), and no fork re-derives it. The community's answer is a **downgrade**:
   `f3_1704_steam` (Anniversary) = `6D09781426A5C61AED59ADDEC130A8009849E3C7`,
   `f3_1703_gog` = `FEB875F0EEC87D2D4854C56DD9CF1F75EC07A3B3` (our GOG exe
   matches this exactly — verified).
-- Implication for Ashfall: **downgrading the host's game to 1.7.0.3 makes
-  the ENTIRE classic table apply** — vaultmp recipes, the AI-predicate
-  discovery detour (0x6FAE90), GetBaseForm, the address library. The Steam
-  per-site re-derivation becomes optional (only needed if the host refuses
-  the downgrade). This is the recommended host deployment path.
+- **DECISION (2026-08-13): we will NOT downgrade.** The Steam/Anniversary
+  re-derivation is the required path. The downgrade exists as a documented
+  community option, but the project targets the live Steam build — every
+  site gets re-derived (the classic table stays the GOG/comparison anchor).
 - The post-2023 Steam dump we hold (SHA1 `92920737...`) is the unpacked
   SteamStub image — the downgrade targets the pristine exe, so re-derivation
   against the dump stays the fallback.

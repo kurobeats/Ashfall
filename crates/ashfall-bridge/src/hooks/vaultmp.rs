@@ -696,6 +696,18 @@ pub const AI_PREDICATE_FO3_CLASSIC: usize = 0x006F_AE90;
 #[cfg(target_arch = "x86")]
 const AI_PREDICATE_PROLOGUE: [u8; 3] = [0x56, 0x8B, 0xF1];
 
+/// Steam/Anniversary AI predicate — re-derived 2026-08-13 from the flat
+/// dump: entry `55 8B EC 51 57 8B F9` (push ebp; mov ebp,esp; push edi;
+/// mov edi,ecx — actor in edi, the classic's esi twin), same structure:
+/// `cmp byte [edi+0xF8],0` + `cmp [edi+0xFC],5/3` state checks + player
+/// compare against **0x123C674** + shared vtable slot +0x22C. Real VA
+/// (flat offset = VA − 0x400000; r2 PE-parses the dump +0xC00).
+#[cfg(target_arch = "x86")]
+pub const STEAM_AI_PREDICATE: usize = 0x007F_9B70;
+/// Expected prologue: `55 8B EC 51 57`.
+#[cfg(target_arch = "x86")]
+const STEAM_AI_PREDICATE_PROLOGUE: [u8; 5] = [0x55, 0x8B, 0xEC, 0x51, 0x57];
+
 
 /// The Rust collector called by the thunk (cdecl: actor on the stack).
 #[no_mangle]
@@ -736,14 +748,27 @@ unsafe impl Send for super::detour::Detour {}
 
 /// Install the actor-discovery detour on the classic FO3 build. Byte-guarded
 /// like `apply_steam_respawn` — no-op on Steam (address TBD) and non-Windows.
+/// Select the AI-predicate site for the running build by prologue signature
+/// (classic `push esi; mov esi, ecx` vs Steam/Anniversary `push ebp; mov
+/// ebp,esp; push ecx; push edi; mov edi,ecx` — Steam re-derived 2026-08-13).
+#[cfg(target_arch = "x86")]
+fn ai_predicate_site() -> Option<usize> {
+    use crate::hooks::read_bytes;
+    if read_bytes(AI_PREDICATE_FO3_CLASSIC, 3) == AI_PREDICATE_PROLOGUE {
+        return Some(AI_PREDICATE_FO3_CLASSIC);
+    }
+    if read_bytes(STEAM_AI_PREDICATE, 5) == STEAM_AI_PREDICATE_PROLOGUE {
+        return Some(STEAM_AI_PREDICATE);
+    }
+    None
+}
+
 pub fn apply_actor_discovery() -> bool {
     #[cfg(target_arch = "x86")]
     {
-        // Prologue guard: only the classic build has `push esi; mov esi, ecx`
-        // at this address (Steam recompiled — garbage there).
-        if crate::hooks::read_bytes(AI_PREDICATE_FO3_CLASSIC, 3) != AI_PREDICATE_PROLOGUE {
-            return false; // Steam build (prologue mismatch) — no-op
-        }
+        let Some(site) = ai_predicate_site() else {
+            return false; // unknown build — no-op
+        };
 
         let detour = DETOUR.get_or_init(|| std::sync::Mutex::new(None));
         let mut guard = detour.lock().unwrap();
@@ -756,7 +781,7 @@ pub fn apply_actor_discovery() -> bool {
                 fn ashfall_actor_collect_thunk();
             }
             let thunk = ashfall_actor_collect_thunk as *const u8;
-            let mut d = match super::detour::Detour::new(AI_PREDICATE_FO3_CLASSIC as *mut u8, thunk) {
+            let mut d = match super::detour::Detour::new(site as *mut u8, thunk) {
                 Some(d) => d,
                 None => return false, // trampoline alloc failed (non-Windows)
             };
