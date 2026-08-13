@@ -136,9 +136,11 @@ pub fn install() {
     // (steam-re.md remaining site groups).
     vaultmp::apply_actor_discovery();
     // FNV per-frame player-state hook (0x86B386 main-loop call, NVSE anchor).
-    // Byte-guarded — no-op on FO3. FO3's frame hook (0x6EEC15) is a
-    // mid-function dispatch; deferred (steam-re.md).
+    // Byte-guarded — no-op on FO3.
     vaultmp::apply_fnv_frame_hook();
+    // FO3 classic per-frame player-state hook (0x6EEB2F frame-body call).
+    // Byte-guarded — no-op on the Steam/Anniversary build (downgrade path).
+    vaultmp::apply_fo3_frame_hook();
     // TODO: locate TESObjectREFR vtable, patch all hooks.
     // For Proton: same VTable layout as Windows — Wine mirrors the binary exactly.
 }

@@ -242,3 +242,34 @@ save/load/text/model-path only — no AI/process hook.
 **Wired:** `apply_fnv_frame_hook()` (per-frame player-state, byte-guarded,
 installed from `hooks::install()`). Remaining FNV: the AI-predicate address
 for the discovery detour + live verification on the host.
+
+## FO3 Anniversary/2023 build — community solution (online research 2026-08-13)
+
+The FO3 "Anniversary" (post-2023) Steam recompile has **no public address
+table** — the FOSE repo was deleted from ianpatt's account (the only xSE
+missing), and no fork re-derives it. The community's answer is a **downgrade**:
+
+- **FalloutAnniversaryPatcher** (c6-dev + lStewieAl, Nexus FO3 mod 24913,
+  github.com/c6-dev/FalloutAnniversaryPatcher): SHA1-detects the build and
+  xdelta-downgrades the exe back to classic 1.7.0.3. Recognized hashes:
+  `f3_1704_steam` (Anniversary) = `6D09781426A5C61AED59ADDEC130A8009849E3C7`,
+  `f3_1703_gog` = `FEB875F0EEC87D2D4854C56DD9CF1F75EC07A3B3` (our GOG exe
+  matches this exactly — verified).
+- Implication for Ashfall: **downgrading the host's game to 1.7.0.3 makes
+  the ENTIRE classic table apply** — vaultmp recipes, the AI-predicate
+  discovery detour (0x6FAE90), GetBaseForm, the address library. The Steam
+  per-site re-derivation becomes optional (only needed if the host refuses
+  the downgrade). This is the recommended host deployment path.
+- The post-2023 Steam dump we hold (SHA1 `92920737...`) is the unpacked
+  SteamStub image — the downgrade targets the pristine exe, so re-derivation
+  against the dump stays the fallback.
+
+**FO3 classic frame hook now wired**: the main loop's frame body calls
+0x6E3E40 (no-arg cdecl bool — menu/pause global check) at 0x6EEB2F, once per
+frame (NVSE's FO3 anchor 0x6EEC15 is the same loop, dispatch shape).
+`apply_fo3_frame_hook()` redirects the call (guard `e8 0c 53 ff ff`) → calls
+the original + 10 Hz `report_player_state_due()`. Byte-guarded — no-op on
+the Anniversary build (downgrade covers it).
+
+**kFOSE** (lStewieAl/kFOSE) is the kNVSE animation fork for the classic
+build — confirms the classic build is the modding baseline post-2023.

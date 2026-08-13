@@ -846,3 +846,47 @@ pub fn apply_fnv_frame_hook() -> bool {
 pub fn apply_fnv_frame_hook() -> bool {
     false // tests / x64 hosts — nothing to hook
 }
+
+// ═══════════════════════════════════════════════════════════════
+// Per-frame player-state hook (FO3 classic — main-loop frame body)
+// ═══════════════════════════════════════════════════════════════
+//
+// The FO3 main loop's frame body calls 0x6E3E40 (no-arg cdecl bool — reads
+// a menu/pause global) at 0x6EEB2F, once per frame. NVSE's FO3 main-loop
+// anchor was 0x6EEC15 (same loop, dispatch shape). Redirecting the call is
+// the lazy equivalent of the FNV frame hook: call the original, run the
+// 10 Hz player-state reporter, return the original result. Byte-guarded —
+// no-op on the Steam/Anniversary build (recompiled; the community solution
+// for that build is a downgrade to 1.7.0.3, see steam-re.md).
+
+/// FO3 classic frame-hook site (verified on the GOG 1.7.0.3 exe).
+#[cfg(target_arch = "x86")]
+pub const FO3_FRAME_HOOK_SITE: usize = 0x006E_EB2F;
+#[cfg(target_arch = "x86")]
+const FO3_FRAME_ORIGINAL_CALL: usize = 0x006E_3E40;
+/// Guard: `call 0x6E3E40` (e8 0c 53 ff ff).
+#[cfg(target_arch = "x86")]
+const FO3_FRAME_GUARD: [u8; 5] = [0xE8, 0x0C, 0x53, 0xFF, 0xFF];
+
+#[cfg(target_arch = "x86")]
+pub fn apply_fo3_frame_hook() -> bool {
+    if crate::hooks::read_bytes(FO3_FRAME_HOOK_SITE, 5) != FO3_FRAME_GUARD {
+        return false; // Steam/Anniversary build — no-op (downgrade path)
+    }
+    unsafe {
+        unsafe extern "C" fn fo3_frame_hook() -> u8 {
+            let orig: unsafe extern "C" fn() -> u8 =
+                unsafe { std::mem::transmute(FO3_FRAME_ORIGINAL_CALL) };
+            let result = orig();
+            crate::network::report_player_state_due();
+            result
+        }
+        crate::hooks::memory::write_rel_call(FO3_FRAME_HOOK_SITE, fo3_frame_hook as *const () as usize);
+    }
+    true
+}
+
+#[cfg(not(target_arch = "x86"))]
+pub fn apply_fo3_frame_hook() -> bool {
+    false // tests / x64 hosts — nothing to hook
+}
