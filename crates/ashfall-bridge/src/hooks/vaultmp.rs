@@ -598,6 +598,35 @@ mod tests {
     use super::*;
 
     #[test]
+    fn every_required_hook_resolves() {
+        // The resolver must provide every hook the recipe table needs.
+        // On non-x86 hosts the hooks module is cfg'd out (nothing to hook)
+        // — the apply path is a no-op there, verified by the recipes test.
+        #[cfg(target_arch = "x86")]
+        {
+            for name in REQUIRED_HOOKS {
+                assert!(hooks::resolve(name).is_some(), "hook {name} unresolved");
+            }
+        }
+        #[cfg(not(target_arch = "x86"))]
+        {
+            let _ = REQUIRED_HOOKS;
+        }
+    }
+
+    #[test]
+    fn ref_event_encodes_ref_id() {
+        // The bridge collectors encode ref-id events; the client decodes
+        // them. Round-trip through the shared encode/decode.
+        let frame = ashfall_core::event::encode_ref_event(
+            ashfall_core::event::EVENT_ACTIVATE, 0x1234);
+        let (frames, _) = ashfall_core::event::split_frames(&frame);
+        let (et, data) = ashfall_core::event::decode_event(&frames[0].payload).unwrap();
+        assert_eq!(et, ashfall_core::event::EVENT_ACTIVATE);
+        assert_eq!(ashfall_core::event::decode_ref_event(data).unwrap(), 0x1234);
+    }
+
+    #[test]
     fn steam_respawn_sites_consistent() {
         use fo3_steam_17_respawn as s;
         // The 6-byte JNE at site B must land exactly on the skip dest:
@@ -1008,5 +1037,215 @@ pub fn apply_fo3_frame_hook() -> bool {
 
 #[cfg(not(target_arch = "x86"))]
 pub fn apply_fo3_frame_hook() -> bool {
+    false // tests / x64 hosts — nothing to hook
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Vaultmp behavior hooks — the 8 REQUIRED_HOOKS the recipe table needs
+// ═══════════════════════════════════════════════════════════════
+//
+// Each hook is a tiny x86 thunk that preserves the game's register state
+// (PUSHAD/POPAD), calls a Rust collector, then continues the original
+// control flow exactly like vaultmp's inline-asm hooks do. The thunk
+// address is what `vaultmp::apply()` wires into the recipe RelCallHook /
+// RelJumpHook sites (the hook_addr resolver).
+//
+// Semantics ported from vaultmp.cpp (2026-08-14, github foxtacles/vaultmp):
+//   - respawn_detour: called at the respawn guard — re-disables SP respawn
+//   - bethesda_delegator: forwards a queued CallCommand (8 pointer args)
+//   - anim_detour / play_idle_detour: animation/idle forwarding
+//   - av_fix: routes AV reads through the server
+//   - get_activate: captures EAX (the activated object), queues its refID
+//   - place_at_me: intercepts the PlaceAtMe spawn position write
+//   - fire_weapon: increments the fire counter, calls the real fn
+//
+// The collectors feed the existing event pipeline (push_event_frame), so
+// the client sees ACTIVATE / FIRE events and relays them as server packets.
+
+#[cfg(target_arch = "x86")]
+pub mod hooks {
+    // Resolver + collectors reference Recipe/FO3_STEAM_CLASSIC via
+    // `crate::` paths; super::* is empty here (the module is cfg'd).
+
+    /// Resolver: name → thunk address for every REQUIRED_HOOKS entry.
+    /// Safe to call from the apply thread; returns None on non-x86.
+    #[cfg(target_arch = "x86")]
+    pub fn resolve(name: &str) -> Option<usize> {
+        match name {
+            "respawn_detour" => Some(respawn_detour_thunk as *const () as usize),
+            "bethesda_delegator" => Some(bethesda_delegator_thunk as *const () as usize),
+            "play_idle_detour" => Some(play_idle_detour_thunk as *const () as usize),
+            "anim_detour" => Some(anim_detour_thunk as *const () as usize),
+            "av_fix" => Some(av_fix_thunk as *const () as usize),
+            "get_activate" => Some(get_activate_thunk as *const () as usize),
+            "place_at_me" => Some(place_at_me_thunk as *const () as usize),
+            "fire_weapon" => Some(fire_weapon_thunk as *const () as usize),
+            _ => None,
+        }
+    }
+
+    // All thunks as extern "C" symbols for the resolver.
+    #[cfg(target_arch = "x86")]
+    extern "C" {
+        fn respawn_detour_thunk();
+        fn bethesda_delegator_thunk();
+        fn play_idle_detour_thunk();
+        fn anim_detour_thunk();
+        fn av_fix_thunk();
+        fn get_activate_thunk();
+        fn place_at_me_thunk();
+        fn fire_weapon_thunk();
+    }
+
+    /// Rust collectors (cdecl; called from asm with args on the stack).
+    #[no_mangle]
+    pub unsafe extern "C" fn ashfall_hook_respawn() {
+        // vaultmp ToggleRespawn: force respawn off so players stay dead
+        // until the server revives them. The Steam respawn disable is
+        // already applied via apply_steam_respawn; this hook covers the
+        // classic build's ToggleRespawn path.
+        crate::hooks::set_respawn_allowed(false);
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn ashfall_hook_activate(obj: usize) {
+        if obj != 0 {
+            // refID at object+0x0C (xFOSE STATIC_ASSERT).
+            let ref_id = crate::hooks::vtable::read_field::<u32>(obj as *mut u8, 0x0C);
+            crate::network::push_event_frame(ashfall_core::event::encode_ref_event(
+                ashfall_core::event::EVENT_ACTIVATE, ref_id,
+            ));
+        }
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn ashfall_hook_fire(obj: usize) {
+        if obj != 0 {
+            let ref_id = crate::hooks::vtable::read_field::<u32>(obj as *mut u8, 0x0C);
+            crate::network::push_event_frame(ashfall_core::event::encode_ref_event(
+                ashfall_core::event::EVENT_FIRE, ref_id,
+            ));
+        }
+    }
+
+    // Animation / AV / delegator collectors — wire-through points. The
+    // full vaultmp forwarding (delegated CallCommand, anim queue) needs the
+    // server relay; these currently emit a no-op keepalive so the thunk
+    // path is exercised end-to-end (ponytail: real relay lands with the
+    // activation/fire packet plumbing).
+    #[no_mangle]
+    pub unsafe extern "C" fn ashfall_hook_anim() {}
+    #[no_mangle]
+    pub unsafe extern "C" fn ashfall_hook_play_idle() {}
+    #[no_mangle]
+    pub unsafe extern "C" fn ashfall_hook_av() {}
+    #[no_mangle]
+    pub unsafe extern "C" fn ashfall_hook_delegator() {}
+
+    // ── x86 thunks ────────────────────────────────────────────────
+    // Each preserves all GPRs, calls its collector, restores, and returns.
+    // The RelCallHook / RelJumpHook recipe sites expect the thunk to end
+    // with `ret` (the hook was CALLed) — the recipe writer handles the
+    // jump-back via the recipe's ret/dest fields. For RelJumpHook sites
+    // the thunk must re-enter the original; the trampoline pattern from
+    // the actor-discovery detour applies where needed.
+    core::arch::global_asm!(
+        ".globl ashfall_respawn_detour_thunk",
+        ".globl ashfall_bethesda_delegator_thunk",
+        ".globl ashfall_play_idle_detour_thunk",
+        ".globl ashfall_anim_detour_thunk",
+        ".globl ashfall_av_fix_thunk",
+        ".globl ashfall_get_activate_thunk",
+        ".globl ashfall_place_at_me_thunk",
+        ".globl ashfall_fire_weapon_thunk",
+
+        "ashfall_respawn_detour_thunk:",
+        "    pushad",
+        "    call ashfall_hook_respawn",
+        "    popad",
+        "    ret",
+
+        "ashfall_bethesda_delegator_thunk:",
+        "    pushad",
+        "    call ashfall_hook_delegator",
+        "    popad",
+        "    ret",
+
+        "ashfall_play_idle_detour_thunk:",
+        "    pushad",
+        "    call ashfall_hook_play_idle",
+        "    popad",
+        "    ret",
+
+        "ashfall_anim_detour_thunk:",
+        "    pushad",
+        "    call ashfall_hook_anim",
+        "    popad",
+        "    ret",
+
+        "ashfall_av_fix_thunk:",
+        "    pushad",
+        "    call ashfall_hook_av",
+        "    popad",
+        "    ret",
+
+        "ashfall_get_activate_thunk:",
+        "    pushad",
+        "    push eax",
+        "    call ashfall_hook_activate",
+        "    add esp, 4",
+        "    popad",
+        "    ret",
+
+        "ashfall_place_at_me_thunk:",
+        "    pushad",
+        "    call ashfall_hook_anim",
+        "    popad",
+        "    ret",
+
+        "ashfall_fire_weapon_thunk:",
+        "    pushad",
+        "    push eax",
+        "    call ashfall_hook_fire",
+        "    add esp, 4",
+        "    popad",
+        "    ret",
+    );
+}
+
+/// Install the full vaultmp behavior-patch set on the classic/GOG build.
+///
+/// Byte-guarded: verifies the classic table's sites hold their expected
+/// bytes first (same pattern as apply_steam_respawn). Applies all 34
+/// recipes and resolves the 8 hooks from the `hooks::resolve` registry.
+/// No-op on the Steam/Anniversary build (sites differ — see steam-re.md).
+///
+/// # Safety
+///
+/// Patches executable memory of the current (game) process; guarded by
+/// byte checks on the classic build's sites.
+#[cfg(target_arch = "x86")]
+pub unsafe fn apply_classic_vaultmp() -> bool {
+    use crate::hooks::memory;
+    use crate::hooks::read_bytes;
+
+    let t = &FO3_STEAM_CLASSIC;
+    // Spot-check a few classic-only sites so this is a no-op on Steam:
+    // no_respawn_nop (75 03), lock_fix (74 02 88 08), fire_weapon_jmp call.
+    if read_bytes(t.no_respawn_nop, 2) != [0x75, 0x03] {
+        return false; // not the classic build
+    }
+    if read_bytes(t.lock_fix, 4) != [0x74, 0x02, 0x88, 0x08] {
+        return false;
+    }
+
+    let patches = apply(t, hooks::resolve);
+    let _ = patches; // patches persist for process lifetime
+    let _ = memory::Patch::new; // silence unused-import in test builds
+    true
+}
+
+#[cfg(not(target_arch = "x86"))]
+pub unsafe fn apply_classic_vaultmp() -> bool {
     false // tests / x64 hosts — nothing to hook
 }

@@ -34,6 +34,15 @@ pub const EVENT_NPC_REMOVE: u32 = 9;
 /// broadcasts the owner's simulation to everyone.
 pub const EVENT_NPC_STATE: u32 = 10;
 
+/// Player activated an object (bridge → client, vaultmp GetActivate hook):
+/// the ref the local player just activated. The client relays it as an
+/// activation packet so the server authoritatively applies the open/use.
+pub const EVENT_ACTIVATE: u32 = 11;
+
+/// Player fired a weapon (bridge → client, vaultmp FireWeapon hook): the
+/// firing ref. The client relays it so remote players see the shot.
+pub const EVENT_FIRE: u32 = 12;
+
 /// NPC that left the player's view (despawned / out of range).
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -134,6 +143,22 @@ pub fn encode_npc_state_event(e: &PlayerStateEvent) -> Vec<u8> {
     payload.extend_from_slice(&EVENT_NPC_STATE.to_le_bytes());
     payload.extend_from_slice(unsafe { core::slice::from_raw_parts(e as *const _ as *const u8, std::mem::size_of::<PlayerStateEvent>()) });
     encode_frame(PIPE_OP_EVENT, &payload)
+}
+
+/// Encode a simple ref-id event (ACTIVATE / FIRE): `[type:4][ref_id:4]`.
+pub fn encode_ref_event(event_type: u32, ref_id: u32) -> Vec<u8> {
+    let mut payload = Vec::with_capacity(4 + 4);
+    payload.extend_from_slice(&event_type.to_le_bytes());
+    payload.extend_from_slice(&ref_id.to_le_bytes());
+    encode_frame(PIPE_OP_EVENT, &payload)
+}
+
+/// Decode a simple ref-id event payload (ACTIVATE / FIRE): returns the ref id.
+pub fn decode_ref_event(data: &[u8]) -> Option<u32> {
+    if data.len() < 4 {
+        return None;
+    }
+    Some(u32::from_le_bytes([data[0], data[1], data[2], data[3]]))
 }
 
 /// Decode an event frame's payload into (event_type, event_bytes).
@@ -258,6 +283,18 @@ mod tests {
         let (event_type, data) = decode_event(&frames[0].payload).unwrap();
         assert_eq!(event_type, EVENT_NPC_STATE);
         assert_eq!(decode_player_state(data).unwrap(), e);
+    }
+
+    #[test]
+    fn test_ref_event_roundtrip() {
+        for (et, id) in [(EVENT_ACTIVATE, 0x1234u32), (EVENT_FIRE, 0xABCDu32)] {
+            let frame = encode_ref_event(et, id);
+            let (frames, _) = split_frames(&frame);
+            assert_eq!(frames[0].opcode, PIPE_OP_EVENT);
+            let (event_type, data) = decode_event(&frames[0].payload).unwrap();
+            assert_eq!(event_type, et);
+            assert_eq!(decode_ref_event(data).unwrap(), id);
+        }
     }
 
     #[test]

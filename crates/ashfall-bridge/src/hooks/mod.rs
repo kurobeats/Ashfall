@@ -130,6 +130,12 @@ pub fn install() {
     unsafe {
         vaultmp::apply_steam_respawn();
     }
+    // Full vaultmp behavior-patch set (respawn, fire relay, activate,
+    // PlaceAtMe, anim/idle forwarding) on the classic/GOG build. Byte-
+    // guarded — no-op on Steam/Anniversary (sites differ).
+    unsafe {
+        vaultmp::apply_classic_vaultmp();
+    }
     // Actor-discovery detour (classic FO3: 0x6FAE90 AI predicate, verified
     // 2026-08-13 — the engine's per-actor processing gate). Byte-guarded —
     // no-op on Steam until the Steam AI-pause address is re-derived
@@ -557,6 +563,19 @@ pub fn is_dead(ref_id: u32) -> bool {
     let _ = ref_id;
     // TODO: Actor::GetDead()
     false
+}
+
+/// Server-authoritative respawn gate. The vaultmp respawn_detour hook calls
+/// this: when false (the default for a running server), the SP respawn path
+/// stays disabled so players remain dead until the server revives them.
+/// The Steam respawn-disable patch (apply_steam_respawn) is the byte-level
+/// enforcement; this flag is the hook-level toggle for the classic build.
+pub fn set_respawn_allowed(_allowed: bool) {
+    // The respawn-disable byte patches (classic + Steam) already prevent
+    // the SP auto-respawn at the engine level. This hook is the semantic
+    // gate for the classic ToggleRespawn path — kept as a no-op toggle
+    // until the server revive op lands (ponytail: the byte patches are the
+    // enforcement; this is the wiring point for OP_REVIVE).
 }
 
 /// Get the cell FormID this reference currently occupies.

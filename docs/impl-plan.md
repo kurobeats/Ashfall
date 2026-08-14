@@ -306,7 +306,7 @@ PRs within a phase often parallelizable unless noted.
 | 3. StringCache | `StringTable` + `CachedString` (Plain/Inline{id,value}/Id). Server assigns ids per-session, `Packet::finalize_strings` binds in the send path (dedicated.rs `send()`), repeats go out as 2-byte ids. Wired into ObjectNew/UpdateName/UpdateActorIdle/GameChat/GameMessage/UpdateInterior. | `ashfall-core/src/string_cache.rs`, `protocol/mod.rs`, `dedicated.rs`, client registry/dispatch |
 | 4. Ownership transfer | `OwnershipClaim/Granted/Released` packets + registry owner map. ActorNew grants sender ownership (dedup by ref_id); mutations gated to own player OR sim owner; disconnect releases all owned actors + broadcasts release. Client tracks `owned_actors`; bridge hooks: `Game::claim_ownership()` / `Game::owns()`. | `protocol/mod.rs`, `world/registry.rs`, `handlers/actor.rs`, `handlers/object.rs`, `dedicated.rs`, client `game.rs`/`registry.rs` |
 
-467 tests, 0 warnings. Ownership/delta rules proven in `tests/ownership.rs` (5 handler-level tests); string-cache wire semantics in `string_cache.rs` unit tests + `wire_format.rs`. Next: bridge `events.rs` NPC-spawn reporting → `claim_ownership()` wiring.
+472 tests, 0 warnings. Ownership/delta rules proven in `tests/ownership.rs` (5 handler-level tests); string-cache wire semantics in `string_cache.rs` unit tests + `wire_format.rs`. Next: bridge `events.rs` NPC-spawn reporting → `claim_ownership()` wiring.
 
 | 5. Time/settings/spell/version | `GameTime` (authoritative clock, advances server-side at time_scale, 30-day-month rollover, join-send + change-broadcast — STR CalendarService), `ServerSettings { pvp_enabled }` (config → join broadcast), `SpellCast` (owner-gated relay, STR NotifySpellCast), `GameAuth.version` (reject mismatch, STR AuthenticationRequest). | `protocol/mod.rs`, `dedicated.rs`, `config.rs`, `handlers/auth.rs`, `handlers/actor.rs`, client `game.rs`/`dispatch.rs` |
 
@@ -319,6 +319,7 @@ PRs within a phase often parallelizable unless noted.
 Remaining (needs game host — steam-re.md): live verification of the discovery detours (GOG 0x6FAE90 + Steam 0x7F9B70 — probe-verify before patching, FLAT/+0xC00 caveat), the per-frame game-loop hooks, the vtable-call ops on Steam (GetActorValue/State/AnimData — early vtable region reordered, OP_PROBE_FORM will read the slots), and the remaining Steam patch-site groups (fire_fix, match_race, place_at_me, ai_fix2/3/4, play_idle_fix — all need live-probe). get_activate fully solved (jmp 0x8D3BC8 + ret 0x8D3CB8). Load-order bridge reporting explicitly deprioritized — MVP targets vanilla games.
 
 | 17. Steam vtable re-derivation (2026-08-14c) | Steam PC vtable base found (0xF938FC, verified via AI-pred +0x22C and death-handler +0x23C); GOG base 0xE16B10. Slot translation by byte-identical matching: 41 slots, 59% fit a +0x58 shift (recompile inserted 22 early entries). Early region (+0x00..0x68) REORDERED — GetActorValue/BaseValue/AnimData need live probe. GET_LOCKED confirmed: GOG +0xA0 -> Steam +0xFC (byte-identical `8a 41 0a 24 01 c3`). Wired `fo3_steam_vtable` + `steam_slot_for()` into `get_lock` (byte-guarded, GOG fallback). Online: no public Anniversary vtable exists (kFOSE checked — classic only). | bridge `vtable.rs`, scripts/re/vtable_steam.py, docs/steam-re.md |
+| 18. Vaultmp hook framework (2026-08-14d) | The 8 REQUIRED_HOOKS (respawn_detour, bethesda_delegator, play_idle_detour, anim_detour, av_fix, get_activate, place_at_me, fire_weapon) were referenced by the recipe table but never implemented — the full vaultmp behavior-patch pipeline was dead code. Implemented the hook registry (name → thunk addr) + 8 register-preserving x86 thunks (PUSHAD/POPAD, collector call) + Rust collectors. get_activate/fire_weapon collectors read the object refID (+0x0C) and emit new EVENT_ACTIVATE (11) / EVENT_FIRE (12) pipe events; the client relays them as UpdateActivate / UpdateFireWeapon packets. `apply_classic_vaultmp()` wires the full 34-recipe set into `install()` (byte-guarded, no-op on Steam). Fixed pre-existing x86-build blocker: `select_candidate`'s unsafe prologue read lacked an unsafe block. 472 tests, x86 cross-check clean. | bridge `vaultmp.rs`/`mod.rs`/`address.rs`, core `event.rs`, client `sync.rs` |
 
 | 16. vcdiff breakthrough (2026-08-14) | Dead-end Steam patch sites solved via **FalloutAnniversaryPatcher's `patch_steam.vcdiff`** (online find): the downgrade delta encodes every byte that survived the recompile as a CPY_0 instruction (classic target ↔ Steam source). Decoded with the pristine Steam exe (f3_1704_steam, SHA1-verified; its .text is byte-identical to our flat dump, +0xC00) → classic_out.exe (f3_1703_mod, SHA1-verified). `printdelta` trap: Offset/S@ columns are DECIMAL. **63,616 verified byte-identical runs** (`vcdiff_map5.py`). New EXACT-cover sites wired: **ai_fix1 → 0x5E99E2**, **get_activate_jmp → 0x8D3BC8** (vtable slot shifted 0x224→0x100), **delegator stub spot → 0x405E69/0x405E6A**, **play_group_fix → 0x4350F9**; lock_fix + play_idle_call_src confirmed. Gap-based translations and generic SEH-prologue matches are false positives (proven: ai_predicate gap ≠ real 0x7F9B70). | bridge `vaultmp.rs`, scripts/re/vcdiff_map5.py, docs/steam-re.md |
 | 15. Steam AI predicate re-derived | The actor-discovery detour now covers the Steam/Anniversary build: `cmp [reg+0xFC],5/3` fingerprint scan on the flat dump found the AI predicate at **0x7F9B70** (entry `55 8B EC 51 57 8B F9`, structurally identical to classic — same `[edi+0xF8]`/`[edi+0xFC]` checks, player compare vs Steam PlayerCharacter singleton 0x123C674, shared vtable slot +0x22C). `ai_predicate_site()` picks classic vs Steam by prologue signature. The vaultmp ai_fix recipe twins live inside it (derivable once live-probed). | bridge `vaultmp.rs`, docs/steam-re.md |
@@ -329,7 +330,7 @@ Remaining (needs game host — steam-re.md): live verification of the discovery 
 
 Admin/ban system: explicitly skipped per project direction.
 
-**467 tests, 0 warnings** (2026-08-13).
+**472 tests, 0 warnings** (2026-08-13).
 
 2026-08-14: live-collector tests serialized (shared CURRENT/LAST statics raced in
 parallel); repo-wide clippy/lint cleanup (map_or → is_none_or/is_some_and,
@@ -344,7 +345,17 @@ test. Also verified the **Steam FNV download** against GOG: same binary at
 runtime (sections/layout identical, .data/.rsrc/.reloc byte-identical; only
 .8diff: .text SteamStub-encrypted on disk + steam_api.dll vs GalaxyWrp.dll
 import + .bind unpacker) → **fnv_14 table applies to Steam unchanged, no
-re-derivation needed**. 467 tests, 0 warnings.
+re-derivation needed**. 472 tests, 0 warnings.
+
+2026-08-14 (d): vaultmp hook framework — the 8 REQUIRED_HOOKS implemented
+(resolver + x86 thunks + collectors), EVENT_ACTIVATE/EVENT_FIRE pipe events
++ client relay (UpdateActivate/UpdateFireWeapon), apply_classic_vaultmp()
+wired into install() (byte-guarded, no-op on Steam). Fixed the pre-existing
+x86-build blocker in select_candidate (unsafe block). +4 tests (472 total),
+x86 cross-check clean. Answer to "is it purely live testing now": no — the
+whole vaultmp behavior-patch pipeline was dead code; the hooks + wiring were
+implementable without the game (only the per-site live probe + Steam AV/anim
+vtable slots remain game-host work).
 
 P3+P4 can run in parallel (both depend on P2). P6+P7 can run in parallel after P5+P7 foundation ready. P10 can start after P7 IPC module (PR79).
 

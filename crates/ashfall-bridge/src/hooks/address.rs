@@ -29,7 +29,10 @@ pub fn select_candidate(candidates: &[Candidate], fallback: usize) -> usize {
             (0..n).map(|i| *((addr + i) as *const u8)).collect()
         }
         for c in candidates {
-            if rd(c.addr, c.signature.len()) == c.signature {
+            // SAFETY: rd dereferences game-memory addresses for the
+            // candidate prologue check; the sites are known code in the
+            // loaded exe (validated by the address tables).
+            if unsafe { rd(c.addr, c.signature.len()) } == c.signature {
                 return c.addr;
             }
         }

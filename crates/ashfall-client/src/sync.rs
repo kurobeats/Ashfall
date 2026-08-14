@@ -9,7 +9,8 @@
 
 use ashfall_core::event::{
     decode_event, decode_npc_remove, decode_npc_spawn, decode_player_state, PipeFrame,
-    EVENT_NPC_REMOVE, EVENT_NPC_SPAWN, EVENT_NPC_STATE, EVENT_PLAYER_STATE, PIPE_OP_EVENT,
+    EVENT_NPC_REMOVE, EVENT_NPC_SPAWN, EVENT_NPC_STATE, EVENT_PLAYER_STATE,
+    decode_ref_event, EVENT_ACTIVATE, EVENT_FIRE, PIPE_OP_EVENT,
 };
 use ashfall_core::id::NetworkID;
 use ashfall_core::protocol::Packet;
@@ -123,6 +124,27 @@ pub fn events_to_packets(frames: &[PipeFrame], local_id: NetworkID) -> Vec<Packe
                     out.push(Packet::ObjectRemove { id: entity_id(e.ref_id), silent: false });
                 }
             }
+            EVENT_ACTIVATE => {
+                if let Some(ref_id) = decode_ref_event(data) {
+                    // Player activated an object — relay so the server
+                    // applies the open/use authoritatively. actor = the
+                    // local player (local_id); the activated object is the
+                    // ref.
+                    out.push(Packet::UpdateActivate {
+                        id: entity_id(ref_id),
+                        actor: local_id,
+                    });
+                }
+            }
+            EVENT_FIRE => {
+                if let Some(ref_id) = decode_ref_event(data) {
+                    // Player fired — relay so remote players see the shot.
+                    out.push(Packet::UpdateFireWeapon {
+                        id: local_id,
+                        weapon: ref_id,
+                    });
+                }
+            }
             _ => {}
         }
     }
@@ -181,8 +203,33 @@ mod tests {
     use super::*;
     use ashfall_core::event::{
         encode_npc_remove_event, encode_npc_spawn_event, encode_npc_state_event,
-        encode_player_state_event, NpcRemoveEvent, NpcSpawnEvent, PlayerStateEvent,
+        encode_player_state_event, encode_ref_event, NpcRemoveEvent, NpcSpawnEvent,
+        PlayerStateEvent, EVENT_ACTIVATE, EVENT_FIRE,
     };
+
+    #[test]
+    fn test_activate_event_to_packet() {
+        let local = NetworkID::new(1);
+        let frame = encode_ref_event(EVENT_ACTIVATE, 0x9999);
+        let (frames, _) = ashfall_core::event::split_frames(&frame);
+        let packets = events_to_packets(&frames, local);
+        // Activated object 0x9999, actor = local player.
+        assert!(packets.iter().any(|p| matches!(
+            p, Packet::UpdateActivate { id, actor } if *id == entity_id(0x9999) && *actor == local
+        )));
+    }
+
+    #[test]
+    fn test_fire_event_to_packet() {
+        let local = NetworkID::new(1);
+        let frame = encode_ref_event(EVENT_FIRE, 0x7777);
+        let (frames, _) = ashfall_core::event::split_frames(&frame);
+        let packets = events_to_packets(&frames, local);
+        // Fire relay: weapon ref 0x7777, firing id = local player.
+        assert!(packets.iter().any(|p| matches!(
+            p, Packet::UpdateFireWeapon { id, weapon } if *id == local && *weapon == 0x7777
+        )));
+    }
 
     #[test]
     fn test_npc_state_event_to_packets() {
