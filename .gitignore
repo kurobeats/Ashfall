@@ -39,3 +39,7 @@ data/*
 !data/README.md
 hosts/ 
 .pi/
+
+# python analysis helpers
+__pycache__/
+*.pyc

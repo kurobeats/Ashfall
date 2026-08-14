@@ -5,7 +5,7 @@ mod for the classic Bethesda games — host a server, connect with your crew,
 and explore the wasteland together. Built from scratch in Rust, inspired by
 the old vaultmp project and its successors.
 
-[![Tests](https://img.shields.io/badge/tests-466%20passed-brightgreen)](#status)
+[![Tests](https://img.shields.io/badge/tests-467%20passed-brightgreen)](#status)
 [![License](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
 [![Status](https://img.shields.io/badge/status-co-op%20MVP%20in%20progress-orange)](#status)
 
@@ -134,7 +134,7 @@ Full architecture: [docs/architecture.md](./docs/architecture.md)
 
 ## Status & roadmap
 
-**Phases 1–10 complete, 466 tests, zero warnings.** The phase-by-phase record
+**Phases 1–10 complete, 467 tests, zero warnings.** The phase-by-phase record
 lives in [docs/impl-plan.md](./docs/impl-plan.md). Recent highlights:
 
 - Ownership transfer, string compression, and differential state sync
@@ -154,6 +154,11 @@ lives in [docs/impl-plan.md](./docs/impl-plan.md). Recent highlights:
   re-derived from the dump; ownership, state sampling, remote application
   all wired); remaining is live verification on the game host
   (see [docs/steam-re.md](./docs/steam-re.md))
+- **Remaining Steam patch sites** — 2026-08-14: 4 more vaultmp behavior
+  sites byte-verified via the FalloutAnniversaryPatcher vcdiff (ai_fix1
+  0x5E99E2, get_activate_jmp 0x8D3BC8, delegator stub spot 0x405E69,
+  play_group_fix 0x4350F9) — live-probe before hooking. Still to derive:
+  get_activate_ret, fire_fix, match_race, place_at_me, av_fix
 - **Per-frame player hook** — wired for FNV (0x86B386 main-loop hook) and
   FO3 classic (0x6EEB2F); Steam/Anniversary per-frame + live verification
   remain
@@ -175,7 +180,7 @@ engineering, all fair game. One hard rule:
 > you can exercise the whole client+server stack without the game running.
 
 ```bash
-cargo test --workspace   # 466 tests
+cargo test --workspace   # 467 tests
 cargo clippy -- -D warnings
 cargo fmt -- --check
 ```

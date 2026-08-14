@@ -1371,7 +1371,7 @@ pub struct MasterServer {
 ## 11. Implementation Phases
 
 > The living phase-by-phase record is [docs/impl-plan.md](./impl-plan.md) —
-> phases 1–10 done + post-phase-10 ingestion and STR-reuse work, 466 tests.
+> phases 1–10 done + post-phase-10 ingestion and STR-reuse work, 467 tests.
 > The plan below is the original design sketch, kept for history.
 
 ### Phase 1: Core Protocol
@@ -1443,9 +1443,13 @@ VTable/detour/opcode hooks, 11 default GECK opcode interceptors (15 verified
 with two tools), real VTable getters, FOSE/NVSE ABI fixed, i686 cross-build +
 wine round-trip. **Post-MVP RE (2026-08-07/08, live on the game host):** Steam
 post-2023 build re-derived (LookupFormByID 0x711EF0, cdecl + thiscall
-convention fixes), field reads live-verified under Proton; remaining work =
-Steam vtable slots for vtable-call getters + behavior-patch sites
-(hooks::vaultmp recipes) — see docs/steam-re.md.
+convention fixes), field reads live-verified under Proton. **2026-08-14:** the
+FalloutAnniversaryPatcher vcdiff (downgrade delta) provided a verified
+classic↔Steam byte map (63,616 runs) — 4 more vaultmp behavior-patch sites
+re-derived EXACT (ai_fix1, get_activate_jmp, delegator stub spot,
+play_group_fix); Steam FNV verified = GOG at runtime (fnv_14 table applies
+unchanged). Remaining = get_activate_ret + fire-fix/match_race/place_at_me/
+av_fix live-probe (hooks::vaultmp recipes) — see docs/steam-re.md.
 
 ---
 

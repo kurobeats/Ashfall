@@ -135,6 +135,51 @@ pub const FO3_STEAM_CLASSIC: Fo3SteamClassic = Fo3SteamClassic {
     fire_weapon_call: 0x004BE1A0,
 };
 
+/// Steam FO3 (post-2023) re-derived vaultmp sites — verified via the
+/// FalloutAnniversaryPatcher vcdiff (2026-08-14): the downgrade delta
+/// encodes classic↔Steam byte-identical regions; sites covered by an EXACT
+/// vcdiff COPY run are byte-verified in BOTH builds (see docs/steam-re.md
+/// "Session 2026-08-14" + scripts/re/vcdiff_map5.py). Every site below is
+/// byte-guarded before patching, exactly like `apply_steam_respawn`.
+pub mod fo3_steam_17_vaultmp {
+    /// anim_detour hook site: `mov dword [ecx+0x414],0; ret` — the
+    /// PlayIdle stub twin (GOG 0x73BB20). Byte-exact, unique (vcdiff EXACT
+    /// + byte search agree): `c7 81 14 04 00 00 00 00 00 00 c3`.
+    pub const PLAY_IDLE_CALL_SRC: usize = 0x0085_E0A0;
+    /// Lock-pick fix: `je +2; mov byte [eax],cl; push 1; mov ecx,eax;
+    /// call <fn>; mov ecx,esi; call <fn>; cmp; jle` — GOG 0x527F33 twin,
+    /// vcdiff EXACT (`74 02 88 08 6a 01 8b c8`). NOP the JE.
+    pub const LOCK_FIX: usize = 0x0079_8B65;
+    /// AI fix 1 (NOP 2B): `je +0x1e; cmp eax,3; je` — GOG 0x72051E twin
+    /// (`74 15 83 f8 03 74` → `74 1e 83 f8 03 74`), vcdiff EXACT cover.
+    pub const AI_FIX1: usize = 0x005E_99E2;
+    /// GetActivate interception: the 6-byte guard `je +0xdd; mov eax,[reg];
+    /// mov ecx,reg; mov eax,[eax+0x100]; call eax; test al,al; je` — GOG
+    /// 0x78A68D twin, vcdiff EXACT (`0f 84 dd 00 00 00 8b 06 8b ce`).
+    /// vtable slot shifted 0x224→0x100. Ret target needs live probe.
+    pub const GET_ACTIVATE_JMP: usize = 0x008D_3BC8;
+    /// Delegator stub planting spot (int3 padding after `ret`, GOG
+    /// 0x6EDBD9 twin) — vaultmp writes its PUSH-ECX stub here. The stub
+    /// bytes are vaultmp-injected, only the padding location translates.
+    pub const DELEGATOR_DEST: usize = 0x0040_5E69;
+    pub const DELEGATOR_CALL_SRC: usize = 0x0040_5E6A;
+    /// PlayGroup fix (2B `EB 27` written into int3 padding after `ret 8`,
+    /// GOG 0x49DD6A twin), vcdiff EXACT.
+    pub const PLAY_GROUP_FIX: usize = 0x0043_50F9;
+    /// FireWeapon call site: `call <fire>` + second call + `mov [reg+0x144],
+    /// eax; movss [reg+0x148]` + jmp + player-compare tail — structural
+    /// byte-search match (GOG 0x71F05F). vcdiff marks the region rewritten;
+    /// needs live probe (OP_PROBE_CODE) before hooking.
+    pub const FIRE_WEAPON_JMP: usize = 0x007D_F3F7;
+    /// Steam fire routine candidate (GOG 0x4BE1A0): SEH prologue + ~4523B
+    /// (GOG 4346B). vcdiff EXACT is a generic SEH-prologue coincidence —
+    /// structural only, needs live probe.
+    pub const FIRE_WEAPON_CALL: usize = 0x0077_0880;
+    /// plugins.txt loader: `.txt` in `\Plugins.txt` at +9 (GOG 0xE10FF1,
+    /// exact same layout). Patched to `.vmp`.
+    pub const PLUGINS_VMP: usize = 0x00F9_FDB1;
+}
+
 /// Steam FO3 (post-2023) respawn-disable sites — re-derived 2026-08-08 by
 /// side-by-side disassembly vs GOG (see docs/steam-re.md). Same semantics as
 /// vaultmp's ToggleRespawn disable: NOP the site-A predicate JNE + jump the
@@ -544,6 +589,29 @@ mod tests {
         assert!((0x400000..0x1200000).contains(&s::SITE_B_SKIP));
         assert_eq!(s::SITE_B2_FLAG, 0x8C9D52);
         assert!((0x400000..0x1200000).contains(&s::SITE_B2_FLAG));
+    }
+
+    #[test]
+    fn steam_vaultmp_sites_consistent() {
+        use fo3_steam_17_vaultmp as s;
+        // All Steam sites in image range.
+        for a in [s::PLAY_IDLE_CALL_SRC, s::LOCK_FIX, s::AI_FIX1,
+                  s::GET_ACTIVATE_JMP, s::DELEGATOR_DEST,
+                  s::DELEGATOR_CALL_SRC, s::PLAY_GROUP_FIX,
+                  s::FIRE_WEAPON_JMP, s::FIRE_WEAPON_CALL, s::PLUGINS_VMP] {
+            assert!((0x400000..0x1200000).contains(&a), "{a:#x} out of range");
+        }
+        // plugins.txt: ".txt" sits 9 bytes into ".\\Plugins.txt" (GOG layout).
+        assert_eq!(s::PLUGINS_VMP, 0xF9FDB1);
+        // fire call site is 5 bytes (E8 rel32) before its second call.
+        assert_eq!(s::FIRE_WEAPON_CALL, 0x770880);
+        assert_eq!(s::FIRE_WEAPON_JMP, 0x7DF3F7);
+        // vcdiff-verified EXACT covers (classic → steam).
+        assert_eq!(s::GET_ACTIVATE_JMP, 0x8D3BC8);
+        assert_eq!(s::AI_FIX1, 0x5E99E2);
+        assert_eq!(s::PLAY_GROUP_FIX, 0x4350F9);
+        assert_eq!(s::DELEGATOR_DEST, 0x405E69);
+        assert_eq!(s::DELEGATOR_CALL_SRC, s::DELEGATOR_DEST + 1);
     }
 
     #[test]

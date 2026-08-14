@@ -306,7 +306,7 @@ PRs within a phase often parallelizable unless noted.
 | 3. StringCache | `StringTable` + `CachedString` (Plain/Inline{id,value}/Id). Server assigns ids per-session, `Packet::finalize_strings` binds in the send path (dedicated.rs `send()`), repeats go out as 2-byte ids. Wired into ObjectNew/UpdateName/UpdateActorIdle/GameChat/GameMessage/UpdateInterior. | `ashfall-core/src/string_cache.rs`, `protocol/mod.rs`, `dedicated.rs`, client registry/dispatch |
 | 4. Ownership transfer | `OwnershipClaim/Granted/Released` packets + registry owner map. ActorNew grants sender ownership (dedup by ref_id); mutations gated to own player OR sim owner; disconnect releases all owned actors + broadcasts release. Client tracks `owned_actors`; bridge hooks: `Game::claim_ownership()` / `Game::owns()`. | `protocol/mod.rs`, `world/registry.rs`, `handlers/actor.rs`, `handlers/object.rs`, `dedicated.rs`, client `game.rs`/`registry.rs` |
 
-466 tests, 0 warnings. Ownership/delta rules proven in `tests/ownership.rs` (5 handler-level tests); string-cache wire semantics in `string_cache.rs` unit tests + `wire_format.rs`. Next: bridge `events.rs` NPC-spawn reporting → `claim_ownership()` wiring.
+467 tests, 0 warnings. Ownership/delta rules proven in `tests/ownership.rs` (5 handler-level tests); string-cache wire semantics in `string_cache.rs` unit tests + `wire_format.rs`. Next: bridge `events.rs` NPC-spawn reporting → `claim_ownership()` wiring.
 
 | 5. Time/settings/spell/version | `GameTime` (authoritative clock, advances server-side at time_scale, 30-day-month rollover, join-send + change-broadcast — STR CalendarService), `ServerSettings { pvp_enabled }` (config → join broadcast), `SpellCast` (owner-gated relay, STR NotifySpellCast), `GameAuth.version` (reject mismatch, STR AuthenticationRequest). | `protocol/mod.rs`, `dedicated.rs`, `config.rs`, `handlers/auth.rs`, `handlers/actor.rs`, client `game.rs`/`dispatch.rs` |
 
@@ -316,8 +316,9 @@ PRs within a phase often parallelizable unless noted.
 | 9. Mod policy | `GameModList` (client load order: filename+crc) verified against server config `mod` entries (STR ModPolicy); mismatch → GameEnd Denied + disconnect. Off when list empty. CRCs are IEEE CRC-32 of the raw file bytes — shared `ashfall_core::crc32` (zlib-verified), and `ashfall-server --list-mod-crc <dir>` prints ready-to-paste config lines (base master first, verified against the real data/ files: Fallout3.esm = C092218B). | `protocol/mod.rs`, `handlers/game.rs`, `config.rs`, `crc32.rs`, `main.rs`, client `config.rs`/`game.rs` |
 | 10. Bridge event pipeline (coop loop) | Length-prefixed pipe framing (`ashfall_core::event` — responses + events share the TCP stream unambiguously), bridge event queue + push in the connection loop, `OP_REPORT_PLAYER_STATE` debug reporter (samples the local player via the vtable getters → EVENT_PLAYER_STATE), client `IpcClient` event buffering + `poll_events`, client `sync.rs` (events→packets: UpdatePos/Angle/ActorStateDelta/health + NPC-spawn→ActorNew+claim; packets→commands: remote UpdatePos/Angle→OP_SET_POS/ANGLE), wired into the client poll loop. Real-TCP tests on both ends. | `ashfall-core/event.rs`, bridge `network.rs`/`commands.rs`, client `ipc/*`, `sync.rs`, `game.rs`, `main.rs` |
 
-Remaining (needs game host — steam-re.md): live verification of the discovery detours (GOG 0x6FAE90 + Steam 0x7F9B70 — probe-verify before patching, FLAT/+0xC00 caveat), the per-frame game-loop hooks, and the remaining Steam patch-site groups (fire relay, PlaceAtMe/activate, race match, lock fix, delegators). Load-order bridge reporting explicitly deprioritized — MVP targets vanilla games.
+Remaining (needs game host — steam-re.md): live verification of the discovery detours (GOG 0x6FAE90 + Steam 0x7F9B70 — probe-verify before patching, FLAT/+0xC00 caveat), the per-frame game-loop hooks, and the remaining Steam patch-site groups (get_activate_ret, fire_fix, match_race, place_at_me, av_fix, fire_weapon live-probe). Load-order bridge reporting explicitly deprioritized — MVP targets vanilla games.
 
+| 16. vcdiff breakthrough (2026-08-14) | Dead-end Steam patch sites solved via **FalloutAnniversaryPatcher's `patch_steam.vcdiff`** (online find): the downgrade delta encodes every byte that survived the recompile as a CPY_0 instruction (classic target ↔ Steam source). Decoded with the pristine Steam exe (f3_1704_steam, SHA1-verified; its .text is byte-identical to our flat dump, +0xC00) → classic_out.exe (f3_1703_mod, SHA1-verified). `printdelta` trap: Offset/S@ columns are DECIMAL. **63,616 verified byte-identical runs** (`vcdiff_map5.py`). New EXACT-cover sites wired: **ai_fix1 → 0x5E99E2**, **get_activate_jmp → 0x8D3BC8** (vtable slot shifted 0x224→0x100), **delegator stub spot → 0x405E69/0x405E6A**, **play_group_fix → 0x4350F9**; lock_fix + play_idle_call_src confirmed. Gap-based translations and generic SEH-prologue matches are false positives (proven: ai_predicate gap ≠ real 0x7F9B70). | bridge `vaultmp.rs`, scripts/re/vcdiff_map5.py, docs/steam-re.md |
 | 15. Steam AI predicate re-derived | The actor-discovery detour now covers the Steam/Anniversary build: `cmp [reg+0xFC],5/3` fingerprint scan on the flat dump found the AI predicate at **0x7F9B70** (entry `55 8B EC 51 57 8B F9`, structurally identical to classic — same `[edi+0xF8]`/`[edi+0xFC]` checks, player compare vs Steam PlayerCharacter singleton 0x123C674, shared vtable slot +0x22C). `ai_predicate_site()` picks classic vs Steam by prologue signature. The vaultmp ai_fix recipe twins live inside it (derivable once live-probed). | bridge `vaultmp.rs`, docs/steam-re.md |
 | 14. Coop-loop integration test + client fixes | `coop_loop.rs` (client): mock bridge → client A → real server → client B → mock bridge, proving the whole vanilla-coop pipeline in CI (A's engine event becomes server packets, relays to B, B applies them as engine commands — OP_SET_POS/ANGLE/ACTOR_VALUE captured). Found + fixed two real client bugs: (1) `send_seq` was bumped for unreliable sends (no seq on the wire) → holes in the reliable sequence space → server reassembly stalled; (2) `IpcClient::poll_events` never read the transport — events only arrived inside `execute()`; now try_reads + ingests. | client `network.rs`/`ipc`/`coop_loop.rs` |
 | 13. FO3 frame hook + downgrade path | FO3 classic frame hook wired (0x6EEB2F → `call 0x6E3E40`, no-arg cdecl, per-frame; guard e8 0c 53 ff ff) → 10 Hz `report_player_state_due`. Online research: **no public Anniversary/2023 FO3 address table exists** (FOSE repo deleted); the community solution is FalloutAnniversaryPatcher (c6-dev + lStewieAl) — downgrade the exe to 1.7.0.3 (our GOG exe SHA1 matches `f3_1703_gog` exactly). **Decision: we do NOT downgrade** — the Steam/Anniversary build gets per-site re-derivation instead (AI predicate done in item 15). See steam-re.md. | bridge `vaultmp.rs`, docs/steam-re.md |
@@ -326,13 +327,22 @@ Remaining (needs game host — steam-re.md): live verification of the discovery 
 
 Admin/ban system: explicitly skipped per project direction.
 
-**466 tests, 0 warnings** (2026-08-13).
+**467 tests, 0 warnings** (2026-08-13).
 
 2026-08-14: live-collector tests serialized (shared CURRENT/LAST statics raced in
 parallel); repo-wide clippy/lint cleanup (map_or → is_none_or/is_some_and,
 deadlock-safe connect threads, send-without-read-lock, Default impls). No new
 tests. Infra note: game-host OOM (4.8GB probe-side python) killed the tmux/pi
 session — no work lost, checkpoint committed.
+
+2026-08-14 (second pass): Steam patch-site re-derivation via the
+FalloutAnniversaryPatcher vcdiff — 4 new EXACT-cover sites wired (ai_fix1,
+get_activate_jmp, delegator stub spot, play_group_fix; see item 16), 1 new
+test. Also verified the **Steam FNV download** against GOG: same binary at
+runtime (sections/layout identical, .data/.rsrc/.reloc byte-identical; only
+.8diff: .text SteamStub-encrypted on disk + steam_api.dll vs GalaxyWrp.dll
+import + .bind unpacker) → **fnv_14 table applies to Steam unchanged, no
+re-derivation needed**. 467 tests, 0 warnings.
 
 P3+P4 can run in parallel (both depend on P2). P6+P7 can run in parallel after P5+P7 foundation ready. P10 can start after P7 IPC module (PR79).
 

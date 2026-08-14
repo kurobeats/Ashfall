@@ -206,3 +206,9 @@ Everything client/server/bridge-side is built and tested. On the host:
    steam-re.md) — live-probe it (OP_PROBE_CODE, FLAT/+0xC00 trap) then the
    detour applies as-is. Remaining: the frame-function address for the
    continuous player-state hook (`report_player_state_due`).
+3. **2026-08-14 vcdiff additions** (steam-re.md Session 2026-08-14b): 4 more
+   Steam sites byte-verified via the FalloutAnniversaryPatcher vcdiff —
+   ai_fix1 0x5E99E2, get_activate_jmp 0x8D3BC8 (ret target still probing),
+   delegator stub spot 0x405E69, play_group_fix 0x4350F9. Live-probe those
+   (OP_PROBE_CODE) before hooking. Steam FNV verified = GOG at runtime —
+   no separate FNV Steam analysis needed.

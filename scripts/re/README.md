@@ -205,3 +205,32 @@ prologue (`51 8b 0d` = GOG/classic, `55 8b ec 53` = Steam).
   no-arg GetBaseForm) — calling it corrupts the stack. Next: locate the
   real GetBaseForm slot (or the baseForm field) via the object-field probe
   (`OP_PROBE_FORM` dumps obj fields; player base form = 0x707).
+
+## 2026-08-14 — vcdiff Steam mapping + FNV verification (scripts added)
+
+`gog_bytes.py` — PE VA→offset (image-base aware; the naive version missed
+0x400000 and read garbage). `steam_twin_search.py` — byte-search classic
+sites in the flat dump. `steam_pair_map.py` — GOG containing-fn → Steam
+size-proximity candidates (mostly useless: aflj merges into megafunctions).
+`vcdiff_map5.py` — the real winner: parse the FalloutAnniversaryPatcher
+`patch_steam.vcdiff` instruction stream into a classic→Steam byte map.
+
+Workflow (see docs/steam-re.md Session 2026-08-14b):
+
+```bash
+# on the analysis host, with the pristine Steam exe (f3_1704_steam):
+xdelta3 -d -s steam-anniv.exe patch_steam.vcdiff classic_out.exe  # SHA1 = f3_1703_mod
+xdelta3 printdelta patch_steam.vcdiff > vcdiff_insts.txt
+python3 vcdiff_map5.py   # -> /tmp/classic_steam_map.txt (63,616 verified runs)
+```
+
+Trap: printdelta's Offset and S@ columns are **decimal**, not hex. Only runs
+that EXACTLY cover a site are trustworthy; gap-based translations and generic
+SEH-prologue matches are false positives. Decoded files live in
+`/tmp/steam-anniv.exe` + `/tmp/classic_out.exe` on battlecruiser.
+
+FNV Steam verification: Steam `FalloutNV.exe` (md5 516ed1c6…) vs GOG
+(0f374bae…) — sections identical, .data/.rsrc/.reloc byte-identical, .text
+SteamStub-encrypted on disk (decrypts to GOG code at load), import differs
+(`steam_api.dll` vs `GalaxyWrp.dll` for PI_IsSteamRunning), extra .bind
+unpacker section. **fnv_14 table applies to Steam unchanged.**

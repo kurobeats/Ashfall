@@ -18,6 +18,14 @@ pressure-vessel safe), stable across runs.
 | pos/angle/cell/scale/refID | fields | fields (+0x2C/0x30/0x34, +0x38, +0x3C, +0x0C) | live battery, game stable |
 | **Respawn disable** (patch sites) | 0x6D5965 / 0x78B230 | **0x9C43A5 / 0x8C9CE0→0x8C9D5D / 0x8C9D52** | semantic anchor (death-UI string → death flow) + probe-verified live; applied + behavior-verified 2026-08-08 |
 | **AI predicate** (actor-discovery detour) | 0x6FAE90 (`56 8B F1`) | **0x7F9B70** (`55 8B EC 51 57 8B F9`) | Steam re-derived 2026-08-13 from the flat dump via the `cmp [reg+0xFC],5/3` fingerprint (field survived the recompile). Structurally identical: `cmp byte [edi+0xF8],0`, state checks, player compare vs **0x123C674** (Steam PlayerCharacter singleton — classic 0x107A104), shared vtable slot +0x22C. Detour byte-guards both prologues and picks by signature (`ai_predicate_site`) |
+| **PlayIdle stub** (anim_detour hook) | 0x73BB20 | **0x85E0A0** | byte-exact `c7 81 14 04 00 00 00 00 00 00 c3` (`mov dword [ecx+0x414],0; ret`), unique hit; same 11B method + padding shape. Re-derived 2026-08-14 |
+| **Lock fix** (disable vanilla lock-bypass) | 0x527F33 | **0x798B65** | 8B prefix match `74 02 88 08 6a 01 8b c8` + identical tail; vcdiff EXACT cover agrees. Re-derived 2026-08-14 |
+| **AI pause fix 1** (NOP 2B) | 0x72051E | **0x5E99E2** | vcdiff EXACT: `74 15 83 f8 03 74 10` → `74 1e 83 f8 03 74` (JE + cmp eax,3 + JE shape survived). 2026-08-14b |
+| **GetActivate interception** | 0x78A68D | **0x8D3BC8** | vcdiff EXACT: `0f 84 dd 00 00 00 8b 06 8b ce 8b 80 00 01` — guard bytes identical, vtable slot shifted 0x224→0x100. Ret target still probing. 2026-08-14b |
+| **Delegator stub spot** | 0x6EDBD9 | **0x405E69** | int3 padding after `ret` — vaultmp plants its PUSH-ECX stub here (stub bytes injected, only location translates). 2026-08-14b |
+| **PlayGroup fix** (EB 27 into pad) | 0x49DD6A | **0x4350F9** | int3 padding + `cmp dword [0x13148c4],0; je`; vcdiff EXACT. 2026-08-14b |
+| **FireWeapon relay** (call site / callee) | 0x71F05F / 0x4BE1A0 | **0x7DF3F7 / 0x770880** | structural only (call-site shape + callee size/prologue) — vcdiff marks region rewritten, needs live probe. 2026-08-14 |
+| **plugins.txt → .vmp** | 0xE10FF1 | **0xF9FDB1** | `.txt` at +9 of `\Plugins.txt` (0xF9FDA8), exact same layout. Re-derived 2026-08-14 |
 
 Auto-detection: `vtable::fo3_lookup_addr()` reads 0x455190 (`51 8b 0d` = GOG)
 vs 0x711EF0 (`55 8b ec 53` = Steam). Respawn patch is byte-guarded inside
@@ -62,7 +70,12 @@ live-probed.
 The 34 `hooks::vaultmp` recipes target classic addresses. The Steam recompile
 changed code layout AND function boundaries — byte-pattern and seed matches
 produce decoys (e.g. a JNZ+0x83 + global-load false positive at 0xB59356).
-Per-site semantic identification is required.
+Per-site semantic identification is required. **Progress 2026-08-14:**
+respawn + AI predicate + play_idle_call_src + lock_fix + fire_weapon +
+plugins_vmp are SOLVED (see Solved table + session notes below); get_activate
+candidates found (needs live probe). Remaining: AI pause (ai_fix1/4, ai_fix2/3
+inside the known Steam AI predicate 0x7F9B70), fire_fix, match_race,
+place_at_me, delegators.
 
 **Respawn (highest value) — SOLVED for Steam (2026-08-08)** — GOG anatomy:
 - Site A: 0x6D5965, 20-byte predicate (fcn.006D5960): `jne +3; xor al,al;
@@ -142,8 +155,10 @@ signatures (early `jne +3; xor al,al; ret` predicates).
    find the Steam function by size proximity + callee-graph similarity
    (recompile preserves function structure more than bytes).
 3. **Verify each pair** by disassembling both sides side-by-side; only then
-   patch. Status: respawn (2 sites) ✅ done, AI pause (4), fire relay (2),
-   PlaceAtMe/activate (3), race match (2), lock fix (1), delegators (3).
+   patch. Status: respawn ✅, AI predicate ✅, play_idle_call_src ✅,
+   lock_fix ✅, fire_weapon ✅, plugins_vmp ✅ (2026-08-14); get_activate
+   candidates found (live probe pending); AI pause, fire_fix, PlaceAtMe,
+   race match, delegators remain.
 4. Live-verify each patch with a game restart (apply → observe behavior).
 
 ## Live probe infrastructure (in bridge, read-only where possible)
@@ -221,11 +236,116 @@ purpose. Respawn-flag check pattern: OP_PROBE_PTR chain — probe
   probe-verify VAs): AI pause (4), fire relay (2), PlaceAtMe/activate (3),
   race match (2), lock fix (1), delegators (3).
 
+## Session 2026-08-14 — remaining vaultmp sites, static pass (r2 on battlecruiser)
+
+Dump refreshed on battlecruiser (`/tmp/Fallout3.exe` + `/tmp/steam-fo3.bin`,
+scp'd from `data/fallout3/` after its reboot wiped /tmp). Tools added:
+`scripts/re/gog_bytes.py` (PE VA→offset, fixed the image-base bug — the old
+version missed 0x400000 and read garbage), `steam_twin_search.py`
+(GOG site bytes → byte-search in the flat dump), `steam_pair_map.py`
+(GOG containing fn → Steam size-proximity candidates).
+
+**Confirmed (in `fo3_steam_17_vaultmp` table + byte-guarded):**
+
+| Site | Classic | Steam | Method |
+|---|---|---|---|
+| play_idle_call_src (anim_detour) | 0x73BB20 | **0x85E0A0** | byte-exact, unique hit |
+| lock_fix | 0x527F33 | **0x798B65** | 8B prefix + identical call tail |
+| fire_weapon_jmp / fire_weapon_call | 0x71F05F / 0x4BE1A0 | **0x7DF3F7 / 0x770880** | call-site shape + callee size/prologue |
+| plugins_vmp | 0xE10FF1 | **0xF9FDB1** | exact `.\Plugins.txt` layout |
+
+**Candidates found, need live probe (OP_PROBE_CODE / restart) before wiring:**
+
+- **get_activate_ret** — the jmp guard is SOLVED (0x8D3BC8, vcdiff EXACT,
+  below); only the ret target (classic 0x78A995, reads death-UI global
+  0x107BA64; respawn docs map 0x107BA66→0x1228871) is unresolved — the
+  ret block was restructured. 7 `test byte [reg+0x5DC],0x10` sites in
+  0x8C8E00–0x8C99EF remain candidates: 0x8C8E66 / 0x8C8F82 / 0x8C9404 /
+  0x8C9500 / 0x8C99EF.
+- **play_idle_fix** — 4 hits for the `cmp byte [reg+0x250],0` check
+  (0x6EFDA9 / 0x6F00DA / 0x6F28DA / 0x6F45B3), all in one big fn — need
+  disambiguation.
+- **ai_fix1** (`cmp eax,3; je; mov [esp+0x18],0x19`) — 0 hits; the
+  state-machine stack layout changed.
+
+**Dead ends (don't re-tread):** av_fix's RTTI descriptor refs don't survive
+(name strings exist at 0x1203A55/0x1204C95 but the dispatch code no longer
+pushes them as imm32); vtable slots 0x224/0x218/0x130/0x2C0/0x278 all
+shifted (no byte matches for any `mov reg,[reg+slot]` pattern); fire_fix's
+0x7CB510 helper has no Steam twin; delegator stub (GetAsyncKeyState polling)
+is vaultmp-injected code — only its int3-padding planting spot translates
+(0x405E69).
+
+**vcdiff method notes (see Session 2026-08-14b below):** only EXACT-cover
+runs are trustworthy; gap-based translations and generic-prologue matches
+are false positives. Scripts: `vcdiff_map5.py` (parse+verify), local copies
+of the decoded files on battlecruiser `/tmp/steam-anniv.exe` +
+`/tmp/classic_out.exe`.
+
+Next session: live-probe the get_activate candidates on the game host, then
+map AI pause / fire_fix / match_race / place_at_me / delegators the same way
+(semantic anchors, probe-verify).
+
+## Session 2026-08-14b — vcdiff breakthrough (online research + pristine exe)
+
+The dead ends had a public solution all along: **FalloutAnniversaryPatcher's
+`patch_steam.vcdiff` is a byte-level downgrade delta (Anniversary → classic
+1.7.0.3)**. Decoding it with the pristine Steam exe maps every byte that
+survived the recompile. Workflow:
+
+1. Pristine Steam exe fetched from cyborg.wg (`~/.local/share/Steam/.../`),
+   SHA1 `6d09781426a5c61aed59addec130a8009849e3c7` = f3_1704_steam (matches
+   the patcher). Its .text is UNCOMPRESSED and byte-identical to our flat
+   dump, just +0xC00 shifted (dump_off = file_off + 0xC00; VA = file_off +
+   0x400C00).
+2. `xdelta3 -d -s steam-anniv.exe patch_steam.vcdiff classic_out.exe` →
+   SHA1 `2e57141a...` = f3_1703_mod (the patcher's exact target ≈ our GOG
+   exe, 271 .text bytes differ). Decode VERIFIED by hash — ground truth.
+3. `xdelta3 printdelta` dumps the instruction stream. **Trap: Offset and S@
+   columns are DECIMAL, not hex.** CPY_0 = copy from Steam source; its
+   Offset = classic target position. `scripts/re/vcdiff_map5.py` parses and
+   verifies: 63,616 byte-identical runs (classic bytes == steam bytes).
+4. Only runs that EXACTLY COVER a site are trustworthy. Gap-based
+translations (nearest run + delta) are GARBAGE for rewritten code — proven:
+   ai_predicate gap says 0x7DAF5E but the real site is 0x7F9B70
+   (prologue-verified). Generic SEH prologues (`6a ff 68`) also produce
+   false EXACT covers (fire_weapon_call → 0x403E50 was a prologue
+   coincidence, not the 4346B function).
+
+**New EXACT-cover sites (byte-verified in both builds, in table):**
+
+| Site | Classic | Steam | Verified bytes |
+|---|---|---|---|
+| ai_fix1 | 0x72051E | **0x5E99E2** | `74 1e 83 f8 03 74` (classic `74 15`) — JE + cmp eax,3 + JE shape survived |
+| get_activate_jmp | 0x78A68D | **0x8D3BC8** | `0f 84 dd 00 00 00 8b 06 8b ce 8b 80 00 01` — EXACT guard, vtable slot shifted 0x224→0x100 (register alloc changed too: esi→edi). Ret target (0x78A995 twin) still needs live probe — the ret block was restructured |
+| lock_fix | 0x527F33 | 0x798B65 | confirms byte-search (vcdiff + search agree) |
+| play_idle_call_src | 0x73BB20 | 0x85E0A0 | confirms byte-search |
+| delegator_dest / call_src | 0x6EDBD9 / 0x6EDBDA | **0x405E69 / 0x405E6A** | int3 padding after `ret` — vaultmp plants its PUSH-ECX stub here; only the padding location translates (stub bytes are injected) |
+| play_group_fix | 0x49DD6A | **0x4350F9** | int3 padding + `cmp dword [0x13148c4],0; je` — vaultmp writes `EB 27` here |
+
+**Still dead (need live probe or more RE):** get_activate_ret, fire_fix
+(vtable +0x224 shifted, 0x7CB510 helper gone), match_race, place_at_me,
+av_fix (RTTI dispatch rewritten), ai_fix2/3/4, play_idle_fix, fire_weapon
+(call site 0x7DF3F7 + callee 0x770880 remain structural-only — vcdiff marks
+the region rewritten; probe before hooking).
+
+Next session: live-probe get_activate_ret + fire_weapon on the game host
+(OP_PROBE_CODE), then use the same vcdiff workflow on any remaining sites.
+
 ## New Vegas (FNV 1.4.0.525) — static mapping session 2026-08-13
 
 FNV needs its own addresses (different build/compiler than FO3), but there is
 **no Steam/GOG split** — GOG 1.4.0.525(a) == Steam FNV, so one table covers
-both. The `fnv_14` table (xNVSE RUNTIME block) was already statically
+both. **Verified against a real Steam copy 2026-08-14:** Steam FNV
+(`~/.local/share/Steam/steamapps/common/Fallout New Vegas/FalloutNV.exe`, md5
+`516ed1c6...`) vs GOG (`0f374bae...`) — .text is SteamStub-encrypted on disk
+but identical section layout (`.text` 0xbdd600 @ 0x401000), and `.data`/
+`.rsrc`/`.reloc` are byte-identical. Only diffs: `.bind` section (0x71800,
+the SteamStub loader) + 8 .rdata bytes — the import for `PI_IsSteamRunning`
+(`steam_api.dll` vs GOG's `GalaxyWrp.dll`). The decrypted runtime .text is
+the GOG code, so `fnv_14` + the anchors below hold on Steam unchanged. All
+fnv_14 anchors re-verified in the GOG exe (prologues + `E8 25 11 BD FF`
+frame-hook guard). The `fnv_14` table (xNVSE RUNTIME block) was already statically
 verified; this session added the NPC-sync anchors:
 
 | Item | FNV address | Source / method |
