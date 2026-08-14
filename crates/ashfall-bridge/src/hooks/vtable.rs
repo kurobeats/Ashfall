@@ -626,14 +626,13 @@ pub unsafe fn set_angle(ref_id: u32, angle: [f32; 3]) {
 
 /// Set actor value by index.
 pub unsafe fn set_actor_value(ref_id: u32, index: u8, value: f32) {
-    let obj = lookup_form_by_id(ref_id);
-    if obj.is_null() {
-        return;
-    }
-
-    const VTBL_ACTOR_SET_VALUE: usize = vtable_index(0x6C); // index 27 (x86, estimated)
-    // thiscall: SetActorValue(this, index, value), callee cleans both args.
-    let _: u32 = vcall_2::<u8, f32, u32>(obj, VTBL_ACTOR_SET_VALUE, index, value);
+    // ponytail: the "estimated" vtable slot +0x6C is wrong — same vtable-
+    // base audit as get_actor_value (2026-08-14l): on the dominant
+    // TESObjectREFR family +0x6C is a `ret 8` stub (silently does
+    // nothing); FNV's SetActorValue is an Actor PRIMARY-vtable method
+    // (ActorValueOwner is a member there, Get/SetAV live on it at +0xA4).
+    // No-op until the real SetActorValue path is live-probed.
+    let _ = (ref_id, index, value);
 }
 
 /// Read cell of a reference.
@@ -829,9 +828,14 @@ pub unsafe fn get_combat_target_from_obj(obj: *mut u8) -> u32 {
     read_field::<u32>(obj, offset)
 }
 
-/// Full-name vtable slot on TESForm: byte offset 0x1C (index 7 on x86).
-const VTBL_FORM_GET_FULL_NAME: usize = vtable_index(0x1C);
-
+/// Full-name access is a NON-virtual TESForm function (FOSE GameForms.h
+/// line 517: `TESFullName* GetFullName();` has no `virtual` keyword) — the
+/// old `vtable +0x1C` call hit TESForm slot 7 (SaveAlt / ret-stub on the
+/// dominant vtable), i.e. it was never GetFullName (2026-08-14l audit).
+/// The function's address is not yet re-derived; get_name returns
+/// "unnamed" until it is (the baseForm field read at +0x1C stays — it's
+/// correct).
+///
 /// Get the display name via the VTable chain
 /// `GetBaseForm` → `GetFullName` (returns `const char*`).
 pub unsafe fn get_name(ref_id: u32) -> String {
@@ -846,18 +850,11 @@ pub unsafe fn get_name_from_obj(obj: *mut u8) -> String {
     // baseForm field at +0x1C (empirically derived on Steam 2026-08-07) —
     // the vtable GetBaseForm slot differs from xFOSE in the Steam build and
     // calling it corrupts the stack.
-    let base_form: *mut u8 = read_field::<usize>(obj, 0x1C) as *mut u8;
-    if base_form.is_null() {
-        return "unnamed".into();
-    }
-    if vtable_entry::<usize>(base_form, VTBL_FORM_GET_FULL_NAME).is_none() {
-        return "unnamed".into();
-    }
-    let name_ptr: *const i8 = vcall_0(base_form, VTBL_FORM_GET_FULL_NAME);
-    if name_ptr.is_null() {
-        return "unnamed".into();
-    }
-    std::ffi::CStr::from_ptr(name_ptr).to_string_lossy().into_owned()
+    let _base_form: *mut u8 = read_field::<usize>(obj, 0x1C) as *mut u8;
+    // ponytail: TESForm::GetFullName is a non-virtual function — the old
+    // vtable +0x1C call was wrong (hit SaveAlt/ret-stub). Return "unnamed"
+    // until the real GetFullName address is re-derived.
+    "unnamed".into()
 }
 
 /// Actor value indices (Gamebryo ActorValue enum, shared by FO3/FNV).
@@ -1138,21 +1135,15 @@ mod tests {
     }
 
     #[test]
-    fn test_get_name_from_obj_vtable_chain() {
-        unsafe extern "C" fn fake_get_full_name(_this: *mut u8) -> *const i8 {
-            b"Wanderer\0".as_ptr() as *const i8
-        }
+    fn test_get_name_returns_unnamed_safely() {
         unsafe {
-            let mut base_vtable = vec![0usize; 16];
-            base_vtable[VTBL_FORM_GET_FULL_NAME] = fake_get_full_name as *const () as usize;
-            let (_base, base_ptr) = fake_object(&base_vtable, 64);
-
-            // baseForm field at +0x1C (derived on Steam 2026-08-07).
-            let obj_vtable = vec![0usize; 16];
-            let (_mut_obj, obj_ptr) = fake_object(&obj_vtable, 128);
-            write_field::<usize>(obj_ptr, 0x1C, base_ptr as usize);
-
-            assert_eq!(get_name_from_obj(obj_ptr), "Wanderer");
+            // TESForm::GetFullName is a NON-virtual function (audit
+            // 2026-08-14l) — the old vtable chain was wrong; get_name
+            // returns "unnamed" safely until the real address is derived.
+            let vtable = vec![0usize; 16];
+            let (_obj, ptr) = fake_object(&vtable, 128);
+            assert_eq!(get_name_from_obj(ptr), "unnamed");
+            assert_eq!(get_name_from_obj(std::ptr::null_mut()), "unnamed");
         }
     }
 

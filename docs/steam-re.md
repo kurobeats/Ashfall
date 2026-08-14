@@ -699,3 +699,22 @@ order: GetBaseAVI/F, GetAVI/F, mods, GetPermAVI/F, GetAsForm,
 GetActorLevel). Verify with OP_PROBE_FORM on a loaded FNV actor (read
 [actor+0xA4], then its vtable +0x0C), then wire `get_actor_value`'s FNV
 branch to that path.
+
+**2026-08-14m follow-up — audit completed across ALL vtable ops:** the same
+wrong-base problem hit `get_name` and `set_actor_value`:
+- `get_name` called vtable +0x1C on the base form — but TESForm::GetFullName
+  is a NON-virtual function (FOSE GameForms.h:517); +0x1C is TESForm slot 7
+  (SaveAlt / ret-stub on the dominant family). Now returns "unnamed" safely;
+  the real GetFullName address is a future re-derivation item (op is unused
+  by server/client).
+- `set_actor_value` called the "estimated" vtable +0x6C — a `ret 8` stub on
+  the dominant family (silently no-op). Now a safe no-op; FNV's real
+  SetActorValue is an Actor PRIMARY-vtable method (Get/SetAV live on the
+  ActorValueOwner member at +0xA4 in FNV). Same live-probe list as
+  get_actor_value.
+
+Remaining vtable calls in the bridge are only: the AnimData (+0x1E4,
+vaultmp's documented classic mechanism — runtime vtbl[0], keep) and the
+byte-guarded get_lock (+0xA0). `get_actor_state`'s anim offsets (0x4E/0x54/
+0x118) verified vaultmp-consistent against the FOSE AnimData struct
+(animGroupIDs at +0x4C, u8 reads of UInt16 IDs fine for small IDs).
