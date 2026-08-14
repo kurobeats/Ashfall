@@ -688,3 +688,14 @@ Method note: the GECK RTTI's Actor COL → 0xD592DC is a SECONDARY vtable
 lock at +0x9C/+0xA0) differs — RTTI class vtables must not be assumed to
 be vtbl[0]. The `scripts/re/lock_scan.py` approach (scan .rdata vtable
 runs for known getter pairs) is the reliable way to pin a slot.
+
+**Concrete FNV path for the next live session (2026-08-14l follow-up):**
+FNV `Actor::GetActorValue` = `((ActorValueOwner*)(actor+0xA4))->GetActorValueF(index)` —
+the avOwner is an INLINE member at +0xA4 (xNVSE STATIC_ASSERT magicCaster
+0x88 / magicTarget 0x94 / avOwner 0xA4; 16 `lea [reg+0xA4]` sites in the
+GOG FNV exe), and GetActorValueF is its vtable slot 3 (+0x0C, float
+return — FNV GECK ActorValueOwner vtable 0xD52AC4 confirms the 11-slot
+order: GetBaseAVI/F, GetAVI/F, mods, GetPermAVI/F, GetAsForm,
+GetActorLevel). Verify with OP_PROBE_FORM on a loaded FNV actor (read
+[actor+0xA4], then its vtable +0x0C), then wire `get_actor_value`'s FNV
+branch to that path.
