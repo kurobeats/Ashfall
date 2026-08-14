@@ -247,9 +247,9 @@ mod tests {
     fn test_call_thiscall_explicit_address() {
         unsafe {
             let this = 0x1000usize as *mut u8;
-            let v = call_thiscall_0::<u32>(fake_get_value as usize, this);
+            let v = call_thiscall_0::<u32>(fake_get_value as *const () as usize, this);
             assert_eq!(v, 0x1000);
-            let s = call_thiscall_2::<u32, u32, u32>(fake_add as usize, this, 1, 2);
+            let s = call_thiscall_2::<u32, u32, u32>(fake_add as *const () as usize, this, 1, 2);
             assert_eq!(s, 0x1000 + 3);
         }
     }

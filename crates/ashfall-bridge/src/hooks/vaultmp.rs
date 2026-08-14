@@ -593,210 +593,6 @@ pub unsafe fn apply(
     out
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn every_required_hook_resolves() {
-        // The resolver must provide every hook the recipe table needs.
-        // On non-x86 hosts the hooks module is cfg'd out (nothing to hook)
-        // — the apply path is a no-op there, verified by the recipes test.
-        #[cfg(target_arch = "x86")]
-        {
-            for name in REQUIRED_HOOKS {
-                assert!(hooks::resolve(name).is_some(), "hook {name} unresolved");
-            }
-        }
-        #[cfg(not(target_arch = "x86"))]
-        {
-            let _ = REQUIRED_HOOKS;
-        }
-    }
-
-    #[test]
-    fn ref_event_encodes_ref_id() {
-        // The bridge collectors encode ref-id events; the client decodes
-        // them. Round-trip through the shared encode/decode.
-        let frame = ashfall_core::event::encode_ref_event(
-            ashfall_core::event::EVENT_ACTIVATE, 0x1234);
-        let (frames, _) = ashfall_core::event::split_frames(&frame);
-        let (et, data) = ashfall_core::event::decode_event(&frames[0].payload).unwrap();
-        assert_eq!(et, ashfall_core::event::EVENT_ACTIVATE);
-        assert_eq!(ashfall_core::event::decode_ref_event(data).unwrap(), 0x1234);
-    }
-
-    #[test]
-    fn steam_respawn_sites_consistent() {
-        use fo3_steam_17_respawn as s;
-        // The 6-byte JNE at site B must land exactly on the skip dest:
-        // 0F 85 <rel32>: from + 6 + rel == skip.
-        let rel: i32 = 0x77;
-        assert_eq!(s::SITE_B_JNE + 6 + rel as usize, s::SITE_B_SKIP);
-        // Site-A guard bytes (75 03) and site-B tail (00) match the dump.
-        assert_eq!(s::SITE_B_TAIL, s::SITE_B_JNE + 5);
-        assert!((0x400000..0x1200000).contains(&s::SITE_A_JNE));
-        assert!((0x400000..0x1200000).contains(&s::SITE_B_SKIP));
-        assert_eq!(s::SITE_B2_FLAG, 0x8C9D52);
-        assert!((0x400000..0x1200000).contains(&s::SITE_B2_FLAG));
-    }
-
-    #[test]
-    fn steam_vaultmp_sites_consistent() {
-        use fo3_steam_17_vaultmp as s;
-        // All Steam sites in image range.
-        for a in [s::PLAY_IDLE_CALL_SRC, s::LOCK_FIX, s::AI_FIX1,
-                  s::GET_ACTIVATE_JMP, s::GET_ACTIVATE_RET,
-                  s::DELEGATOR_DEST,
-                  s::DELEGATOR_CALL_SRC, s::PLAY_GROUP_FIX,
-                  s::AV_FIX_SRC, s::AV_FIX_RET, s::AV_FIX_TERM,
-                  s::FIRE_WEAPON_JMP, s::FIRE_WEAPON_CALL, s::PLUGINS_VMP] {
-            assert!((0x400000..0x1200000).contains(&a), "{a:#x} out of range");
-        }
-        // plugins.txt: ".txt" sits 9 bytes into ".\\Plugins.txt" (GOG layout).
-        assert_eq!(s::PLUGINS_VMP, 0xF9FDB1);
-        // fire call site is 5 bytes (E8 rel32) before its second call.
-        assert_eq!(s::FIRE_WEAPON_CALL, 0x770880);
-        assert_eq!(s::FIRE_WEAPON_JMP, 0x7DF3F7);
-        // vcdiff-verified EXACT covers (classic → steam).
-        assert_eq!(s::GET_ACTIVATE_JMP, 0x8D3BC8);
-        assert_eq!(s::GET_ACTIVATE_RET, 0x8D3CB8);
-        assert_eq!(s::AI_FIX1, 0x5E99E2);
-        assert_eq!(s::PLAY_GROUP_FIX, 0x4350F9);
-        assert_eq!(s::DELEGATOR_DEST, 0x405E69);
-        assert_eq!(s::DELEGATOR_CALL_SRC, s::DELEGATOR_DEST + 1);
-        // av_fix: hook slot + 5B = ret, term = sprintf call after the format push.
-        assert_eq!(s::AV_FIX_RET, s::AV_FIX_SRC + 5);
-        assert!(s::AV_FIX_TERM > s::AV_FIX_RET);
-    }
-
-    #[test]
-    fn table_addresses_in_pe_range() {
-        // FO3 loads at 0x400000; code+data live below 0x1200000.
-        let t = &FO3_STEAM_CLASSIC;
-        let addrs = [
-            t.plugins_vmp, t.play_group, t.delegator_src, t.delegator_dest,
-            t.delegator_call_src, t.no_respawn_nop, t.no_respawn_jmp_src,
-            t.no_respawn_jmp_dest, t.play_idle_call_src, t.play_idle_fix_src,
-            t.match_race_nop1, t.match_race_nop2, t.match_race_patch,
-            t.match_race_param, t.lock_fix, t.ai_fix1, t.ai_fix2, t.ai_fix3,
-            t.ai_fix4, t.play_group_fix, t.play_group_fix_src,
-            t.play_group_fix_dest, t.av_fix_src, t.av_fix_ret, t.av_fix_term,
-            t.fire_fix_jmp, t.fire_fix_patch, t.get_activate_jmp,
-            t.get_activate_ret, t.place_at_me_jmp, t.place_at_me_call,
-            t.place_at_me_fix, t.place_at_me_fix_dest, t.fire_weapon_jmp,
-            t.fire_weapon_call,
-        ];
-        for a in addrs {
-            assert!(
-                (0x400000..0x1200000).contains(&a),
-                "address 0x{a:x} outside FO3 image range"
-            );
-        }
-    }
-
-    #[test]
-    fn recipes_cover_every_patch_from_patchgame() {
-        let r = recipes(&FO3_STEAM_CLASSIC);
-        // PatchGame writes 34 distinct sites (SafeWrite + WriteRel* combined
-        // into the recipe list above); guard against accidental drops.
-        assert_eq!(r.len(), 34, "recipe count regressed");
-        // Every site in the image range.
-        for rec in &r {
-            assert!(
-                (0x400000..0x1200000).contains(&rec.addr()),
-                "recipe {} at 0x{:x} outside range",
-                match rec {
-                    Recipe::Bytes { name, .. } => name,
-                    Recipe::Write { name, .. } => name,
-                    Recipe::RelCall { name, .. } => name,
-                    Recipe::RelJump { name, .. } => name,
-                    Recipe::RelCallHook { name, .. } => name,
-                    Recipe::RelJumpHook { name, .. } => name,
-                },
-                rec.addr()
-            );
-        }
-        // No two recipes write the same site.
-        let mut sites: Vec<usize> = r.iter().map(|rec| rec.addr()).collect();
-        sites.sort();
-        let dup: Vec<_> = sites.windows(2).filter(|w| w[0] == w[1]).collect();
-        assert!(dup.is_empty(), "duplicate recipe sites: {dup:?}");
-    }
-
-    #[test]
-    fn every_required_hook_is_requested() {
-        let r = recipes(&FO3_STEAM_CLASSIC);
-        let requested: std::collections::BTreeSet<_> = r
-            .iter()
-            .filter_map(Recipe::required_hook)
-            .collect();
-        for h in REQUIRED_HOOKS {
-            assert!(requested.contains(h), "hook {h} not requested by recipes");
-        }
-        assert_eq!(requested.len(), REQUIRED_HOOKS.len());
-    }
-
-    #[test]
-    fn plugins_vmp_bytes_are_literal_dot_vmp() {
-        assert_eq!(u32::from_le_bytes(*b".vmp"), 0x706D762E);
-    }
-
-    #[test]
-    fn rel_jump_offset_math() {
-        // write_rel_jump(from,to) emits E9 + (to-from-5) as little-endian i32.
-        let from = 0x0049DD8Eusize;
-        let to = 0x0049DCF1usize;
-        let disp = (to as isize - from as isize - 5) as i32;
-        assert_eq!(disp, -162);
-        assert_eq!(disp.to_le_bytes(), [0x5E, 0xFF, 0xFF, 0xFF]);
-    }
-
-    #[test]
-    fn recipe_bytes_match_vaultmp_source() {
-        let r = recipes(&FO3_STEAM_CLASSIC);
-        let find = |name: &str| {
-            r.iter()
-                .find(|rec| match rec {
-                    Recipe::Bytes { name: n, .. } => *n == name,
-                    Recipe::Write { name: n, .. } => *n == name,
-                    _ => false,
-                })
-                .expect(name)
-        };
-        // Delegator stub: PUSH ECX; call site +5: POP ECX.
-        if let Recipe::Write { value, .. } = find("delegator_push_ecx") {
-            assert_eq!(*value, 0x51);
-        } else {
-            panic!("delegator_push_ecx wrong variant");
-        }
-        if let Recipe::Write { value, .. } = find("delegator_call_pop_ecx") {
-            assert_eq!(*value, 0x59);
-        } else {
-            panic!("delegator_call_pop_ecx wrong variant");
-        }
-        // aiFix3 block is exact from vaultmp: 85 FF 74 CC EB F6.
-        if let Recipe::Bytes { bytes, .. } = find("ai_fix3_block") {
-            assert_eq!(*bytes, [0x85, 0xFF, 0x74, 0xCC, 0xEB, 0xF6]);
-        } else {
-            panic!("ai_fix3_block wrong variant");
-        }
-        // FireFix jump: EB 57 90.
-        if let Recipe::Bytes { bytes, .. } = find("fire_fix_jmp") {
-            assert_eq!(*bytes, [0xEB, 0x57, 0x90]);
-        } else {
-            panic!("fire_fix_jmp wrong variant");
-        }
-        // match_race_nop1 is an 18-byte NOP block.
-        if let Recipe::Bytes { bytes, .. } = find("match_race_nop1") {
-            assert_eq!(bytes.len(), 18);
-            assert!(bytes.iter().all(|b| *b == 0x90));
-        } else {
-            panic!("match_race_nop1 wrong variant");
-        }
-    }
-}
-
 // ═══════════════════════════════════════════════════════════════
 // Actor discovery detour (classic FO3 only — Steam TBD, steam-re.md)
 // ═══════════════════════════════════════════════════════════════
@@ -1269,5 +1065,209 @@ pub fn fire_routine_addr() -> usize {
     #[cfg(not(target_arch = "x86"))]
     {
         0
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_required_hook_resolves() {
+        // The resolver must provide every hook the recipe table needs.
+        // On non-x86 hosts the hooks module is cfg'd out (nothing to hook)
+        // — the apply path is a no-op there, verified by the recipes test.
+        #[cfg(target_arch = "x86")]
+        {
+            for name in REQUIRED_HOOKS {
+                assert!(hooks::resolve(name).is_some(), "hook {name} unresolved");
+            }
+        }
+        #[cfg(not(target_arch = "x86"))]
+        {
+            let _ = REQUIRED_HOOKS;
+        }
+    }
+
+    #[test]
+    fn ref_event_encodes_ref_id() {
+        // The bridge collectors encode ref-id events; the client decodes
+        // them. Round-trip through the shared encode/decode.
+        let frame = ashfall_core::event::encode_ref_event(
+            ashfall_core::event::EVENT_ACTIVATE, 0x1234);
+        let (frames, _) = ashfall_core::event::split_frames(&frame);
+        let (et, data) = ashfall_core::event::decode_event(&frames[0].payload).unwrap();
+        assert_eq!(et, ashfall_core::event::EVENT_ACTIVATE);
+        assert_eq!(ashfall_core::event::decode_ref_event(data).unwrap(), 0x1234);
+    }
+
+    #[test]
+    fn steam_respawn_sites_consistent() {
+        use fo3_steam_17_respawn as s;
+        // The 6-byte JNE at site B must land exactly on the skip dest:
+        // 0F 85 <rel32>: from + 6 + rel == skip.
+        let rel: i32 = 0x77;
+        assert_eq!(s::SITE_B_JNE + 6 + rel as usize, s::SITE_B_SKIP);
+        // Site-A guard bytes (75 03) and site-B tail (00) match the dump.
+        assert_eq!(s::SITE_B_TAIL, s::SITE_B_JNE + 5);
+        assert!((0x400000..0x1200000).contains(&s::SITE_A_JNE));
+        assert!((0x400000..0x1200000).contains(&s::SITE_B_SKIP));
+        assert_eq!(s::SITE_B2_FLAG, 0x8C9D52);
+        assert!((0x400000..0x1200000).contains(&s::SITE_B2_FLAG));
+    }
+
+    #[test]
+    fn steam_vaultmp_sites_consistent() {
+        use fo3_steam_17_vaultmp as s;
+        // All Steam sites in image range.
+        for a in [s::PLAY_IDLE_CALL_SRC, s::LOCK_FIX, s::AI_FIX1,
+                  s::GET_ACTIVATE_JMP, s::GET_ACTIVATE_RET,
+                  s::DELEGATOR_DEST,
+                  s::DELEGATOR_CALL_SRC, s::PLAY_GROUP_FIX,
+                  s::AV_FIX_SRC, s::AV_FIX_RET, s::AV_FIX_TERM,
+                  s::FIRE_WEAPON_JMP, s::FIRE_WEAPON_CALL, s::PLUGINS_VMP] {
+            assert!((0x400000..0x1200000).contains(&a), "{a:#x} out of range");
+        }
+        // plugins.txt: ".txt" sits 9 bytes into ".\\Plugins.txt" (GOG layout).
+        assert_eq!(s::PLUGINS_VMP, 0xF9FDB1);
+        // fire call site is 5 bytes (E8 rel32) before its second call.
+        assert_eq!(s::FIRE_WEAPON_CALL, 0x770880);
+        assert_eq!(s::FIRE_WEAPON_JMP, 0x7DF3F7);
+        // vcdiff-verified EXACT covers (classic → steam).
+        assert_eq!(s::GET_ACTIVATE_JMP, 0x8D3BC8);
+        assert_eq!(s::GET_ACTIVATE_RET, 0x8D3CB8);
+        assert_eq!(s::AI_FIX1, 0x5E99E2);
+        assert_eq!(s::PLAY_GROUP_FIX, 0x4350F9);
+        assert_eq!(s::DELEGATOR_DEST, 0x405E69);
+        assert_eq!(s::DELEGATOR_CALL_SRC, s::DELEGATOR_DEST + 1);
+        // av_fix: hook slot + 5B = ret, term = sprintf call after the format push.
+        assert_eq!(s::AV_FIX_RET, s::AV_FIX_SRC + 5);
+        const _: () = assert!(s::AV_FIX_TERM > s::AV_FIX_RET);
+    }
+
+    #[test]
+    fn table_addresses_in_pe_range() {
+        // FO3 loads at 0x400000; code+data live below 0x1200000.
+        let t = &FO3_STEAM_CLASSIC;
+        let addrs = [
+            t.plugins_vmp, t.play_group, t.delegator_src, t.delegator_dest,
+            t.delegator_call_src, t.no_respawn_nop, t.no_respawn_jmp_src,
+            t.no_respawn_jmp_dest, t.play_idle_call_src, t.play_idle_fix_src,
+            t.match_race_nop1, t.match_race_nop2, t.match_race_patch,
+            t.match_race_param, t.lock_fix, t.ai_fix1, t.ai_fix2, t.ai_fix3,
+            t.ai_fix4, t.play_group_fix, t.play_group_fix_src,
+            t.play_group_fix_dest, t.av_fix_src, t.av_fix_ret, t.av_fix_term,
+            t.fire_fix_jmp, t.fire_fix_patch, t.get_activate_jmp,
+            t.get_activate_ret, t.place_at_me_jmp, t.place_at_me_call,
+            t.place_at_me_fix, t.place_at_me_fix_dest, t.fire_weapon_jmp,
+            t.fire_weapon_call,
+        ];
+        for a in addrs {
+            assert!(
+                (0x400000..0x1200000).contains(&a),
+                "address 0x{a:x} outside FO3 image range"
+            );
+        }
+    }
+
+    #[test]
+    fn recipes_cover_every_patch_from_patchgame() {
+        let r = recipes(&FO3_STEAM_CLASSIC);
+        // PatchGame writes 34 distinct sites (SafeWrite + WriteRel* combined
+        // into the recipe list above); guard against accidental drops.
+        assert_eq!(r.len(), 34, "recipe count regressed");
+        // Every site in the image range.
+        for rec in &r {
+            assert!(
+                (0x400000..0x1200000).contains(&rec.addr()),
+                "recipe {} at 0x{:x} outside range",
+                match rec {
+                    Recipe::Bytes { name, .. } => name,
+                    Recipe::Write { name, .. } => name,
+                    Recipe::RelCall { name, .. } => name,
+                    Recipe::RelJump { name, .. } => name,
+                    Recipe::RelCallHook { name, .. } => name,
+                    Recipe::RelJumpHook { name, .. } => name,
+                },
+                rec.addr()
+            );
+        }
+        // No two recipes write the same site.
+        let mut sites: Vec<usize> = r.iter().map(|rec| rec.addr()).collect();
+        sites.sort();
+        let dup: Vec<_> = sites.windows(2).filter(|w| w[0] == w[1]).collect();
+        assert!(dup.is_empty(), "duplicate recipe sites: {dup:?}");
+    }
+
+    #[test]
+    fn every_required_hook_is_requested() {
+        let r = recipes(&FO3_STEAM_CLASSIC);
+        let requested: std::collections::BTreeSet<_> = r
+            .iter()
+            .filter_map(Recipe::required_hook)
+            .collect();
+        for h in REQUIRED_HOOKS {
+            assert!(requested.contains(h), "hook {h} not requested by recipes");
+        }
+        assert_eq!(requested.len(), REQUIRED_HOOKS.len());
+    }
+
+    #[test]
+    fn plugins_vmp_bytes_are_literal_dot_vmp() {
+        assert_eq!(u32::from_le_bytes(*b".vmp"), 0x706D762E);
+    }
+
+    #[test]
+    fn rel_jump_offset_math() {
+        // write_rel_jump(from,to) emits E9 + (to-from-5) as little-endian i32.
+        let from = 0x0049DD8Eusize;
+        let to = 0x0049DCF1usize;
+        let disp = (to as isize - from as isize - 5) as i32;
+        assert_eq!(disp, -162);
+        assert_eq!(disp.to_le_bytes(), [0x5E, 0xFF, 0xFF, 0xFF]);
+    }
+
+    #[test]
+    fn recipe_bytes_match_vaultmp_source() {
+        let r = recipes(&FO3_STEAM_CLASSIC);
+        let find = |name: &str| {
+            r.iter()
+                .find(|rec| match rec {
+                    Recipe::Bytes { name: n, .. } => *n == name,
+                    Recipe::Write { name: n, .. } => *n == name,
+                    _ => false,
+                })
+                .expect(name)
+        };
+        // Delegator stub: PUSH ECX; call site +5: POP ECX.
+        if let Recipe::Write { value, .. } = find("delegator_push_ecx") {
+            assert_eq!(*value, 0x51);
+        } else {
+            panic!("delegator_push_ecx wrong variant");
+        }
+        if let Recipe::Write { value, .. } = find("delegator_call_pop_ecx") {
+            assert_eq!(*value, 0x59);
+        } else {
+            panic!("delegator_call_pop_ecx wrong variant");
+        }
+        // aiFix3 block is exact from vaultmp: 85 FF 74 CC EB F6.
+        if let Recipe::Bytes { bytes, .. } = find("ai_fix3_block") {
+            assert_eq!(*bytes, [0x85, 0xFF, 0x74, 0xCC, 0xEB, 0xF6]);
+        } else {
+            panic!("ai_fix3_block wrong variant");
+        }
+        // FireFix jump: EB 57 90.
+        if let Recipe::Bytes { bytes, .. } = find("fire_fix_jmp") {
+            assert_eq!(*bytes, [0xEB, 0x57, 0x90]);
+        } else {
+            panic!("fire_fix_jmp wrong variant");
+        }
+        // match_race_nop1 is an 18-byte NOP block.
+        if let Recipe::Bytes { bytes, .. } = find("match_race_nop1") {
+            assert_eq!(bytes.len(), 18);
+            assert!(bytes.iter().all(|b| *b == 0x90));
+        } else {
+            panic!("match_race_nop1 wrong variant");
+        }
     }
 }

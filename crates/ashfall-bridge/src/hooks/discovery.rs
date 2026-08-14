@@ -289,7 +289,6 @@ mod tests {
 
     #[test]
     fn test_collect_and_flush_emits_events() {
-        use ashfall_core::event::NpcSpawnEvent;
         let _g = TEST_LOCK.lock().unwrap();
         reset_known();
 

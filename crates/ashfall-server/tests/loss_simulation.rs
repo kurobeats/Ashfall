@@ -71,22 +71,17 @@ async fn test_all_packets_delivered_in_order_under_loss() {
         }
 
         // Process ACKs the server has received (frees the send window)
-        loop {
-            match tokio::time::timeout(
-                Duration::from_millis(1),
-                server.socket().recv_from(&mut srv_buf),
-            )
-            .await
-            {
-                Ok(Ok((len, addr))) => {
-                    server.try_recv(addr, &srv_buf[..len]);
-                }
-                _ => break,
-            }
+        while let Ok(Ok((len, addr))) = tokio::time::timeout(
+            Duration::from_millis(1),
+            server.socket().recv_from(&mut srv_buf),
+        )
+        .await
+        {
+            server.try_recv(addr, &srv_buf[..len]);
         }
 
         // Give the server a tick window for retransmission
-        if attempts % 3 == 0 {
+        if attempts.is_multiple_of(3) {
             server.tick().await;
         }
 

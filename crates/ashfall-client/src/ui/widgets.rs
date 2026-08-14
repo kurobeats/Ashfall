@@ -354,7 +354,7 @@ mod tests {
         assert!(gui.apply_packet(&Packet::UpdateWindowVisible { id, visible: false }));
         assert!(!gui.widgets.get(&id).unwrap().visible);
         assert!(gui.apply_packet(&Packet::WindowRemove { id }));
-        assert!(gui.widgets.get(&id).is_none(), "window removed");
+        assert!(!gui.widgets.contains_key(&id), "window removed");
     }
 
     #[test]

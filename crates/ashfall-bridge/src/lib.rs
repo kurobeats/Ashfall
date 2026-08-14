@@ -10,6 +10,7 @@
 //! ## Loading
 //!
 //! Preferred path: loaded by NVSE/FOSE as a plugin — `NVSEPlugin_Query` /
+#![allow(clippy::missing_safety_doc)] // unsafe fns document safety inline; the literal "# Safety" heading is noise here
 //! `NVSEPlugin_Load` handle init.
 //!
 //! Fallback: loaded via Wine DLL override (`WINEDLLOVERRIDES="bridge=n,b"`).

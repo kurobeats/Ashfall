@@ -97,7 +97,7 @@ fn encode_reliable(packet: &Packet, seq: u16) -> Vec<u8> {
     };
     let mut buf = Vec::with_capacity(3 + seq_bytes.len() + payload.len());
     buf.extend_from_slice(&((seq_bytes.len() + payload.len()) as u16).to_le_bytes());
-    buf.push(CHANNEL_RELIABLE_FLAG | 0); // System channel
+    buf.push(CHANNEL_RELIABLE_FLAG); // System channel
     buf.extend_from_slice(&seq_bytes);
     buf.extend_from_slice(&payload);
     buf
@@ -184,12 +184,10 @@ async fn test_script_auth_gate_on_wire() {
 
         let mut saw_end = false;
         for _ in 0..8 {
-            if let Some(pkt) = sock.recv_packet().await {
-                if let Packet::GameEnd { reason } = pkt {
-                    saw_end = true;
-                    assert_eq!(reason, ashfall_core::types::Reason::Denied as u8, "denied by script");
-                    break;
-                }
+            if let Some(Packet::GameEnd { reason }) = sock.recv_packet().await {
+                saw_end = true;
+                assert_eq!(reason, ashfall_core::types::Reason::Denied as u8, "denied by script");
+                break;
             }
         }
         assert!(saw_end, "script must reject 'bob' with GameEnd");
@@ -253,15 +251,13 @@ async fn test_two_client_chat_relay() {
 
         let mut saw_relay = false;
         for _ in 0..16 {
-            if let Some(pkt) = alice.recv_packet().await {
+            if let Some(Packet::GameChat { message }) = alice.recv_packet().await {
                 // Stale spawn-welcome / PlayerNew packets may still be in
                 // alice's buffer — keep scanning until bob's relay arrives.
-                if let Packet::GameChat { message } = pkt {
-                    use ashfall_core::string_cache::StringTable;
-                    if message.resolve(&mut StringTable::new()) == "hello alice" {
-                        saw_relay = true;
-                        break;
-                    }
+                use ashfall_core::string_cache::StringTable;
+                if message.resolve(&mut StringTable::new()) == "hello alice" {
+                    saw_relay = true;
+                    break;
                 }
             }
         }

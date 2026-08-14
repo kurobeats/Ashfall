@@ -26,9 +26,9 @@ const ALL_OPCODES: [u32; 17] = [
 #[test]
 fn test_all_17_opcodes_defined() {
     // Verify no duplicates
-    for i in 0..ALL_OPCODES.len() {
-        for j in i + 1..ALL_OPCODES.len() {
-            assert_ne!(ALL_OPCODES[i], ALL_OPCODES[j]);
+    for (i, a) in ALL_OPCODES.iter().enumerate() {
+        for b in &ALL_OPCODES[i + 1..] {
+            assert_ne!(a, b);
         }
     }
     // Verify opcode values are 0x0001 through 0x0011

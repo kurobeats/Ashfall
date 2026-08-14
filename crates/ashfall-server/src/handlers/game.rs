@@ -153,7 +153,7 @@ mod tests {
 
     #[test]
     fn test_mod_policy_off_accepts_anything() {
-        assert!(handle_mod_list(&[], &vec![("anything.esp".into(), 0)]).is_none());
+        assert!(handle_mod_list(&[], &[("anything.esp".into(), 0)]).is_none());
         assert!(handle_mod_list(&[], &[]).is_none());
     }
 

@@ -534,8 +534,14 @@ pub unsafe fn get_actor_state(ref_id: u32) -> (u32, u8, u8, u8, bool, bool) {
     // ponytail: alerted/sneaking need engine function calls (ALERTED_STATE,
     // SNEAKING_STATE from vaultmp.hpp). VTable offsets unknown for these.
     // Return false until RE completes. vaultmp uses hardcoded FO3 1.7 addresses.
+    #[cfg(target_arch = "x86")]
     let mut alerted = false;
+    #[cfg(not(target_arch = "x86"))]
+    let alerted = false;
+    #[cfg(target_arch = "x86")]
     let mut sneaking = false;
+    #[cfg(not(target_arch = "x86"))]
+    let sneaking = false;
 
     // Alerted/sneaking states: thin vtable-dispatch getters on the classic
     // GOG build (alerted 0x6F6C70 = `[this+0x60]` obj vtable +0x450;
@@ -560,50 +566,43 @@ pub unsafe fn get_actor_state(ref_id: u32) -> (u32, u8, u8, u8, bool, bool) {
 
 /// Read actor value by index (health=0x14, AP=0x15, DR=0x29, DT=0x2A for FNV).
 ///
-/// FNV (wired 2026-08-14n): ActorValueOwner is an inline MEMBER at +0xA4
-/// (xNVSE STATIC_ASSERT offsetof(Actor, magicCaster)==0x88, magicTarget
-/// 0x94, avOwner 0xA4; 16 `lea [reg+0xA4]` sites in the GOG FNV exe).
-/// GetActorValueF is its vtable slot 3 (+0x0C, float — the ActorValueOwner
-/// class def order confirmed in the FNV GECK RTTI vtable 0xD52AC4: 11
-/// slots GetBaseAVI/F, GetAVI/F, mods, GetPermAVI/F, GetAsForm,
-/// GetActorLevel). Guard: the member's vtable pointer must be in .rdata.
+/// FO3 (wired 2026-08-14n): the engine's own ForceActorValue handler
+/// (0x521F20) reads the current value via `lea ecx,[actor+0x9C]` then
+/// `call [avowner_vtable+0xC]` — i.e. the ActorValueOwner sub-object sits
+/// at Actor+0x9C and GetActorValueF is its vtable slot 3 (+0x0C). The
+/// RTTI-derived +0x7C (GECK editor build) does NOT match the game.
 ///
-/// FO3: the ActorValueOwner is a base whose exact vtbl[0] access is NOT
-/// statically derivable (the documented +0x68 sits on vtable run-start
-/// artifacts; the GECK RTTI offset 0x7C doesn't match the game's binary
-/// access patterns — see steam-re.md 2026-08-14l/n). Return 0 until a
-/// live OP_PROBE_FORM settles the real path.
+/// FNV: ActorValueOwner is an inline MEMBER at +0xA4 (xNVSE STATIC_ASSERT
+/// magicCaster 0x88 / magicTarget 0x94 / avOwner 0xA4). GetActorValueF =
+/// its vtable slot 3 (+0x0C).
+///
+/// Guard: the member's vtable pointer must be in .rdata before calling.
 pub unsafe fn get_actor_value(ref_id: u32, index: u8) -> f32 {
     let obj = lookup_form_by_id(ref_id);
     if obj.is_null() {
         return 0.0;
     }
-    if crate::hooks::is_fnv() {
-        let av = obj.add(0xA4);
-        let vt = read_field::<usize>(av, 0);
-        if (0x400000..0x1200000).contains(&vt) {
-            return vcall_1::<u8, f32>(av, 0x0C, index); // GetActorValueF
-        }
-        return 0.0;
+    let av = if crate::hooks::is_fnv() { 0xA4 } else { 0x9C };
+    let av = obj.add(av);
+    let vt = read_field::<usize>(av, 0);
+    if (0x400000..0x1200000).contains(&vt) {
+        return vcall_1::<u8, f32>(av, 0x0C, index); // GetActorValueF
     }
     0.0
 }
 
-/// Read base actor value by index (FNV wired like get_actor_value —
-/// avOwner +0xA4, GetBaseActorValueF at vtable slot 1 = +0x04). FO3
-/// unresolved, returns 0.
+/// Read base actor value by index (GetBaseActorValueF at vtable slot 1 =
+/// +0x04; avOwner FO3 +0x9C / FNV +0xA4, same source as get_actor_value).
 pub unsafe fn get_actor_base_value(ref_id: u32, index: u8) -> f32 {
     let obj = lookup_form_by_id(ref_id);
     if obj.is_null() {
         return 0.0;
     }
-    if crate::hooks::is_fnv() {
-        let av = obj.add(0xA4);
-        let vt = read_field::<usize>(av, 0);
-        if (0x400000..0x1200000).contains(&vt) {
-            return vcall_1::<u8, f32>(av, 0x04, index); // GetBaseActorValueF
-        }
-        return 0.0;
+    let av = if crate::hooks::is_fnv() { 0xA4 } else { 0x9C };
+    let av = obj.add(av);
+    let vt = read_field::<usize>(av, 0);
+    if (0x400000..0x1200000).contains(&vt) {
+        return vcall_1::<u8, f32>(av, 0x04, index); // GetBaseActorValueF
     }
     0.0
 }
@@ -652,13 +651,29 @@ pub unsafe fn set_angle(ref_id: u32, angle: [f32; 3]) {
 
 /// Set actor value by index.
 pub unsafe fn set_actor_value(ref_id: u32, index: u8, value: f32) {
-    // ponytail: the "estimated" vtable slot +0x6C is wrong — same vtable-
-    // base audit as get_actor_value (2026-08-14l): on the dominant
-    // TESObjectREFR family +0x6C is a `ret 8` stub (silently does
-    // nothing); FNV's SetActorValue is an Actor PRIMARY-vtable method
-    // (ActorValueOwner is a member there, Get/SetAV live on it at +0xA4).
-    // No-op until the real SetActorValue path is live-probed.
-    let _ = (ref_id, index, value);
+    let obj = lookup_form_by_id(ref_id);
+    if obj.is_null() {
+        return;
+    }
+    if crate::hooks::is_fnv() {
+        // FNV: SetActorValue is an Actor vtable method whose slot is not
+        // statically derived (the ActorValueOwner member at +0xA4 has the
+        // GETters only). No-op until live-probed.
+        let _ = (index, value);
+        return;
+    }
+    // FO3: replicate the engine's ForceActorValue handler (0x521F20):
+    // current = GetActorValueF via avOwner (+0x9C) vtable slot 3, then
+    // apply the delta via Actor vtbl[0] slot +0x3A0 (thiscall, args
+    // index, delta, 0 — confirmed from the handler's push sequence).
+    let av = obj.add(0x9C);
+    let vt = read_field::<usize>(av, 0);
+    if !(0x400000..0x1200000).contains(&vt) {
+        return;
+    }
+    let current = vcall_1::<u8, f32>(av, 0x0C, index);
+    let delta = value - current;
+    let _: u32 = vcall_3::<u32, f32, u32, u32>(obj, 0x3A0, index as u32, delta, 0);
 }
 
 /// Read cell of a reference.
@@ -854,16 +869,16 @@ pub unsafe fn get_combat_target_from_obj(obj: *mut u8) -> u32 {
     read_field::<u32>(obj, offset)
 }
 
-/// Full-name access is a NON-virtual TESForm function (FOSE GameForms.h
-/// line 517: `TESFullName* GetFullName();` has no `virtual` keyword) — the
-/// old `vtable +0x1C` call hit TESForm slot 7 (SaveAlt / ret-stub on the
-/// dominant vtable), i.e. it was never GetFullName (2026-08-14l audit).
-/// The function's address is not yet re-derived; get_name returns
-/// "unnamed" until it is (the baseForm field read at +0x1C stays — it's
-/// correct).
+/// Full-name access: TESForm::GetFullName is a NON-virtual function (FOSE
+/// GameForms.h:517); for the common form types (weapons/armor/misc, etc.)
+/// the TESFullName component is an INLINE member at +0x18 and its name is
+/// a BSString at +0x04 (m_data at +0x04, m_dataLen at +0x08) — so the
+/// display-name char* sits at base_form + 0x18 + 0x04 (2026-08-14n,
+/// FOSE-layout + game cross-check; the old vtable +0x1C call was wrong:
+/// TESForm slot 7 = SaveAlt/ret-stub).
 ///
-/// Get the display name via the VTable chain
-/// `GetBaseForm` → `GetFullName` (returns `const char*`).
+/// Get the display name (base-form full name; per-ref overrides not
+/// handled).
 pub unsafe fn get_name(ref_id: u32) -> String {
     get_name_from_obj(lookup_form_by_id(ref_id))
 }
@@ -873,14 +888,41 @@ pub unsafe fn get_name_from_obj(obj: *mut u8) -> String {
     if obj.is_null() {
         return "unnamed".into();
     }
-    // baseForm field at +0x1C (empirically derived on Steam 2026-08-07) —
-    // the vtable GetBaseForm slot differs from xFOSE in the Steam build and
-    // calling it corrupts the stack.
-    let _base_form: *mut u8 = read_field::<usize>(obj, 0x1C) as *mut u8;
-    // ponytail: TESForm::GetFullName is a non-virtual function — the old
-    // vtable +0x1C call was wrong (hit SaveAlt/ret-stub). Return "unnamed"
-    // until the real GetFullName address is re-derived.
-    "unnamed".into()
+    // baseForm field at +0x1C (empirically derived on Steam 2026-08-07).
+    let base_form: *mut u8 = read_field::<usize>(obj, 0x1C) as *mut u8;
+    if base_form.is_null() {
+        return "unnamed".into();
+    }
+    // TESFullName inline at +0x18: verify it looks like a component (its
+    // first field is a .rdata vtable pointer), then read the BSString
+    // m_data at +0x04.
+    let full_name = base_form.add(0x18);
+    let vt = read_field::<usize>(full_name, 0);
+    if !(0x400000..0x1200000).contains(&vt) {
+        return "unnamed".into();
+    }
+    let name_ptr = read_field::<usize>(full_name, 0x04) as *const u8;
+    if name_ptr.is_null() {
+        return "unnamed".into();
+    }
+    // sanity: bounded printable C string (avoid reading arbitrary memory)
+    let mut len = 0usize;
+    while len < 256 {
+        let b = *name_ptr.add(len);
+        if b == 0 {
+            break;
+        }
+        if !(0x20..=0x7E).contains(&b) {
+            return "unnamed".into();
+        }
+        len += 1;
+    }
+    if len == 0 || len == 256 {
+        return "unnamed".into();
+    }
+    std::ffi::CStr::from_ptr(name_ptr as *const i8)
+        .to_string_lossy()
+        .into_owned()
 }
 
 /// Actor value indices (Gamebryo ActorValue enum, shared by FO3/FNV).

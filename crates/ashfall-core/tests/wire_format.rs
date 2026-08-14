@@ -787,9 +787,11 @@ fn test_form_id_sync_roundtrip() {
 
 #[test]
 fn test_anti_cheat_constants() {
-    assert!(constants::MAX_SPEED > 0.0);
-    assert!(constants::MAX_TELEPORT_DISTANCE > 0.0);
-    assert_eq!(constants::MAX_ITEM_STACK, 65535);
-    assert!(constants::MIN_SCALE > 0.0);
-    assert!(constants::MAX_SCALE > constants::MIN_SCALE);
+    // compile-time constant checks (kept as const asserts so clippy
+    // doesn't flag always-true runtime asserts)
+    const _: () = assert!(constants::MAX_SPEED > 0.0);
+    const _: () = assert!(constants::MAX_TELEPORT_DISTANCE > 0.0);
+    const _: () = assert!(constants::MAX_ITEM_STACK == 65535);
+    const _: () = assert!(constants::MIN_SCALE > 0.0);
+    const _: () = assert!(constants::MAX_SCALE > constants::MIN_SCALE);
 }

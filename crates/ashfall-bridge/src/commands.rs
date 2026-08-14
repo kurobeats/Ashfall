@@ -640,7 +640,7 @@ mod tests {
     #[test]
     fn test_original_setters_return_success() {
         let params = [0x42u8, 0, 0, 0, 0, 0, 0x80, 0x3F, 0, 0, 0, 0, 0, 0, 0, 0];
-        let mut setters: Vec<(u32, &[u8])> = vec![
+        let setters: Vec<(u32, &[u8])> = vec![
             (opcodes::OP_SET_POS, &params),
             (opcodes::OP_SET_ANGLE, &params),
             (opcodes::OP_SET_CELL, &params),

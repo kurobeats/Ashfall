@@ -15,13 +15,14 @@ use ashfall_bridge::network;
 fn test_pipe_wakeup() {
     // PIPE_SYS_WAKEUP is just 0x01
     assert_eq!(network::PIPE_SYS_WAKEUP, 0x01);
-    assert!(network::PIPE_SYS_WAKEUP != network::PIPE_ERROR_CLOSE);
+    // distinct (compile-time constants)
+    const _: () = assert!(network::PIPE_SYS_WAKEUP != network::PIPE_ERROR_CLOSE);
 }
 
 #[test]
 fn test_pipe_error_close() {
     assert_eq!(network::PIPE_ERROR_CLOSE, 0x06);
-    assert!(network::PIPE_ERROR_CLOSE != network::PIPE_OP_RETURN);
+    const _: () = assert!(network::PIPE_ERROR_CLOSE != network::PIPE_OP_RETURN);
 }
 
 #[test]

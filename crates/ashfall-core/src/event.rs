@@ -200,7 +200,7 @@ mod tests {
 
     #[test]
     fn test_frame_roundtrip_and_split() {
-        let frames = vec![
+        let frames = [
             encode_frame(0x02, &[1, 2, 3, 4, 5]),
             encode_frame(PIPE_OP_EVENT, &[9, 9, 9]),
         ];

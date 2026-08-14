@@ -41,7 +41,7 @@ impl TestClient {
         let seq_bytes: Vec<u8> = if seq < 128 { vec![0x80 | seq as u8] } else { vec![0; 3] };
         let mut buf = Vec::new();
         buf.extend_from_slice(&((seq_bytes.len() + payload.len()) as u16).to_le_bytes());
-        buf.push(CHANNEL_RELIABLE_FLAG | 0);
+        buf.push(CHANNEL_RELIABLE_FLAG);
         buf.extend_from_slice(&seq_bytes);
         buf.extend_from_slice(&payload);
         self.sock.send(&buf).await.unwrap();

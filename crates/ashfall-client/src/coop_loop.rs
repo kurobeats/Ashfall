@@ -28,13 +28,14 @@ fn tcp_port() -> u16 {
 
 
 fn test_config(port: u16, name: &str, ipc_port: u16) -> ClientConfig {
-    let mut c = ClientConfig::default();
-    c.name = name.into();
-    c.server_addr = "127.0.0.1".into();
-    c.server_port = port;
-    c.ipc_mode = "tcp".into();
-    c.ipc_port = ipc_port;
-    c
+    ClientConfig {
+        name: name.into(),
+        server_addr: "127.0.0.1".into(),
+        server_port: port,
+        ipc_mode: "tcp".into(),
+        ipc_port,
+        ..Default::default()
+    }
 }
 
 /// Spawn a mock game bridge: sends one player-state event on connect, then
