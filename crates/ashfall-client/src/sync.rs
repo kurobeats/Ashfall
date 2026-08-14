@@ -221,6 +221,14 @@ pub fn packets_to_commands(
                     vec![Param::U32(ref_id), Param::U32(*lock)],
                 ));
             }
+            // Remote scale change — apply the scale field locally.
+            Packet::UpdateScale { id, scale } => {
+                let Some(ref_id) = resolve_ref(*id) else { continue };
+                out.push((
+                    crate::ipc::OP_SET_SCALE,
+                    vec![Param::U32(ref_id), Param::F32(*scale)],
+                ));
+            }
             _ => {}
         }
     }
@@ -350,6 +358,22 @@ mod tests {
         assert_eq!(*op, crate::ipc::OP_SET_LOCK);
         assert!(matches!(p[0], Param::U32(0x70)));
         assert!(matches!(p[1], Param::U32(1)));
+    }
+
+    #[test]
+    fn test_remote_scale_to_command() {
+        let local = NetworkID::new(1);
+        let obj_id = entity_id(0x80);
+        let packets = vec![
+            Packet::UpdateScale { id: obj_id, scale: 1.5 },
+        ];
+        let resolve = |id: NetworkID| if id == obj_id { Some(0x80) } else { None };
+        let cmds = packets_to_commands(&packets, local, resolve);
+        assert_eq!(cmds.len(), 1);
+        let (op, p) = &cmds[0];
+        assert_eq!(*op, crate::ipc::OP_SET_SCALE);
+        assert!(matches!(p[0], Param::U32(0x80)));
+        assert!(matches!(p[1], Param::F32(1.5)));
     }
 
     #[test]

@@ -419,6 +419,31 @@ const OFFSET_REF_ID: usize = 0x0C;
 fn pos_offset(index: usize) -> usize {
     if crate::hooks::is_fnv() { 0x30 + index * 4 } else { 0x2C + index * 4 }
 }
+/// Scale field: immediately after the position triple.
+/// FO3: pos 0x2C/0x30/0x34 → scale 0x38. FNV: pos 0x30/0x34/0x38 → 0x3C.
+fn scale_offset() -> usize {
+    if crate::hooks::is_fnv() { 0x3C } else { 0x38 }
+}
+/// Read the reference scale (raw field, Steam-safe).
+pub unsafe fn get_scale(ref_id: u32) -> f32 {
+    let obj = lookup_form_by_id(ref_id);
+    get_scale_from_obj(obj)
+}
+/// Read the scale from an already-resolved object pointer.
+pub unsafe fn get_scale_from_obj(obj: *mut u8) -> f32 {
+    if obj.is_null() {
+        return 1.0;
+    }
+    read_field::<f32>(obj, scale_offset())
+}
+/// Set the reference scale (raw field write, Steam-safe).
+pub unsafe fn set_scale(ref_id: u32, scale: f32) {
+    let obj = lookup_form_by_id(ref_id);
+    if obj.is_null() {
+        return;
+    }
+    write_field::<f32>(obj, scale_offset(), scale);
+}
 fn angle_offset(index: usize) -> usize {
     if crate::hooks::is_fnv() { 0x24 + index * 4 } else { 0x20 + index * 4 }
 }
@@ -1034,6 +1059,18 @@ mod tests {
             assert_eq!(read_field::<u8>(obj.as_mut_ptr(), 0x0A) & 0x01, 1);
             set_lock_flags(obj.as_mut_ptr(), false);
             assert_eq!(read_field::<u8>(obj.as_mut_ptr(), 0x0A) & 0x01, 0);
+        }
+    }
+
+    #[test]
+    fn test_scale_roundtrip() {
+        unsafe {
+            // FO3 scale at +0x38 (default engine state → not FNV).
+            let mut obj = vec![0u8; 128];
+            write_field::<f32>(obj.as_mut_ptr(), 0x38, 1.0);
+            assert_eq!(get_scale_from_obj(obj.as_mut_ptr()), 1.0);
+            write_field::<f32>(obj.as_mut_ptr(), 0x38, 2.5);
+            assert_eq!(get_scale_from_obj(obj.as_mut_ptr()), 2.5);
         }
     }
 

@@ -20,6 +20,7 @@ pub const OP_GET_LOCK: u32 = 0x0012;
 pub const OP_SET_LOCK: u32 = 0x0013;
 pub const OP_SET_ENABLED: u32 = 0x0011;
 pub const OP_MOVE_TO: u32 = 0x0014;
+pub const OP_SET_SCALE: u32 = 0x0015;
 pub const OP_PLAY_GROUP: u32 = 0x0028;
 pub const OP_KILL: u32 = 0x0023;
 pub const OP_TRACK_ACTOR: u32 = 0x00F6;

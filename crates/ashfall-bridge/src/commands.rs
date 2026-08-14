@@ -26,6 +26,7 @@ pub mod opcodes {
     pub const OP_GET_LOCK: u32           = 0x0012;
     pub const OP_SET_LOCK: u32           = 0x0013;
     pub const OP_MOVE_TO: u32            = 0x0014;
+    pub const OP_SET_SCALE: u32          = 0x0015;
     pub const OP_PLAY_SOUND: u32         = 0x0015;
     pub const OP_PLACE_AT_ME: u32        = 0x0016;
     pub const OP_GET_BASE: u32           = 0x0017;
@@ -260,6 +261,16 @@ pub fn execute(func: u32, params: &[u8]) -> Vec<u8> {
             // (Steam-safe raw writes, wired 2026-08-14).
             crate::hooks::set_parent_cell(ref_id, cell);
             crate::hooks::set_pos(ref_id, [x, y, z]);
+            vec![1]
+        }
+
+        // ── Scale ──
+        OP_SET_SCALE => {
+            if params.len() < 8 { return vec![]; }
+            let ref_id = u32::from_le_bytes([params[0], params[1], params[2], params[3]]);
+            let scale = f32::from_le_bytes([params[4], params[5], params[6], params[7]]);
+            // Remote scale change: raw field write (Steam-safe).
+            crate::hooks::set_scale(ref_id, scale);
             vec![1]
         }
 

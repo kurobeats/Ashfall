@@ -187,12 +187,11 @@ pub fn set_angle(ref_id: u32, angle: [f32; 3]) {
 }
 
 pub fn get_scale(ref_id: u32) -> f32 {
-    let _ = ref_id;
-    1.0
+    unsafe { vtable::get_scale(ref_id) }
 }
 
 pub fn set_scale(ref_id: u32, scale: f32) {
-    let _ = (ref_id, scale);
+    unsafe { vtable::set_scale(ref_id, scale) }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -605,10 +604,25 @@ pub fn intercept_opcode(opcode: u16, args: &[u32]) -> bool {
 // ═══════════════════════════════════════════════════════════════
 
 /// Check if actor is dead.
+///
+/// Reads the death-state field `Actor+0xFC` (survived the Steam recompile —
+/// the respawn handler does `cmp eax,2; je` there, and the AI predicate
+/// checks cmp 5/3; non-zero = dead/death flow active). Field read, not a
+/// vtable call — Steam-safe (2026-08-14).
 pub fn is_dead(ref_id: u32) -> bool {
-    let _ = ref_id;
-    // TODO: Actor::GetDead()
-    false
+    #[cfg(target_arch = "x86")]
+    unsafe {
+        let obj = crate::hooks::vtable::lookup_form_by_id(ref_id);
+        if obj.is_null() {
+            return false;
+        }
+        crate::hooks::vtable::read_field::<u32>(obj, 0xFC) != 0
+    }
+    #[cfg(not(target_arch = "x86"))]
+    {
+        let _ = ref_id;
+        false
+    }
 }
 
 /// Server-authoritative respawn gate. The vaultmp respawn_detour hook calls
