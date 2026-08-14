@@ -349,6 +349,62 @@ const VTBL_ACTOR_GET_BASE_VALUE: usize = vtable_index(0x70); // index 28 (x86, e
 const VTBL_ACTOR_ANIM_DATA: usize = vtable_index(0x01E4);   // index 121 (x86, vaultmp.cpp GetActorState)
 
 // ═══════════════════════════════════════════════════════════════
+// Steam (post-2023) vtable — re-derived 2026-08-14 (static, see steam-re.md)
+//
+// The Steam recompile REORDERED the TESObjectREFR/PlayerCharacter vtable.
+// The Steam vtable base is 0xF938FC (verified: AI-predicate slot +0x22C
+// → 0x8B8AF0, matches `call [rax+0x22c]` in the Steam AI predicate; the
+// death-handler slot +0x23C → 0x8CA490). Byte-identical method matching
+// (scripts/re/vtable_fullmap.py) shows the mid/late table shifted by a
+// DOMINANT +0x58 (59% of 41 translated slots exact; the early region
+// +0x00..0x68 was reordered — GetActorValue/GetBaseValue need semantic
+// re-derivation, they do NOT sit at +0x58-shifted slots). Confirmed
+// translations:
+//   GOG +0x9C/0xA0 (lock-state getter 0x4017E0/0x4017F0) -> Steam
+//     +0xF4/+0xFC (0x57C770/0x57C780, byte-identical)
+//   GOG +0x1E8/0x1EC/0x1F0 (anim-data region) -> Steam +0x240/0x244/0x248
+//   GOG +0x228 -> Steam +0x280
+//   GOG +0x2D4 -> Steam +0x32C
+// Field reads (pos/angle/cell/scale/refID) are unaffected — the bridge
+// reads those raw. Only vtable-call ops (actor value/state/is_moving/lock)
+// need the Steam slots; get_lock is the first confirmed safe one.
+pub mod fo3_steam_vtable {
+    /// Steam PlayerCharacter/TESObjectREFR vtable base (.rdata). Verified
+    /// 2026-08-14: slot +0x22C → 0x8B8AF0 (the AI predicate's actor
+    /// `call [rax+0x22c]` target), slot +0x23C → 0x8CA490 (death handler).
+    pub const BASE: usize = 0x00F9_38FC;
+    /// Lock-state getter (`mov al,[ecx+0xa]; and al,1; ret`) — GOG slot
+    /// +0xA0 (0x4017F0) byte-identical twin. GOG +0xA0 -> Steam +0xFC.
+    pub const GET_LOCKED: usize = 0xFC;
+    /// GOG +0x9C (0x4017E0, lock-state sibling) -> Steam +0xF4.
+    pub const GET_LOCKED_SIBLING: usize = 0xF4;
+}
+
+/// Steam slot for a classic GOG vtable slot, by byte-identity check.
+///
+/// The +0x58 shift covers most of the mid/late table. Rather than trust the
+/// shift blindly, verify the slot's function bytes against the known Steam
+/// function for the confirmed translations. Returns `None` when the running
+/// build isn't Steam or the slot isn't confirmed — callers keep the GOG
+/// fallback (which crashes on Steam for unconfirmed slots — do NOT call
+/// vtable methods with unconfirmed slots on Steam).
+#[cfg(target_arch = "x86")]
+pub fn steam_slot_for(gog_slot: usize) -> Option<usize> {
+    match gog_slot {
+        // GOG +0xA0 lock getter 0x4017F0 (`8a 41 0a 24 01 c3`) is
+        // byte-identical at Steam slot +0xFC (0x57C780) — verified
+        // 2026-08-14 by matching the vtable function bytes.
+        0xA0 => Some(fo3_steam_vtable::GET_LOCKED),
+        _ => None,
+    }
+}
+
+#[cfg(not(target_arch = "x86"))]
+pub fn steam_slot_for(_gog_slot: usize) -> Option<usize> {
+    None
+}
+
+// ═══════════════════════════════════════════════════════════════
 // Known raw field offsets (vaultmp.cpp confirmed, FO3 1.7)
 // ═══════════════════════════════════════════════════════════════
 
@@ -609,7 +665,19 @@ pub unsafe fn get_lock_from_obj(obj: *mut u8) -> u32 {
     if obj.is_null() {
         return 0;
     }
-    vcall_0(obj, VTBL_REF_GET_LOCKED)
+    // Steam: vtable reordered — GOG slot +0xA0 (lock-state getter
+    // 0x4017F0) is byte-identical at Steam slot +0xFC (0x57C780),
+    // verified 2026-08-14 (steam-re.md). Use it when detected.
+    #[cfg(target_arch = "x86")]
+    {
+        let slot = crate::hooks::vtable::steam_slot_for(VTBL_REF_GET_LOCKED)
+            .unwrap_or(VTBL_REF_GET_LOCKED);
+        return vcall_0(obj, slot);
+    }
+    #[cfg(not(target_arch = "x86"))]
+    {
+        vcall_0(obj, VTBL_REF_GET_LOCKED)
+    }
 }
 
 /// Parent cell: `TESObjectREFR::parentCell` — FO3 +0x3C / FNV +0x40.

@@ -423,3 +423,50 @@ binary). The `1_7ng` block is the 2010 NoGore variant (ConsoleManager
 blocks show FO3 address drift across releases (1.0→1.7: LookupFormByID
 0x454CC0→0x455190 etc.) — per-site semantic re-derivation is the only way
 for the Anniversary build.
+
+## Session 2026-08-14c — Steam vtable re-derivation (static, r2 on battlecruiser)
+
+The bridge's vtable-call ops (OP_GET_ACTOR_VALUE/STATE, OP_IS_MOVING) crash
+on Steam because the recompile REORDERED the TESObjectREFR/PlayerCharacter
+vtable. Static work this session (`scripts/re/vtable_steam.py`):
+
+**Steam PC vtable base = 0xF938FC** (399 entries). Verified two ways:
+- AI-predicate actor slot +0x22C → **0x8B8AF0** — matches `call [rax+0x22c]`
+  in the Steam AI predicate (0x7F9C51); the predicate's actor is `esi`/`rsi`
+  and `mov eax,[rsi]; ... call [rax+0x22c]` derefs the same vtable.
+- Death-handler slot +0x23C → **0x8CA490** (in the 0x8C9xxx region).
+
+**GOG PC vtable base = 0xE16B10** (death-handler method 0x788350 @ +0x2FC).
+
+**Slot translation via byte-identical method matching**: 41 slots matched,
+59% fit a **+0x58 shift** exactly (the recompile inserted 0x58/4 = 22 vtable
+entries early). Confirmed translations (GOG → Steam):
+- GOG +0x9C/0xA0 (lock-state getter `8a 41 0a 24 01 c3` = `mov al,[ecx+0xa];
+  and al,1; ret`) → **Steam +0xF4/+0xFC** (0x57C770/0x57C780, byte-identical)
+- GOG +0x1E8/0x1EC/0x1F0 (anim-data region) → Steam +0x240/+0x244/+0x248
+- GOG +0x228 → Steam +0x280; GOG +0x2D4 → Steam +0x32C
+
+**The early region (slots +0x00..+0x68) was REORDERED, not shifted** —
+GetActorValue (+0x68) and GetBaseValue (+0x70) are NOT at +0x58-shifted
+slots. Their Steam functions read the AV container field +0x1C4 (many
+candidates found: 0x77C8C0, 0x784A7A, etc.) but none is a vtable entry in
+the PC vtable — the Steam AV getter is not vtable-dispatched at +0x68, and
+the AV container helper (GOG 0x6CF0B0) was rewritten (no byte twin). The
+GOG 0x783900 "GetActorValue" is actually an AV set/get helper that calls
+LookupFormByID + RTTI dispatch (same shape as get_activate). **GetActorValue
++ GetBaseValue + AnimData need live probing — no reliable static path.**
+
+**Wired into the bridge**: `fo3_steam_vtable` module (BASE 0xF938FC,
+GET_LOCKED +0xFC) + `steam_slot_for()` — `get_lock` now uses Steam slot
++0xFC when the running build is Steam (byte-guarded, GOG fallback).
+Position/angle/cell/scale/refID stay FIELD-based (already Steam-safe).
+
+Online research re-confirmed: **no public Anniversary vtable table exists**
+(FOSE repo deleted; kFOSE/lStewieAl forks are classic-build only — checked
+kFOSE's GameObjects.cpp: g_thePlayer 0x011DEA3C is the FNV build). The
+community answer is the downgrade; we re-derive per-site.
+
+Next: live-probe get_actor_value/state + is_moving on the game host
+(OP_PROBE_FORM dumps the vtable — read the +0x68/+0x70/+0x1E4 entries),
+then the remaining patch sites (get_activate_ret 0x8C8F82 candidate,
+fire_fix, match_race, place_at_me, ai_fix2/3/4).

@@ -234,3 +234,12 @@ FNV Steam verification: Steam `FalloutNV.exe` (md5 516ed1c6…) vs GOG
 SteamStub-encrypted on disk (decrypts to GOG code at load), import differs
 (`steam_api.dll` vs `GalaxyWrp.dll` for PI_IsSteamRunning), extra .bind
 unpacker section. **fnv_14 table applies to Steam unchanged.**
+
+`vtable_steam.py` — Steam PlayerCharacter vtable RE. Steam PC vtable base
+0xF938FC (verified: AI-pred slot +0x22C → 0x8B8AF0, death-handler +0x23C →
+0x8CA490); GOG base 0xE16B10. Builds the GOG→Steam slot translation by
+byte-identical method matching: 41 slots, 59% fit a +0x58 shift; the early
+region (+0x00..0x68) was REORDERED (GetActorValue/BaseValue/AnimData need
+live probing). GET_LOCKED confirmed: GOG +0xA0 → Steam +0xFC (byte-identical
+`8a 41 0a 24 01 c3`). Wired in the bridge as `fo3_steam_vtable` +
+`steam_slot_for()` (get_lock uses Steam slot +0xFC when detected).

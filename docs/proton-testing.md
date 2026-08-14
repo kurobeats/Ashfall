@@ -48,11 +48,13 @@ as-is.
 (LookupFormByID 0x711EF0, ExtractArgs 0x787530, ConsoleManager 0x788B30,
 cdecl + thiscall convention fixes) — see "Steam build — live re-derivation
 progress" below. Field-read commands (OP_GET_POS/GET_ANGLE/GET_PARENT_CELL)
-are live-verified on the Steam build. Still unsafe: **vtable-call getters
-(OP_GET_BASE, OP_GET_ACTOR_STATE, OP_GET_ACTOR_VALUE, OP_IS_MOVING)** — the
-Steam TESObjectREFR vtable layout differs from the xFOSE assumption (index
-4 = destructor, not GetBaseForm); they crash until the real slots are
-re-derived.
+are live-verified on the Steam build. vtable-call getters: OP_GET_LOCK now
+uses the Steam slot (GOG +0xA0 → Steam +0xFC, byte-identical lock getter,
+re-derived 2026-08-14c). Still unsafe: **OP_GET_BASE, OP_GET_ACTOR_STATE,
+OP_GET_ACTOR_VALUE, OP_IS_MOVING** — the Steam TESObjectREFR vtable was
+REORDERED (early region +0x00..0x68; GetActorValue/BaseValue/AnimData slots
+need live probing, steam-re.md Session 2026-08-14c); they crash until the
+real slots are re-derived.
 
 ## What crashes the game (verified)
 
@@ -172,10 +174,14 @@ build, exe md5 `8a3adab8...`) under Proton Experimental:
 - **Live with a loaded save**: `OP_GET_POS` → (42878.5, -72844.4, 11118.6),
   `OP_GET_ANGLE` → (6.3, 0.0, 186.9), parent cell read, form probe shows a
   real object (0x0303A6F4) with a real vtable (0xF93958, all entries .text).
-- **Blocked**: vtable-call getters (`get_base`, `get_actor_value`, `is_moving`).
-  The Steam TESObjectREFR vtable layout differs from the xFOSE assumption:
-  index 4 holds a destructor (`ret $0x4`, delete-flag arg) not a no-arg
-  GetBaseForm; calling it corrupts the stack (game dies). The object-field
+- **Blocked**: vtable-call getters (`get_actor_value`, `get_actor_state`,
+  `is_moving`). The Steam TESObjectREFR vtable was REORDERED: index 4 holds
+  a destructor (`ret $0x4`, delete-flag arg) not a no-arg GetBaseForm;
+  calling the GOG slots corrupts the stack (game dies). 2026-08-14c: Steam
+  vtable base found (0xF938FC), GET_LOCKED slot re-derived (GOG +0xA0 →
+  Steam +0xFC) and wired. The AV/anim slots (+0x68/+0x70/+0x1E4) are in
+  the reordered early region — use OP_PROBE_FORM to read them live.
+  The object-field
   probe (`OP_PROBE_FORM` dumps obj fields) is in place — next: scan the
   object fields for a pointer to the player base form (FO3 base form
   ID 0x707) to find the baseForm field, and map the real GetBaseForm slot
