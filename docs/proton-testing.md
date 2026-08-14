@@ -47,10 +47,12 @@ as-is.
 **Superseded 2026-08-07:** the Steam build's table is now re-derived
 (LookupFormByID 0x711EF0, ExtractArgs 0x787530, ConsoleManager 0x788B30,
 cdecl + thiscall convention fixes) — see "Steam build — live re-derivation
-progress" below. Field-read commands (OP_GET_POS/GET_ANGLE/GET_PARENT_CELL)
-are live-verified on the Steam build. vtable-call getters: OP_GET_LOCK now
-uses the Steam slot (GOG +0xA0 → Steam +0xFC, byte-identical lock getter,
-re-derived 2026-08-14c). Still unsafe: **OP_GET_BASE, OP_GET_ACTOR_STATE,
+progress" below. Field-read commands (OP_GET_POS/GET_ANGLE/GET_PARENT_CELL,
+plus the field-based getters wired 2026-08-14d-g — scale +0x38, dead-state
++0xFC, lock byte +0xA, enabled +0x50, parent-cell +0x3C) are Steam-safe.
+vtable-call getters: OP_GET_LOCK uses the Steam slot (GOG +0xA0 → Steam
++0xFC, byte-identical lock getter, re-derived 2026-08-14c). Still unsafe:
+**OP_GET_BASE, OP_GET_ACTOR_STATE,
 OP_GET_ACTOR_VALUE, OP_IS_MOVING** — the Steam TESObjectREFR vtable was
 REORDERED (early region +0x00..0x68; GetActorValue/BaseValue/AnimData slots
 need live probing, steam-re.md Session 2026-08-14c); they crash until the

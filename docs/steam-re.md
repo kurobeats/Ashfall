@@ -461,3 +461,34 @@ Next: live-probe get_actor_value/state + is_moving on the game host
 (OP_PROBE_FORM dumps the vtable — read the +0x68/+0x70/+0x1E4 entries),
 then the remaining patch sites (fire_fix, match_race, place_at_me,
 ai_fix2/3/4).
+
+## Session 2026-08-14d-g — field-based getters + relay completion (no game)
+
+The bridge had several stub getters/OP handlers that ARE field-writable
+(no vtable call → Steam-safe). Completed them:
+
+- **get_scale/set_scale** — were stubs (1.0/no-op); now field reads/writes
+  (FO3 +0x38, FNV +0x3C — immediately after the pos triple, matching the
+  documented layout).
+- **is_dead** — was a TODO returning false; now reads the death-state
+  field Actor+0xFC (survived the Steam recompile; the respawn handler does
+  `cmp eax,2; je` there, AI predicate checks cmp 5/3).
+- **set_lock** — lock byte +0xA bit 0, the same field the verified
+  lock-state getter reads (`mov al,[ecx+0xa]; and al,1; ret`, GOG
+  0x4017F0 / Steam 0x57C780). Wired OP_SET_LOCK + client UpdateLock mapping.
+- **set_parent_cell** (FO3 +0x3C / FNV +0x40) → OP_SET_CELL.
+- **set_enabled** (+0x50/0x54 bit 0x02, inverse of get_enabled) →
+  OP_SET_ENABLED.
+- **OP_MOVE_TO** — 20-byte params (ref + cell + xyz) → set_parent_cell +
+  set_pos.
+- **OP_SET_SCALE** (0x2B, new — moved off the 0x15 collision with
+  OP_PLAY_SOUND) + client UpdateScale mapping.
+- **OP_FIRE_WEAPON** — calls the engine fire routine via thiscall
+  (`fire_routine_addr()`: classic 0x4BE1A0 / Steam 0x770880, byte-guarded).
+- **Client relay** — packets_to_commands now maps UpdateActivate /
+  UpdateFireWeapon / UpdateLock / UpdateScale / UpdateSound → the
+  corresponding OPs (the server relayed these but receivers ignored them).
+
+Remaining engine-bound OP stubs (no safe field path): OP_SET_NAME
+(SetName vtable slot unmapped), OP_PLAY_SOUND's engine call, OP_PLACE_AT_ME
+(engine spawn fn). These + the AV/anim vtable slots need the live host.

@@ -5,7 +5,7 @@ mod for the classic Bethesda games — host a server, connect with your crew,
 and explore the wasteland together. Built from scratch in Rust, inspired by
 the old vaultmp project and its successors.
 
-[![Tests](https://img.shields.io/badge/tests-472%20passed-brightgreen)](#status)
+[![Tests](https://img.shields.io/badge/tests-483%20passed-brightgreen)](#status)
 [![License](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
 [![Status](https://img.shields.io/badge/status-co-op%20MVP%20in%20progress-orange)](#status)
 
@@ -134,7 +134,7 @@ Full architecture: [docs/architecture.md](./docs/architecture.md)
 
 ## Status & roadmap
 
-**Phases 1–10 complete, 472 tests, zero warnings.** The phase-by-phase record
+**Phases 1–10 complete, 483 tests, zero warnings.** The phase-by-phase record
 lives in [docs/impl-plan.md](./docs/impl-plan.md). Recent highlights:
 
 - Ownership transfer, string compression, and differential state sync
@@ -161,11 +161,14 @@ lives in [docs/impl-plan.md](./docs/impl-plan.md). Recent highlights:
   fire_weapon confirmed 0x7DF3F7/0x770880) — live-probe before hooking.
   Steam PC vtable base found (0xF938FC); GET_LOCKED slot re-derived
   (GOG +0xA0 → Steam +0xFC) and wired. get_activate fully solved
-  (jmp 0x8D3BC8 + ret 0x8D3CB8). The 8 vaultmp hooks are now implemented
-  (EVENT_ACTIVATE/EVENT_FIRE relay). Still to derive:
-  the AV/anim vtable slots (GetActorValue/State/
+  (jmp 0x8D3BC8 + ret 0x8D3CB8). The 8 vaultmp hooks are implemented
+  (EVENT_ACTIVATE/EVENT_FIRE relay) and the activate/fire/cell/enabled/
+  move/scale/lock/sound relay paths are complete end-to-end (field writes,
+  Steam-safe); get_scale/set_scale + is_dead are field-based (no vtable).
+  Still to derive: the AV/anim vtable slots (GetActorValue/State/
   is_moving — reordered early region, need live probe), fire_fix,
-  match_race, place_at_me, ai_fix2/3/4, play_idle_fix
+  match_race, place_at_me, ai_fix2/3/4, play_idle_fix. Remaining engine-
+  bound OP stubs: SET_NAME, PLAY_SOUND's engine call, PLACE_AT_ME.
 - **Per-frame player hook** — wired for FNV (0x86B386 main-loop hook) and
   FO3 classic (0x6EEB2F); Steam/Anniversary per-frame + live verification
   remain
@@ -187,7 +190,7 @@ engineering, all fair game. One hard rule:
 > you can exercise the whole client+server stack without the game running.
 
 ```bash
-cargo test --workspace   # 472 tests
+cargo test --workspace   # 483 tests
 cargo clippy -- -D warnings
 cargo fmt -- --check
 ```

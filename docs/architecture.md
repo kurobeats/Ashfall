@@ -1371,7 +1371,7 @@ pub struct MasterServer {
 ## 11. Implementation Phases
 
 > The living phase-by-phase record is [docs/impl-plan.md](./impl-plan.md) —
-> phases 1–10 done + post-phase-10 ingestion and STR-reuse work, 472 tests.
+> phases 1–10 done + post-phase-10 ingestion and STR-reuse work, 483 tests.
 > The plan below is the original design sketch, kept for history.
 
 ### Phase 1: Core Protocol
@@ -1447,9 +1447,15 @@ convention fixes), field reads live-verified under Proton. **2026-08-14:** the
 FalloutAnniversaryPatcher vcdiff (downgrade delta) provided a verified
 classic↔Steam byte map (63,616 runs) — 4 more vaultmp behavior-patch sites
 re-derived EXACT (ai_fix1, get_activate_jmp, delegator stub spot,
-play_group_fix); Steam FNV verified = GOG at runtime (fnv_14 table applies
-unchanged). Remaining = get_activate_ret + fire-fix/match_race/place_at_me/
-av_fix live-probe (hooks::vaultmp recipes) — see docs/steam-re.md.
+play_group_fix) + av_fix/fire_weapon/get_activate_ret by static analysis;
+Steam FNV verified = GOG at runtime (fnv_14 table applies unchanged). The 8
+vaultmp hooks are implemented and the activate/fire/cell/enabled/move/
+scale/lock/sound relays are complete (field-based, Steam-safe); get_scale/
+set_scale + is_dead are field reads. Steam PC vtable base 0xF938FC mapped
+(GET_LOCKED slot GOG +0xA0 → Steam +0xFC). Remaining = fire-fix/
+match_race/place_at_me/ai_fix2-4/play_idle_fix + the Steam AV/anim vtable
+slots (GetActorValue/State/is_moving) live-probe (hooks::vaultmp recipes)
+— see docs/steam-re.md.
 
 ---
 
