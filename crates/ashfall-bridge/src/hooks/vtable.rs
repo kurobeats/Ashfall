@@ -344,8 +344,10 @@ pub unsafe fn lookup_form_by_id(form_id: u32) -> *mut u8 {
 /// Only referenced on the Windows target (in-process patching).
 #[allow(dead_code)]
 const VTBL_REF_GET_POS: usize = vtable_index(0x30);        // index 12 (x86)
-const VTBL_ACTOR_GET_VALUE: usize = vtable_index(0x68);    // index 26 (x86)
-const VTBL_ACTOR_GET_BASE_VALUE: usize = vtable_index(0x70); // index 28 (x86, estimated)
+// VTBL_ACTOR_GET_VALUE (+0x68) / VTBL_ACTOR_GET_BASE_VALUE (+0x70) were
+// REMOVED 2026-08-14k — the audit proved the documented vtable bases are
+// run-start artifacts and +0x68/+0x70 are flag-setter/ret-stub slots, not
+// AV getters (see get_actor_value's ponytail note).
 const VTBL_ACTOR_ANIM_DATA: usize = vtable_index(0x01E4);   // index 121 (x86, vaultmp.cpp GetActorState)
 
 // ═══════════════════════════════════════════════════════════════
@@ -375,9 +377,10 @@ pub mod fo3_steam_vtable {
     pub const BASE: usize = 0x00F9_38FC;
     /// Lock-state getter (`mov al,[ecx+0xa]; and al,1; ret`) — GOG slot
     /// +0xA0 (0x4017F0) byte-identical twin. GOG +0xA0 -> Steam +0xFC.
-    pub const GET_LOCKED: usize = 0xFC;
-    /// GOG +0x9C (0x4017E0, lock-state sibling) -> Steam +0xF4.
-    pub const GET_LOCKED_SIBLING: usize = 0xF4;
+    pub const GET_LOCKED: usize = 0xA0;
+    /// Lock-state getter sibling (`mov al,[ecx+0xa]; and al,1; ret` twin).
+    /// GOG +0x9C = 0x4017E0, Steam +0x9C = 0x57C770 — same slot, no shift.
+    pub const GET_LOCKED_SIBLING: usize = 0x9C;
 }
 
 /// Steam slot for a classic GOG vtable slot, by byte-identity check.
@@ -391,9 +394,11 @@ pub mod fo3_steam_vtable {
 #[cfg(target_arch = "x86")]
 pub fn steam_slot_for(gog_slot: usize) -> Option<usize> {
     match gog_slot {
-        // GOG +0xA0 lock getter 0x4017F0 (`8a 41 0a 24 01 c3`) is
-        // byte-identical at Steam slot +0xFC (0x57C780) — verified
-        // 2026-08-14 by matching the vtable function bytes.
+        // GOG +0xA0 lock getter 0x4017F0 (`8a 41 0a 24 01 c3`) sits at the
+        // SAME slot +0xA0 (0x57C780) in the Steam TESObjectREFR vtables — no
+        // shift (2026-08-14k audit: dominant 66-71 vtable family). The earlier
+        // "+0xFC" claim (steam-re.md 2026-08-14) was a minority vtable whose
+        // +0xFC is a `xor eax,eax; ret` stub, not the lock getter.
         0xA0 => Some(fo3_steam_vtable::GET_LOCKED),
         _ => None,
     }
@@ -529,8 +534,8 @@ pub unsafe fn get_actor_state(ref_id: u32) -> (u32, u8, u8, u8, bool, bool) {
     // ponytail: alerted/sneaking need engine function calls (ALERTED_STATE,
     // SNEAKING_STATE from vaultmp.hpp). VTable offsets unknown for these.
     // Return false until RE completes. vaultmp uses hardcoded FO3 1.7 addresses.
-    let alerted = false;
-    let sneaking = false;
+    let mut alerted = false;
+    let mut sneaking = false;
 
     // Alerted/sneaking states: thin vtable-dispatch getters on the classic
     // GOG build (alerted 0x6F6C70 = `[this+0x60]` obj vtable +0x450;
@@ -554,26 +559,27 @@ pub unsafe fn get_actor_state(ref_id: u32) -> (u32, u8, u8, u8, bool, bool) {
 }
 
 /// Read actor value by index (health=0x14, AP=0x15, DR=0x29, DT=0x2A for FNV).
-/// Tries VTable GetActorValue first, raw field fallback.
+///
+/// ponytail: the documented vtable slot (+0x68, "GetActorValue") is WRONG —
+/// the vtable bases in steam-re.md (GOG 0xE16B10 / Steam 0xF938FC) are
+/// run-start artifacts, not the class vtables (neither holds the death
+/// handler or the lock getter at the documented offsets). +0x68 is a
+/// flag-setter (`orb $8,[ecx+0x30]`) on the old PC-vtable read and a
+/// `ret 4` stub on the dominant TESObjectREFR family; FNV additionally
+/// uses composition (ActorValueOwner is a member at +0xA4, not a base).
+/// Calling it corrupts flags / returns garbage. Return 0 until the real
+/// GetActorValue is live-probed (OP_PROBE_FORM on a loaded actor).
 pub unsafe fn get_actor_value(ref_id: u32, index: u8) -> f32 {
-    let obj = lookup_form_by_id(ref_id);
-    if obj.is_null() {
-        return 0.0;
-    }
-
-    // Try VTable call: Actor::GetActorValue(index) → f32 (thiscall)
-    vcall_1::<u8, f32>(obj, VTBL_ACTOR_GET_VALUE, index)
+    let _ = (ref_id, index);
+    0.0
 }
 
 /// Read base actor value by index.
-/// Tries VTable GetActorBaseValue first, raw field fallback.
+/// Same wrong-slot situation as get_actor_value (see above) — return 0
+/// until live-probed.
 pub unsafe fn get_actor_base_value(ref_id: u32, index: u8) -> f32 {
-    let obj = lookup_form_by_id(ref_id);
-    if obj.is_null() {
-        return 0.0;
-    }
-
-    vcall_1::<u8, f32>(obj, VTBL_ACTOR_GET_BASE_VALUE, index)
+    let _ = (ref_id, index);
+    0.0
 }
 
 /// Read the refID (FormID) of a TESObjectREFR.
@@ -754,18 +760,24 @@ pub unsafe fn get_lock_from_obj(obj: *mut u8) -> u32 {
     if obj.is_null() {
         return 0;
     }
-    // Steam: vtable reordered — GOG slot +0xA0 (lock-state getter
-    // 0x4017F0) is byte-identical at Steam slot +0xFC (0x57C780),
-    // verified 2026-08-14 (steam-re.md). Use it when detected.
+    // Lock-state getter (`mov al,[ecx+0xa]; and al,1; ret`) is at vtable
+    // slot +0xA0 in BOTH the GOG (0x4017F0) and Steam (0x57C780) builds —
+    // same slot, no shift (2026-08-14k audit). The earlier Steam +0xFC
+    // mapping hit a minority vtable whose +0xFC is `xor eax,eax; ret`
+    // (always 0). Byte-guard the slot signature on x86 before calling.
+    let slot = VTBL_REF_GET_LOCKED;
     #[cfg(target_arch = "x86")]
     {
-        let slot = crate::hooks::vtable::steam_slot_for(VTBL_REF_GET_LOCKED)
-            .unwrap_or(VTBL_REF_GET_LOCKED);
-        return vcall_0(obj, slot);
+        if let Some(addr) = vtable_entry::<usize>(obj, slot) {
+            if crate::hooks::read_bytes(addr, 6) == [0x8A, 0x41, 0x0A, 0x24, 0x01, 0xC3] {
+                return vcall_0(obj, slot);
+            }
+        }
+        0 // not the lock getter (unknown build) — don't call garbage
     }
     #[cfg(not(target_arch = "x86"))]
     {
-        vcall_0(obj, VTBL_REF_GET_LOCKED)
+        vcall_0(obj, slot)
     }
 }
 

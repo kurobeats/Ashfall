@@ -655,3 +655,36 @@ Net: the GECK RTTI is now a confirmed, reusable classic-layout oracle
 (class-slot confirmation, future classic-side RE), but it cannot crack the
 Steam re-derivation. The `rtti_walk.py` tool + this extraction path are
 the durable artifacts.
+
+## Session 2026-08-14l — vtable audit via GECK RTTI: get_lock/get_actor_value slot bugs
+
+Cross-validating the GECK-RTTI vtable layouts against the classic game's
+.rdata exposed that the DOCUMENTED vtable bases are run-start artifacts,
+not class vtables. Two real bridge bugs found + fixed (byte-verified):
+
+**get_lock — Steam ALWAYS returned 0.** The docs' "GOG +0xA0 → Steam
++0xFC" lock-getter mapping hit a MINORITY Steam vtable. The lock getter
+`8a 41 0a 24 01 c3` sits at **+0xA0 in both builds** (GOG 0x4017F0 /
+Steam 0x57C780, 66/71-vtable dominant TESObjectREFR family, NO shift);
+Steam +0xFC in that family is `xor eax,eax; ret` (0x579C40). Fixed:
+`get_lock_from_obj` uses +0xA0 and byte-guards the getter signature.
+
+**get_actor_value/get_actor_base_value — removed (returned garbage /
+corrupted flags).** The documented "GOG PC vtable 0xE16B10 / Steam
+0xF938FC" bases are vtable-RUN-START artifacts: neither contains the death
+handler (0x788350 sits at 0xE1840C, slot ~1599 of a contiguous run) nor
+the lock getter (0x4017F0 is NOT in 0xE16B10 at all). At +0x68:
+0xE16B10 has a flag-setter (`orb $8,[ecx+0x30]`), the dominant family has
+a `ret 4` stub, the GECK-RTTI Actor vtable (0xD592DC ↔ game 0xE1C8F4
+family) has a Process/Update method (0x4F0E00). **FNV is structurally
+different too:** xNVSE + FNV GECK show ActorValueOwner is a MEMBER at
++0xA4 (composition), not a base like FO3 (inheritance) — so any
+Actor-primary-vtable AV slot is wrong for FNV. The getters now return 0.0
+with a ponytail note; the real GetActorValue needs a live OP_PROBE_FORM
+(per object class: actor / PC / plain ref).
+
+Method note: the GECK RTTI's Actor COL → 0xD592DC is a SECONDARY vtable
+(lock getter at +0x7C there), while the object's vtbl[0] (dominant family,
+lock at +0x9C/+0xA0) differs — RTTI class vtables must not be assumed to
+be vtbl[0]. The `scripts/re/lock_scan.py` approach (scan .rdata vtable
+runs for known getter pairs) is the reliable way to pin a slot.
