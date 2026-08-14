@@ -290,3 +290,20 @@ gh re-crawl: code search for 0x7F9B70 / 0x8D3BC8 / 0x123C674 → Ashfall only.
 Patcher ships only the vcdiff (exhausted). Project Crossroads = downgrade +
 FOSE-API. Verdict: live probe (OP_PROBE_CODE/OP_PROBE_FORM) is the only
 remaining path for the last patch sites + AV/anim vtable slots.
+
+## 2026-08-14j — GECK RTTI walker (editor builds retain typeinfo)
+
+`rtti_walk.py` — MSVC RTTI → named vtable enumerator for GECK editor
+binaries. The GECK builds retain full RTTI (FNV GECK 1.4 = 2,322 `.?AV`
+type descriptors) while the game exes strip it. Walks TypeDescriptor →
+CompleteObjectLocator → vftable (COL signature is 0 in this build) and
+prints named vtable slots:
+
+```bash
+python3 rtti_walk.py Geck.exe Actor TESObjectREFR
+```
+
+Limits (verified 2026-08-14): the editor STUBS runtime-simulation methods
+(AV getters = `xor eax,eax; ret 4`), the GECK vtable layout differs from
+the game's, and FNV ≠ FO3 — so RTTI is class-structure confirmation only,
+NOT a path to game/Steam slot numbers.

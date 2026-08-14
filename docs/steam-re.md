@@ -573,3 +573,41 @@ ships only the vcdiff (already exhausted). Project Crossroads stays on the
 downgrade + FOSE-API path. **Verdict unchanged: per-site live probe is the
 only remaining path for fire_fix / match_race / place_at_me / ai_fix2-4 /
 play_idle_fix / play_group / delegator_src and the AV/anim vtable slots.**
+
+## Session 2026-08-14j — GECK RTTI investigation (other game files)
+
+Question: do any OTHER files in either game help the remaining Steam RE?
+Checked everything on cyborg.wg (the Steam install host):
+
+| File | What it is | RE value |
+|---|---|---|
+| `Fallout3.exe` (Steam Anniv) | the recompiled engine | already exhausted |
+| `Fallout3 - Garden of Eden Creation Kit.exe` | **installer stub** (68KB .text, zero `.?AV` strings) | none |
+| `Fallout3Launcher.exe` | Steam DRM launcher | none |
+| `FalloutNV.exe` | SteamStub-encrypted = GOG at runtime | already mapped |
+| `FalloutNVLauncher.exe` | Steam DRM launcher | none |
+| `GDFFalloutNV.dll` | Games-for-Windows-Live stub | none |
+| `Fallout New Vegas/Geck.exe` | **the real GECK editor** (v1.4, md5 6ecfb21d…) | see below |
+
+**GECK RTTI finding:** the editor builds RETAIN full MSVC RTTI (the game
+exes strip it — FNV GECK has 2,322 `.?AV` type descriptors, named vtables
+for Actor / TESObjectREFR / ActorValueOwner / TESFullName / TESForm).
+`scripts/re/rtti_walk.py` walks TypeDescriptor → COL → vftable (the COL
+signature is 0 in this build, not the usual 1) and enumerates named vtable
+slots. **BUT the GECK cannot crack the Steam vtable problem:** (1) the
+editor STUBS runtime-simulation methods — ActorValueOwner's AV getters are
+`xor eax,eax; ret 4`; (2) the GECK vtable LAYOUT differs from the game's
+(editor virtuals, stub overrides — FNV GECK Actor vtable +0x68 = a big SEH
+Update method, not GetActorValue); (3) FNV (2011) ≠ FO3 (2008) — GECK
+bodies don't byte-match FO3 classic; (4) the Steam recompile changed method
+bodies regardless. Verdict: GECK RTTI is class-structure confirmation only;
+the remaining Steam slots/patch sites still need the live host.
+
+The FO3 GECK editor (2008, RTTI, would confirm classic vtable layout +
+SetName slot) ships only inside the 7.6GB GOG FO3 GOTY installer
+(`game-fallout.3.game.of.the.year.edition-12034` on archive.org) — the
+Steam "GECK.exe" installer + `Fallout3_GECK_1.5_Update.exe` do NOT contain
+the editor binary (the 8.9MB installer is an InstallShield web-downloader
+bootstrap; the 1.3MB updater references GECK.exe but embeds no payload).
+Downloading the 7.6GB RAR for classic-side confirmation only is low value;
+skip unless SetName's classic slot is needed.
