@@ -243,3 +243,20 @@ region (+0x00..0x68) was REORDERED (GetActorValue/BaseValue/AnimData need
 live probing). GET_LOCKED confirmed: GOG +0xA0 → Steam +0xFC (byte-identical
 `8a 41 0a 24 01 c3`). Wired in the bridge as `fo3_steam_vtable` +
 `steam_slot_for()` (get_lock uses Steam slot +0xFC when detected).
+
+## 2026-08-14h — gh-crawl validation (Project Crossroads catalog)
+
+`gh` (GitHub CLI, authenticated, 5000-call budget) is the efficient GitHub
+access path — no curl rate-limit workarounds. Crawl findings:
+
+`Brotaku-Vengeant/project-crossroads` (active VaultMP-lineage revival,
+FO3 two-player movement) ships `anniversary-patcher-1.7.0.3-patches.json`
+in its FO3 update zip: the complete 31-patch vaultmp site table + 8 engine
+entry points (lookup_form, lookup_func, queue_ui_message, alerted_state
+0x6F6C70, sneaking_state 0x6F58B0, set_pos 0x6F2050, place_at_me_internal
+0x43DEF0, fire_weapon_internal 0x4BE1A0), all with expected byte prefixes.
+This independently confirms the Ashfall classic table (fo3_17) is the exact
+vaultmp lineage. The alerted/sneaking getters were wired into
+`get_actor_state` (classic, byte-guarded). Download path:
+`repos/.../contents/updates/Project-Crossroads-Update-fallout3.zip` →
+profiles/*.json (the DLL is FOSE-API-based, no raw offsets).

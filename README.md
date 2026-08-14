@@ -164,8 +164,12 @@ lives in [docs/impl-plan.md](./docs/impl-plan.md). Recent highlights:
   (jmp 0x8D3BC8 + ret 0x8D3CB8). The 8 vaultmp hooks are implemented
   (EVENT_ACTIVATE/EVENT_FIRE relay) and the activate/fire/cell/enabled/
   move/scale/lock/sound relay paths are complete end-to-end (field writes,
-  Steam-safe); get_scale/set_scale + is_dead are field-based (no vtable).
-  Still to derive: the AV/anim vtable slots (GetActorValue/State/
+  Steam-safe); get_scale/set_scale + is_dead are field-based (no vtable);
+  alerted/sneaking call the classic engine getters (byte-guarded). A gh
+  crawl found Project Crossroads' Anniversary-Patcher catalog — the full
+  vaultmp site table byte-verified, independently confirming our classic
+  table (see docs/steam-re.md Session 2026-08-14h). Still to derive:
+  the AV/anim vtable slots (GetActorValue/State/
   is_moving — reordered early region, need live probe), fire_fix,
   match_race, place_at_me, ai_fix2/3/4, play_idle_fix. Remaining engine-
   bound OP stubs: SET_NAME, PLAY_SOUND's engine call, PLACE_AT_ME.

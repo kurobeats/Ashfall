@@ -408,8 +408,11 @@ The original FOSE source (deleted from GitHub) is archived at
 1.7/1.7ng DLLs). The `FALLOUT_VERSION_1_7` block in GameAPI.cpp matches
 Ashfall's `fo3_17` table **exactly** (LookupFormByID 0x455190, ExtractArgs
 0x517950, CreateFormInstance 0x43CDA0, ConsoleManager 0x62B5D0, DataHandler
-0x106CDCC) — the table is now triple-confirmed (FOSE source + xFOSE + live
-binary). The `1_7ng` block is the 2010 NoGore variant (ConsoleManager
+0x106CDCC) — the table is now **quadruple-confirmed** (FOSE source + xFOSE +
+live binary + the Anniversary-Patcher catalog from Project Crossroads,
+2026-08-14 gh crawl — which also adds SET_POS 0x6F2050, QUEUE_UI_MESSAGE
+0x61B850, alerted_state 0x6F6C70, sneaking_state 0x6F58B0 to `fo3_17`).
+The `1_7ng` block is the 2010 NoGore variant (ConsoleManager
 0x62B490), NOT the 2023 Anniversary build — no shortcut there. The version
 blocks show FO3 address drift across releases (1.0→1.7: LookupFormByID
 0x454CC0→0x455190 etc.) — per-site semantic re-derivation is the only way

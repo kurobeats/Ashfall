@@ -378,6 +378,14 @@ UpdateActorIdle round-trip); confirmed all opcodes handled, all packets
 referenced, server combat self-contained, dead client methods are
 documented future hooks. 483 tests, 0 warnings.
 
+2026-08-14 (h): gh crawl — found Project Crossroads' Anniversary-Patcher
+catalog (the full vaultmp site table + 8 engine entry points, byte-
+verified), independently confirming the fo3_17 classic table. Wired
+alerted/sneaking getters (0x6F6C70/0x6F58B0) into get_actor_state
+(classic, byte-guarded); added SET_POS 0x6F2050 + QUEUE_UI_MESSAGE
+0x61B850 to fo3_17. Community dead ends reconfirmed (no public Anniversary
+vtable; downgrade + classic table is the only public path).
+
 P3+P4 can run in parallel (both depend on P2). P6+P7 can run in parallel after P5+P7 foundation ready. P10 can start after P7 IPC module (PR79).
 
 ---

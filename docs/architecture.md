@@ -1451,8 +1451,14 @@ play_group_fix) + av_fix/fire_weapon/get_activate_ret by static analysis;
 Steam FNV verified = GOG at runtime (fnv_14 table applies unchanged). The 8
 vaultmp hooks are implemented and the activate/fire/cell/enabled/move/
 scale/lock/sound relays are complete (field-based, Steam-safe); get_scale/
-set_scale + is_dead are field reads. Steam PC vtable base 0xF938FC mapped
-(GET_LOCKED slot GOG +0xA0 → Steam +0xFC). Remaining = fire-fix/
+set_scale + is_dead are field reads; get_actor_state's alerted/sneaking call
+the classic engine getters (0x6F6C70/0x6F58B0, byte-guarded). Steam PC
+vtable base 0xF938FC mapped (GET_LOCKED slot GOG +0xA0 → Steam +0xFC).
+**gh crawl (2026-08-14):** Project Crossroads (active VaultMP-lineage
+revival) ships the Anniversary-Patcher catalog — the full 31-patch vaultmp
+site table + 8 engine entry points, byte-verified — independently
+confirming our classic table is the exact vaultmp lineage; added SET_POS
+0x6F2050 / QUEUE_UI_MESSAGE 0x61B850 to fo3_17. Remaining = fire-fix/
 match_race/place_at_me/ai_fix2-4/play_idle_fix + the Steam AV/anim vtable
 slots (GetActorValue/State/is_moving) live-probe (hooks::vaultmp recipes)
 — see docs/steam-re.md.
