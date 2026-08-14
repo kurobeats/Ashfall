@@ -154,11 +154,13 @@ lives in [docs/impl-plan.md](./docs/impl-plan.md). Recent highlights:
   re-derived from the dump; ownership, state sampling, remote application
   all wired); remaining is live verification on the game host
   (see [docs/steam-re.md](./docs/steam-re.md))
-- **Remaining Steam patch sites** — 2026-08-14: 4 more vaultmp behavior
-  sites byte-verified via the FalloutAnniversaryPatcher vcdiff (ai_fix1
-  0x5E99E2, get_activate_jmp 0x8D3BC8, delegator stub spot 0x405E69,
-  play_group_fix 0x4350F9) — live-probe before hooking. Still to derive:
-  get_activate_ret, fire_fix, match_race, place_at_me, av_fix
+- **Remaining Steam patch sites** — 2026-08-14: 6 more vaultmp behavior
+  sites re-derived without the game — via the FalloutAnniversaryPatcher
+  vcdiff (ai_fix1 0x5E99E2, get_activate_jmp 0x8D3BC8, delegator stub spot
+  0x405E69, play_group_fix 0x4350F9) + static analysis (av_fix 0x5B7AC7,
+  fire_weapon confirmed 0x7DF3F7/0x770880) — live-probe before hooking.
+  Still to derive: get_activate_ret (candidate 0x8C8F82), fire_fix,
+  match_race, place_at_me, ai_fix2/3/4, play_idle_fix
 - **Per-frame player hook** — wired for FNV (0x86B386 main-loop hook) and
   FO3 classic (0x6EEB2F); Steam/Anniversary per-frame + live verification
   remain

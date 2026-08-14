@@ -24,7 +24,8 @@ pressure-vessel safe), stable across runs.
 | **GetActivate interception** | 0x78A68D | **0x8D3BC8** | vcdiff EXACT: `0f 84 dd 00 00 00 8b 06 8b ce 8b 80 00 01` — guard bytes identical, vtable slot shifted 0x224→0x100. Ret target still probing. 2026-08-14b |
 | **Delegator stub spot** | 0x6EDBD9 | **0x405E69** | int3 padding after `ret` — vaultmp plants its PUSH-ECX stub here (stub bytes injected, only location translates). 2026-08-14b |
 | **PlayGroup fix** (EB 27 into pad) | 0x49DD6A | **0x4350F9** | int3 padding + `cmp dword [0x13148c4],0; je`; vcdiff EXACT. 2026-08-14b |
-| **FireWeapon relay** (call site / callee) | 0x71F05F / 0x4BE1A0 | **0x7DF3F7 / 0x770880** | structural only (call-site shape + callee size/prologue) — vcdiff marks region rewritten, needs live probe. 2026-08-14 |
+| **FireWeapon relay** (call site / callee) | 0x71F05F / 0x4BE1A0 | **0x7DF3F7 / 0x770880** | E8 rel math verified (call → callee in both builds) + call-site shape + callee size/prologue; still probe before hooking. 2026-08-14 |
+| **AV fix** (ActorValue formatter) | 0x473D35/3B/3E85 | **0x5B7AC7 / 0x5B7ACC / 0x5B7AE2** | vtable +0x130 call survived + "%s %s (%08X)" string; fn 0x5B79B3 SEH-prologue twin of classic 0x473C50. 2026-08-14 |
 | **plugins.txt → .vmp** | 0xE10FF1 | **0xF9FDB1** | `.txt` at +9 of `\Plugins.txt` (0xF9FDA8), exact same layout. Re-derived 2026-08-14 |
 
 Auto-detection: `vtable::fo3_lookup_addr()` reads 0x455190 (`51 8b 0d` = GOG)
@@ -270,8 +271,8 @@ version missed 0x400000 and read garbage), `steam_twin_search.py`
 
 **Dead ends (don't re-tread):** av_fix's RTTI descriptor refs don't survive
 (name strings exist at 0x1203A55/0x1204C95 but the dispatch code no longer
-pushes them as imm32); vtable slots 0x224/0x218/0x130/0x2C0/0x278 all
-shifted (no byte matches for any `mov reg,[reg+slot]` pattern); fire_fix's
+pushes them as imm32); vtable slots 0x224/0x218/0x2C0/0x278 all shifted
+(note: +0x130 SURVIVED — av_fix was solved via it, see below); fire_fix's
 0x7CB510 helper has no Steam twin; delegator stub (GetAsyncKeyState polling)
 is vaultmp-injected code — only its int3-padding planting spot translates
 (0x405E69).
@@ -323,11 +324,24 @@ translations (nearest run + delta) are GARBAGE for rewritten code — proven:
 | delegator_dest / call_src | 0x6EDBD9 / 0x6EDBDA | **0x405E69 / 0x405E6A** | int3 padding after `ret` — vaultmp plants its PUSH-ECX stub here; only the padding location translates (stub bytes are injected) |
 | play_group_fix | 0x49DD6A | **0x4350F9** | int3 padding + `cmp dword [0x13148c4],0; je` — vaultmp writes `EB 27` here |
 
-**Still dead (need live probe or more RE):** get_activate_ret, fire_fix
-(vtable +0x224 shifted, 0x7CB510 helper gone), match_race, place_at_me,
-av_fix (RTTI dispatch rewritten), ai_fix2/3/4, play_idle_fix, fire_weapon
-(call site 0x7DF3F7 + callee 0x770880 remain structural-only — vcdiff marks
-the region rewritten; probe before hooking).
+**Still dead (need live probe or more RE):** get_activate_ret (candidate
+0x8C8F82 — `test byte [reg+0x5DC],0x10; cmp byte [0x122888c],0`, the classic
+ret pattern, needs disambiguation from sibling death handlers), fire_fix
+(vtable +0x224 shifted, 0x7CB510 helper gone), match_race (+0x218/+0x110
+shifted), place_at_me (+0x2A8 shifted), ai_fix2/3/4 (predicate restructured),
+play_idle_fix, fire_weapon (call site 0x7DF3F7 + callee 0x770880 — E8 rel
+math verified, structural only, probe before hooking).
+
+**2026-08-14 static follow-up (no game):**
+
+| Site | Classic | Steam | Evidence |
+|---|---|---|---|
+| **fire_weapon** (confirmed) | 0x71F05F → 0x4BE1A0 | 0x7DF3F7 → **0x770880** | E8 rel32 math: call at 0x7DF3F7 computes to 0x770880; classic 0x71F05F → 0x4BE1A0 — same call-site→callee relationship |
+| **av_fix** (SOLVED, in table) | 0x473D35 / 0x473D3B / 0x473E85 | **0x5B7AC7 / 0x5B7ACC / 0x5B7AE2** | vtable +0x130 call SURVIVED + "%s %s (%08X)" sprintf string (0xF46628); fn 0x5B79B3 = SEH prologue twin of classic 0x473C50. Register alloc changed: `push [ecx+0xc]` (was `mov eax,[ecx+0xc]; push eax`), `call [eax+0x130]` (was `mov eax,[edx+0x130]; call eax`) |
+| get_activate_ret (candidate) | 0x78A995 | 0x8C8F82 | `test byte [edi+0x5dc],0x10; jne; cmp byte [0x122888c],0; je` — the classic ret pattern (death-UI global 0x107BA64 → 0x122888c, adjacent to documented 0x1228871); needs live probe to disambiguate |
+
+Still live-probe-only: match_race, place_at_me, fire_fix, ai_fix2/3/4,
+play_idle_fix, get_activate_ret final.
 
 Next session: live-probe get_activate_ret + fire_weapon on the game host
 (OP_PROBE_CODE), then use the same vcdiff workflow on any remaining sites.

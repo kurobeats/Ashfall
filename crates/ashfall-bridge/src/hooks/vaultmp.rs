@@ -166,6 +166,24 @@ pub mod fo3_steam_17_vaultmp {
     /// PlayGroup fix (2B `EB 27` written into int3 padding after `ret 8`,
     /// GOG 0x49DD6A twin), vcdiff EXACT.
     pub const PLAY_GROUP_FIX: usize = 0x0043_50F9;
+    /// AV fix (ActorValue display formatter): vtable +0x130 call + push
+    /// [reg+0xc] + push [global] + push "%s %s (%08X)" + sprintf — GOG
+    /// 0x473D35 twin in fn 0x5B79B3 (SEH prologue twin of classic 0x473C50).
+    /// The vtable +0x130 slot SURVIVED the recompile (register alloc
+    /// changed: `mov eax,[ecx+0xc]; push eax` → `push [ecx+0xc]`, and
+    /// `mov eax,[edx+0x130]; call eax` → `call [eax+0x130]`).
+    /// Re-derived 2026-08-14 (static: +0x130 slot + sprintf string match).
+    pub const AV_FIX_SRC: usize = 0x005B_7AC7;
+    /// AV fix continuation (the instruction after the 5-byte hook slot):
+    /// `call [eax+0x130]` — GOG 0x473D3B twin.
+    pub const AV_FIX_RET: usize = 0x005B_7ACC;
+    /// AV fix terminator (the sprintf call): GOG 0x473E85 twin.
+    pub const AV_FIX_TERM: usize = 0x005B_7AE2;
+    /// GetActivate ret-target candidate: `test byte [reg+0x5DC],0x10;
+    /// jne; cmp byte [0x122888c],0; je` — the classic ret pattern (reads
+    /// the death-UI global 0x107BA64 → Steam 0x122888c, death-handler
+    /// region). Needs live probe to disambiguate from sibling handlers.
+    pub const GET_ACTIVATE_RET_CAND: usize = 0x008C_8F82;
     /// FireWeapon call site: `call <fire>` + second call + `mov [reg+0x144],
     /// eax; movss [reg+0x148]` + jmp + player-compare tail — structural
     /// byte-search match (GOG 0x71F05F). vcdiff marks the region rewritten;
@@ -596,8 +614,10 @@ mod tests {
         use fo3_steam_17_vaultmp as s;
         // All Steam sites in image range.
         for a in [s::PLAY_IDLE_CALL_SRC, s::LOCK_FIX, s::AI_FIX1,
-                  s::GET_ACTIVATE_JMP, s::DELEGATOR_DEST,
+                  s::GET_ACTIVATE_JMP, s::GET_ACTIVATE_RET_CAND,
+                  s::DELEGATOR_DEST,
                   s::DELEGATOR_CALL_SRC, s::PLAY_GROUP_FIX,
+                  s::AV_FIX_SRC, s::AV_FIX_RET, s::AV_FIX_TERM,
                   s::FIRE_WEAPON_JMP, s::FIRE_WEAPON_CALL, s::PLUGINS_VMP] {
             assert!((0x400000..0x1200000).contains(&a), "{a:#x} out of range");
         }
@@ -612,6 +632,9 @@ mod tests {
         assert_eq!(s::PLAY_GROUP_FIX, 0x4350F9);
         assert_eq!(s::DELEGATOR_DEST, 0x405E69);
         assert_eq!(s::DELEGATOR_CALL_SRC, s::DELEGATOR_DEST + 1);
+        // av_fix: hook slot + 5B = ret, term = sprintf call after the format push.
+        assert_eq!(s::AV_FIX_RET, s::AV_FIX_SRC + 5);
+        assert!(s::AV_FIX_TERM > s::AV_FIX_RET);
     }
 
     #[test]
