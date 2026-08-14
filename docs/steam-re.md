@@ -718,3 +718,15 @@ vaultmp's documented classic mechanism — runtime vtbl[0], keep) and the
 byte-guarded get_lock (+0xA0). `get_actor_state`'s anim offsets (0x4E/0x54/
 0x118) verified vaultmp-consistent against the FOSE AnimData struct
 (animGroupIDs at +0x4C, u8 reads of UInt16 IDs fine for small IDs).
+
+**2026-08-14n — FNV get_actor_value/get_actor_base_value WIRED via avOwner.**
+The FO3 path resisted static derivation (GECK RTTI says ActorValueOwner at
+Actor+0x7C, but the game binary shows ZERO lea/mov/add accesses at +0x7C —
+the editor build's class layout differs from the game's; the game's AV
+calls are not vtable-slot-2/3 patterns). FNV was certain, so it's wired:
+`get_actor_value`/`get_actor_base_value` on FNV read the avOwner member at
++0xA4 (xNVSE STATIC_ASSERT + 16 `lea [reg+0xA4]` sites) and call its
+vtable slot 3 (GetActorValueF, +0x0C) / slot 1 (GetBaseActorValueF, +0x04)
+with a .rdata vtable-pointer guard. FO3 keeps returning 0.0 — the real
+GetActorValue needs a live OP_PROBE_FORM (the game's AV access is likely a
+direct function call, not a vtable call).

@@ -560,25 +560,51 @@ pub unsafe fn get_actor_state(ref_id: u32) -> (u32, u8, u8, u8, bool, bool) {
 
 /// Read actor value by index (health=0x14, AP=0x15, DR=0x29, DT=0x2A for FNV).
 ///
-/// ponytail: the documented vtable slot (+0x68, "GetActorValue") is WRONG —
-/// the vtable bases in steam-re.md (GOG 0xE16B10 / Steam 0xF938FC) are
-/// run-start artifacts, not the class vtables (neither holds the death
-/// handler or the lock getter at the documented offsets). +0x68 is a
-/// flag-setter (`orb $8,[ecx+0x30]`) on the old PC-vtable read and a
-/// `ret 4` stub on the dominant TESObjectREFR family; FNV additionally
-/// uses composition (ActorValueOwner is a member at +0xA4, not a base).
-/// Calling it corrupts flags / returns garbage. Return 0 until the real
-/// GetActorValue is live-probed (OP_PROBE_FORM on a loaded actor).
+/// FNV (wired 2026-08-14n): ActorValueOwner is an inline MEMBER at +0xA4
+/// (xNVSE STATIC_ASSERT offsetof(Actor, magicCaster)==0x88, magicTarget
+/// 0x94, avOwner 0xA4; 16 `lea [reg+0xA4]` sites in the GOG FNV exe).
+/// GetActorValueF is its vtable slot 3 (+0x0C, float — the ActorValueOwner
+/// class def order confirmed in the FNV GECK RTTI vtable 0xD52AC4: 11
+/// slots GetBaseAVI/F, GetAVI/F, mods, GetPermAVI/F, GetAsForm,
+/// GetActorLevel). Guard: the member's vtable pointer must be in .rdata.
+///
+/// FO3: the ActorValueOwner is a base whose exact vtbl[0] access is NOT
+/// statically derivable (the documented +0x68 sits on vtable run-start
+/// artifacts; the GECK RTTI offset 0x7C doesn't match the game's binary
+/// access patterns — see steam-re.md 2026-08-14l/n). Return 0 until a
+/// live OP_PROBE_FORM settles the real path.
 pub unsafe fn get_actor_value(ref_id: u32, index: u8) -> f32 {
-    let _ = (ref_id, index);
+    let obj = lookup_form_by_id(ref_id);
+    if obj.is_null() {
+        return 0.0;
+    }
+    if crate::hooks::is_fnv() {
+        let av = obj.add(0xA4);
+        let vt = read_field::<usize>(av, 0);
+        if (0x400000..0x1200000).contains(&vt) {
+            return vcall_1::<u8, f32>(av, 0x0C, index); // GetActorValueF
+        }
+        return 0.0;
+    }
     0.0
 }
 
-/// Read base actor value by index.
-/// Same wrong-slot situation as get_actor_value (see above) — return 0
-/// until live-probed.
+/// Read base actor value by index (FNV wired like get_actor_value —
+/// avOwner +0xA4, GetBaseActorValueF at vtable slot 1 = +0x04). FO3
+/// unresolved, returns 0.
 pub unsafe fn get_actor_base_value(ref_id: u32, index: u8) -> f32 {
-    let _ = (ref_id, index);
+    let obj = lookup_form_by_id(ref_id);
+    if obj.is_null() {
+        return 0.0;
+    }
+    if crate::hooks::is_fnv() {
+        let av = obj.add(0xA4);
+        let vt = read_field::<usize>(av, 0);
+        if (0x400000..0x1200000).contains(&vt) {
+            return vcall_1::<u8, f32>(av, 0x04, index); // GetBaseActorValueF
+        }
+        return 0.0;
+    }
     0.0
 }
 
