@@ -611,3 +611,47 @@ the editor binary (the 8.9MB installer is an InstallShield web-downloader
 bootstrap; the 1.3MB updater references GECK.exe but embeds no payload).
 Downloading the 7.6GB RAR for classic-side confirmation only is low value;
 skip unless SetName's classic slot is needed.
+
+## Session 2026-08-14k — FO3 GECK acquired, RTTI verified, Steam AV still underivable
+
+**The real FO3 GECK.exe (v1.5 era, 2008) was obtained** — the user's CDN
+link (`cdn.bethsoft.com/fallout/3/geck/Fallout3_GECK.exe`) is the SAME
+8.9MB InstallShield bootstrap as the Steam dir copy (md5 cabe531a...), but
+the editor binary is EMBEDDED in its data1.cab. Extraction path that
+worked: `unshield` couldn't parse the multi-volume IScab (v0x0095, data in
+`data1.hdr`/`data1.cab` split), so ran the installer under Proton wine on
+the game host (`wine Fallout3_GECK.exe` → installed to the prefix's
+`Program Files (x86)\Bethesda Softworks\Fallout 3\`). Result:
+`GECK.exe` 13.9MB (md5 bdc43722...) — the real FO3 editor.
+
+**RTTI verified — 2,033 `.?AV` type descriptors** (the game exe strips
+RTTI; the editor build retains it). `scripts/re/rtti_walk.py` enumerates
+named vtables: Actor @ 0xD592DC (146 slots), ActorValueOwner @ 0xD3BD80
+(11 slots), TESFullName @ 0xD23060, TESForm, TESObjectREFR, etc.
+
+**Layout cross-validation (GECK ↔ game, both 2008):** the GECK Actor
+vtable layout MATCHES the classic game's — shared byte-identical getters
+sit at identical slots (lock getter `8a 41 0a 24 01 c3` = Actor-vtable
++0x7C in BOTH; GetAsForm = +0xA0 in both; game Actor-vtable base is in the
+0xE1C8F4-family of .rdata vtables). **⚠️ doc correction: the lock getter
+is at Actor-vtable +0x7C, not +0x9C/+0xA0** — the docs' +0x9C/+0xA0 (and
+the Steam +0xF4/+0xFC mapping) were measured on the TESObjectREFR/base
+vtable, not the Actor primary vtable. The bridge's `get_lock` targets
+obj->vtbl[0] of whatever object it's called on; for pure TESObjectREFRs
+the +0xA0 slot is right, for Actors the +0x7C slot is — worth a live
+probe (OP_PROBE_FORM on both an actor and a plain ref) to confirm which
+slot the bridge actually needs per object type.
+
+**Steam AV getters: still statically underivable (now definitive).** The
+GECK's ActorValueOwner methods are stubs (`xor eax,eax; ret 4` — the
+editor stubs runtime AV simulation, same as FNV GECK). The Actor class
+overrides them, but the game's real GetActorValue (Actor vtable +0x68 =
+0x4F0E00, 2072-byte SEH method) has **no byte twin anywhere in the Steam
+flat dump** — the recompile changed its body entirely. GECK RTTI does not
+change the docs' verdict: GetActorValue/GetBaseValue/AnimData + the
+remaining patch sites need live probing.
+
+Net: the GECK RTTI is now a confirmed, reusable classic-layout oracle
+(class-slot confirmation, future classic-side RE), but it cannot crack the
+Steam re-derivation. The `rtti_walk.py` tool + this extraction path are
+the durable artifacts.

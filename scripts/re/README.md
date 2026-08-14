@@ -307,3 +307,26 @@ Limits (verified 2026-08-14): the editor STUBS runtime-simulation methods
 (AV getters = `xor eax,eax; ret 4`), the GECK vtable layout differs from
 the game's, and FNV ≠ FO3 — so RTTI is class-structure confirmation only,
 NOT a path to game/Steam slot numbers.
+
+## 2026-08-14k — FO3 GECK acquired via Proton-wine installer extraction
+
+`cdn.bethsoft.com/fallout/3/geck/Fallout3_GECK.exe` is an 8.9MB
+InstallShield bootstrap (md5 cabe531a...) whose data1.cab EMBEDS the real
+editor (`DefaultComponent\GECK.exe`, 13.9MB, md5 bdc43722...). `unshield`
+can't parse this IScab (v0x0095, multi-volume, data in hdr/cab split) —
+the reliable extraction is to RUN the installer under Proton wine:
+
+```bash
+export WINEPREFIX=~/geck-prefix WINEDLLOVERRIDES="mscoree,mshtml="
+export DISPLAY=:0 XAUTHORITY=...   # game host
+"/.../Proton - Experimental/files/bin/wine" ./Fallout3_GECK.exe
+# GECK.exe lands in $WINEPREFIX/drive_c/Program Files (x86)/Bethesda Softworks/Fallout 3/
+```
+
+Result: 2,033 RTTI type descriptors (editor retains RTTI, game strips it).
+`rtti_walk.py` names the vtables (Actor @ 0xD592DC, ActorValueOwner @
+0xD3BD80, TESFullName @ 0xD23060). GECK layout == game layout (lock getter
+`8a 41 0a 24 01 c3` at Actor-vtable +0x7C in both; GetAsForm +0xA0 in
+both). BUT the editor STUBS the ActorValueOwner AV methods, and the game's
+real GetActorValue (0x4F0E00) has no Steam twin — Steam AV slots still
+need live probing.
