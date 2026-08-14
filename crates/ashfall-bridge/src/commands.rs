@@ -26,9 +26,9 @@ pub mod opcodes {
     pub const OP_GET_LOCK: u32           = 0x0012;
     pub const OP_SET_LOCK: u32           = 0x0013;
     pub const OP_MOVE_TO: u32            = 0x0014;
-    pub const OP_SET_SCALE: u32          = 0x0015;
     pub const OP_PLAY_SOUND: u32         = 0x0015;
     pub const OP_PLACE_AT_ME: u32        = 0x0016;
+    pub const OP_SET_SCALE: u32          = 0x002B;
     pub const OP_GET_BASE: u32           = 0x0017;
 
     // ── Tier 1: Position + Actor State Sync ──
@@ -581,6 +581,43 @@ mod tests {
 
     // ── RefID constant for tests ──
     const REF_ID: [u8; 4] = [0x42, 0, 0, 0];
+
+    #[test]
+    fn opcode_values_are_unique() {
+        // Every opcode constant must be distinct — a collision means two
+        // handlers respond to the same wire opcode (caught a real one
+        // 2026-08-14: OP_SET_SCALE collided with OP_PLAY_SOUND at 0x15).
+        use opcodes::*;
+        let all: &[(u32, &str)] = &[
+            (OP_GET_POS, "GET_POS"), (OP_SET_POS, "SET_POS"),
+            (OP_GET_ANGLE, "GET_ANGLE"), (OP_SET_ANGLE, "SET_ANGLE"),
+            (OP_GET_CELL, "GET_CELL"), (OP_SET_CELL, "SET_CELL"),
+            (OP_GET_ACTOR_STATE, "ACTOR_STATE"), (OP_GET_ACTOR_VALUE, "ACTOR_VALUE"),
+            (OP_SET_ACTOR_VALUE, "SET_ACTOR_VALUE"), (OP_GET_CONTROL, "GET_CONTROL"),
+            (OP_SET_CONTROL, "SET_CONTROL"), (OP_GET_ACTIVATE, "GET_ACTIVATE"),
+            (OP_FIRE_WEAPON, "FIRE_WEAPON"), (OP_GET_NAME, "GET_NAME"),
+            (OP_SET_NAME, "SET_NAME"), (OP_GET_ENABLED, "GET_ENABLED"),
+            (OP_SET_ENABLED, "SET_ENABLED"), (OP_GET_LOCK, "GET_LOCK"),
+            (OP_SET_LOCK, "SET_LOCK"), (OP_MOVE_TO, "MOVE_TO"),
+            (OP_PLAY_SOUND, "PLAY_SOUND"), (OP_PLACE_AT_ME, "PLACE_AT_ME"),
+            (OP_SET_SCALE, "SET_SCALE"), (OP_GET_BASE, "GET_BASE"),
+            (OP_GET_BASE_ACTOR_VALUE, "GET_BASE_ACTOR_VALUE"),
+            (OP_GET_DEAD, "GET_DEAD"), (OP_SET_CURRENT_HEALTH, "SET_CURRENT_HEALTH"),
+            (OP_IS_MOVING, "IS_MOVING"), (OP_GET_PARENT_CELL, "GET_PARENT_CELL"),
+            (OP_EQUIP_ITEM, "EQUIP_ITEM"), (OP_UNEQUIP_ITEM, "UNEQUIP_ITEM"),
+            (OP_ADD_ITEM, "ADD_ITEM"), (OP_REMOVE_ITEM, "REMOVE_ITEM"),
+            (OP_REMOVE_ALL_ITEMS, "REMOVE_ALL_ITEMS"), (OP_GET_REF_COUNT, "GET_REF_COUNT"),
+            (OP_KILL, "KILL"), (OP_DAMAGE_ACTOR_VALUE, "DAMAGE_ACTOR_VALUE"),
+            (OP_RESTORE_ACTOR_VALUE, "RESTORE_ACTOR_VALUE"),
+            (OP_FORCE_ACTOR_VALUE, "FORCE_ACTOR_VALUE"),
+            (OP_GET_COMBAT_TARGET, "GET_COMBAT_TARGET"), (OP_PLAY_GROUP, "PLAY_GROUP"),
+            (OP_FORCE_WEATHER, "FORCE_WEATHER"), (OP_SET_RESTRAINED, "SET_RESTRAINED"),
+        ];
+        let mut seen = std::collections::HashSet::new();
+        for (v, name) in all {
+            assert!(seen.insert(*v), "opcode {name} collides at 0x{v:x}");
+        }
+    }
 
     #[test]
     fn test_original_17_opcodes_still_work() {

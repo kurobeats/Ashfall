@@ -229,6 +229,15 @@ pub fn packets_to_commands(
                     vec![Param::U32(ref_id), Param::F32(*scale)],
                 ));
             }
+            // Remote sound (server relays it) — forward to the bridge to
+            // play locally (bridge OP_PLAY_SOUND; engine call pending).
+            Packet::UpdateSound { id, sound } => {
+                let Some(ref_id) = resolve_ref(*id) else { continue };
+                out.push((
+                    crate::ipc::OP_PLAY_SOUND,
+                    vec![Param::U32(ref_id), Param::U32(*sound)],
+                ));
+            }
             _ => {}
         }
     }
@@ -374,6 +383,22 @@ mod tests {
         assert_eq!(*op, crate::ipc::OP_SET_SCALE);
         assert!(matches!(p[0], Param::U32(0x80)));
         assert!(matches!(p[1], Param::F32(1.5)));
+    }
+
+    #[test]
+    fn test_remote_sound_to_command() {
+        let local = NetworkID::new(1);
+        let obj_id = entity_id(0x90);
+        let packets = vec![
+            Packet::UpdateSound { id: obj_id, sound: 0x2A },
+        ];
+        let resolve = |id: NetworkID| if id == obj_id { Some(0x90) } else { None };
+        let cmds = packets_to_commands(&packets, local, resolve);
+        assert_eq!(cmds.len(), 1);
+        let (op, p) = &cmds[0];
+        assert_eq!(*op, crate::ipc::OP_PLAY_SOUND);
+        assert!(matches!(p[0], Param::U32(0x90)));
+        assert!(matches!(p[1], Param::U32(0x2A)));
     }
 
     #[test]
