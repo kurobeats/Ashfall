@@ -160,8 +160,9 @@ lives in [docs/impl-plan.md](./docs/impl-plan.md). Recent highlights:
   0x405E69, play_group_fix 0x4350F9) + static analysis (av_fix 0x5B7AC7,
   fire_weapon confirmed 0x7DF3F7/0x770880) — live-probe before hooking.
   Steam PC vtable base found (0xF938FC); GET_LOCKED slot re-derived
-  (GOG +0xA0 → Steam +0xFC) and wired. Still to derive: get_activate_ret
-  (candidate 0x8C8F82), the AV/anim vtable slots (GetActorValue/State/
+  (GOG +0xA0 → Steam +0xFC) and wired. get_activate fully solved
+  (jmp 0x8D3BC8 + ret 0x8D3CB8). Still to derive:
+  the AV/anim vtable slots (GetActorValue/State/
   is_moving — reordered early region, need live probe), fire_fix,
   match_race, place_at_me, ai_fix2/3/4, play_idle_fix
 - **Per-frame player hook** — wired for FNV (0x86B386 main-loop hook) and

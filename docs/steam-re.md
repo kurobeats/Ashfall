@@ -257,12 +257,8 @@ version missed 0x400000 and read garbage), `steam_twin_search.py`
 
 **Candidates found, need live probe (OP_PROBE_CODE / restart) before wiring:**
 
-- **get_activate_ret** — the jmp guard is SOLVED (0x8D3BC8, vcdiff EXACT,
-  below); only the ret target (classic 0x78A995, reads death-UI global
-  0x107BA64; respawn docs map 0x107BA66→0x1228871) is unresolved — the
-  ret block was restructured. 7 `test byte [reg+0x5DC],0x10` sites in
-  0x8C8E00–0x8C99EF remain candidates: 0x8C8E66 / 0x8C8F82 / 0x8C9404 /
-  0x8C9500 / 0x8C99EF.
+- **get_activate** — SOLVED: jmp 0x8D3BC8 (vcdiff EXACT) + ret 0x8D3CB8
+  (vaultmp-source + Steam flow analysis, see table below).
 - **play_idle_fix** — 4 hits for the `cmp byte [reg+0x250],0` check
   (0x6EFDA9 / 0x6F00DA / 0x6F28DA / 0x6F45B3), all in one big fn — need
   disambiguation.
@@ -324,9 +320,7 @@ translations (nearest run + delta) are GARBAGE for rewritten code — proven:
 | delegator_dest / call_src | 0x6EDBD9 / 0x6EDBDA | **0x405E69 / 0x405E6A** | int3 padding after `ret` — vaultmp plants its PUSH-ECX stub here; only the padding location translates (stub bytes are injected) |
 | play_group_fix | 0x49DD6A | **0x4350F9** | int3 padding + `cmp dword [0x13148c4],0; je` — vaultmp writes `EB 27` here |
 
-**Still dead (need live probe or more RE):** get_activate_ret (candidate
-0x8C8F82 — `test byte [reg+0x5DC],0x10; cmp byte [0x122888c],0`, the classic
-ret pattern, needs disambiguation from sibling death handlers), fire_fix
+**Still dead (need live probe or more RE):** fire_fix
 (vtable +0x224 shifted, 0x7CB510 helper gone), match_race (+0x218/+0x110
 shifted), place_at_me (+0x2A8 shifted), ai_fix2/3/4 (predicate restructured),
 play_idle_fix, fire_weapon (call site 0x7DF3F7 + callee 0x770880 — E8 rel
@@ -338,12 +332,9 @@ math verified, structural only, probe before hooking).
 |---|---|---|---|
 | **fire_weapon** (confirmed) | 0x71F05F → 0x4BE1A0 | 0x7DF3F7 → **0x770880** | E8 rel32 math: call at 0x7DF3F7 computes to 0x770880; classic 0x71F05F → 0x4BE1A0 — same call-site→callee relationship |
 | **av_fix** (SOLVED, in table) | 0x473D35 / 0x473D3B / 0x473E85 | **0x5B7AC7 / 0x5B7ACC / 0x5B7AE2** | vtable +0x130 call SURVIVED + "%s %s (%08X)" sprintf string (0xF46628); fn 0x5B79B3 = SEH prologue twin of classic 0x473C50. Register alloc changed: `push [ecx+0xc]` (was `mov eax,[ecx+0xc]; push eax`), `call [eax+0x130]` (was `mov eax,[edx+0x130]; call eax`) |
-| get_activate_ret (candidate) | 0x78A995 | 0x8C8F82 | `test byte [edi+0x5dc],0x10; jne; cmp byte [0x122888c],0; je` — the classic ret pattern (death-UI global 0x107BA64 → 0x122888c, adjacent to documented 0x1228871); needs live probe to disambiguate |
+| **get_activate_ret** (SOLVED, in table) | 0x78A995 | **0x8D3CB8** | Vaultmp source (GetActivate hook: captures EAX = the object at the jmp site, queues refID obj+0x0C, RelJump at jmp+5 → ret skips the loop body). Steam flow analysis: the jmp JE at 0x8D3BC8 targets 0x8D3CAB (loop continue); the loop exits to 0x8D3CB8 = `cmp [ebp+8],1` (activate-param/death-state check — the classic ret's `cmp byte [0x107ba64],0` twin). 0x8D3CB8 is the post-loop convergence |
 
-Still live-probe-only: match_race, place_at_me, fire_fix, ai_fix2/3/4,
-play_idle_fix, get_activate_ret final.
-
-Next session: live-probe get_activate_ret + fire_weapon on the game host
+Next session: live-probe fire_weapon + the remaining sites on the game host
 (OP_PROBE_CODE), then use the same vcdiff workflow on any remaining sites.
 
 ## New Vegas (FNV 1.4.0.525) — static mapping session 2026-08-13
@@ -468,5 +459,5 @@ community answer is the downgrade; we re-derive per-site.
 
 Next: live-probe get_actor_value/state + is_moving on the game host
 (OP_PROBE_FORM dumps the vtable — read the +0x68/+0x70/+0x1E4 entries),
-then the remaining patch sites (get_activate_ret 0x8C8F82 candidate,
-fire_fix, match_race, place_at_me, ai_fix2/3/4).
+then the remaining patch sites (fire_fix, match_race, place_at_me,
+ai_fix2/3/4).

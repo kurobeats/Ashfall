@@ -179,11 +179,14 @@ pub mod fo3_steam_17_vaultmp {
     pub const AV_FIX_RET: usize = 0x005B_7ACC;
     /// AV fix terminator (the sprintf call): GOG 0x473E85 twin.
     pub const AV_FIX_TERM: usize = 0x005B_7AE2;
-    /// GetActivate ret-target candidate: `test byte [reg+0x5DC],0x10;
-    /// jne; cmp byte [0x122888c],0; je` — the classic ret pattern (reads
-    /// the death-UI global 0x107BA64 → Steam 0x122888c, death-handler
-    /// region). Needs live probe to disambiguate from sibling handlers.
-    pub const GET_ACTIVATE_RET_CAND: usize = 0x008C_8F82;
+    /// GetActivate ret-target: the loop-exit convergence `cmp [ebp+8],1`
+    /// (the activate-parameter/death-state check) at the post-loop
+    /// continuation — GOG 0x78A995 twin. Vaultmp's GetActivate hook
+    /// (vaultmp.cpp GetActivate) captures EAX (the object) at the jmp
+    /// site, queues its refID (obj+0x0C), and the RelJump at jmp+5 sends
+    /// control here, skipping the loop body. Re-derived 2026-08-14 from
+    /// the vaultmp source + Steam flow analysis.
+    pub const GET_ACTIVATE_RET: usize = 0x008D_3CB8;
     /// FireWeapon call site: `call <fire>` + second call + `mov [reg+0x144],
     /// eax; movss [reg+0x148]` + jmp + player-compare tail — structural
     /// byte-search match (GOG 0x71F05F). vcdiff marks the region rewritten;
@@ -614,7 +617,7 @@ mod tests {
         use fo3_steam_17_vaultmp as s;
         // All Steam sites in image range.
         for a in [s::PLAY_IDLE_CALL_SRC, s::LOCK_FIX, s::AI_FIX1,
-                  s::GET_ACTIVATE_JMP, s::GET_ACTIVATE_RET_CAND,
+                  s::GET_ACTIVATE_JMP, s::GET_ACTIVATE_RET,
                   s::DELEGATOR_DEST,
                   s::DELEGATOR_CALL_SRC, s::PLAY_GROUP_FIX,
                   s::AV_FIX_SRC, s::AV_FIX_RET, s::AV_FIX_TERM,
@@ -628,6 +631,7 @@ mod tests {
         assert_eq!(s::FIRE_WEAPON_JMP, 0x7DF3F7);
         // vcdiff-verified EXACT covers (classic → steam).
         assert_eq!(s::GET_ACTIVATE_JMP, 0x8D3BC8);
+        assert_eq!(s::GET_ACTIVATE_RET, 0x8D3CB8);
         assert_eq!(s::AI_FIX1, 0x5E99E2);
         assert_eq!(s::PLAY_GROUP_FIX, 0x4350F9);
         assert_eq!(s::DELEGATOR_DEST, 0x405E69);
