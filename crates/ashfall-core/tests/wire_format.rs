@@ -151,6 +151,18 @@ fn test_update_scale() {
 }
 
 #[test]
+fn test_update_name() {
+    // UpdateName carries a string-cached name (CachedString::Plain + Id).
+    roundtrip(&Packet::UpdateName { id: nid(10), name: "door\0name".into() });
+    roundtrip(&Packet::UpdateName { id: nid(10), name: ashfall_core::string_cache::CachedString::Id(3) });
+}
+
+#[test]
+fn test_update_actor_idle() {
+    roundtrip(&Packet::UpdateActorIdle { id: nid(10), idle: 0x2A, name: "idle\0anim".into() });
+}
+
+#[test]
 fn test_update_cell() {
     roundtrip(&Packet::UpdateCell { id: nid(10), cell: 42, pos: [0.0; 3] });
 }
