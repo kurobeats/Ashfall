@@ -135,8 +135,7 @@ pub fn execute(func: u32, params: &[u8]) -> Vec<u8> {
             if params.len() < 8 { return vec![]; }
             let ref_id = u32::from_le_bytes([params[0], params[1], params[2], params[3]]);
             let cell = u32::from_le_bytes([params[4], params[5], params[6], params[7]]);
-            // ponytail: no set_cell hook yet; stub success
-            let _ = (ref_id, cell);
+            crate::hooks::set_parent_cell(ref_id, cell);
             vec![1]
         }
 
@@ -200,9 +199,9 @@ pub fn execute(func: u32, params: &[u8]) -> Vec<u8> {
             if params.len() < 8 { return vec![]; }
             let ref_id = u32::from_le_bytes([params[0], params[1], params[2], params[3]]);
             let weapon = u32::from_le_bytes([params[4], params[5], params[6], params[7]]);
-            // ponytail: no fire_weapon hook yet; stub success
-            let _ = (ref_id, weapon);
-            vec![1]
+            // Apply a remote fire: call the engine's weapon-fire routine on
+            // the shooter (wired 2026-08-14 — fire_weapon hook implemented).
+            crate::hooks::fire_weapon(ref_id, weapon).to_le_bytes().to_vec()
         }
 
         // ── Name ──
@@ -230,8 +229,7 @@ pub fn execute(func: u32, params: &[u8]) -> Vec<u8> {
             if params.len() < 5 { return vec![]; }
             let ref_id = u32::from_le_bytes([params[0], params[1], params[2], params[3]]);
             let enabled = params[4] != 0;
-            // ponytail: no set_enabled hook yet; stub success
-            let _ = (ref_id, enabled);
+            crate::hooks::set_enabled(ref_id, enabled);
             vec![1]
         }
 
@@ -252,13 +250,16 @@ pub fn execute(func: u32, params: &[u8]) -> Vec<u8> {
 
         // ── Move To ──
         OP_MOVE_TO => {
-            if params.len() < 16 { return vec![]; }
+            if params.len() < 20 { return vec![]; }
             let ref_id = u32::from_le_bytes([params[0], params[1], params[2], params[3]]);
             let cell = u32::from_le_bytes([params[4], params[5], params[6], params[7]]);
             let x = f32::from_le_bytes([params[8], params[9], params[10], params[11]]);
             let y = f32::from_le_bytes([params[12], params[13], params[14], params[15]]);
-            // ponytail: no move_to hook yet; stub success
-            let _ = (ref_id, cell, x, y);
+            let z = f32::from_le_bytes([params[16], params[17], params[18], params[19]]);
+            // Remote teleport: field-write the new cell + position
+            // (Steam-safe raw writes, wired 2026-08-14).
+            crate::hooks::set_parent_cell(ref_id, cell);
+            crate::hooks::set_pos(ref_id, [x, y, z]);
             vec![1]
         }
 
@@ -591,22 +592,30 @@ mod tests {
     #[test]
     fn test_original_setters_return_success() {
         let params = [0x42u8, 0, 0, 0, 0, 0, 0x80, 0x3F, 0, 0, 0, 0, 0, 0, 0, 0];
-        let setters: &[(u32, &[u8])] = &[
+        let mut setters: Vec<(u32, &[u8])> = vec![
             (opcodes::OP_SET_POS, &params),
             (opcodes::OP_SET_ANGLE, &params),
             (opcodes::OP_SET_CELL, &params),
             (opcodes::OP_SET_ACTOR_VALUE, &params),
             (opcodes::OP_SET_CONTROL, &params),
-            (opcodes::OP_FIRE_WEAPON, &params),
             (opcodes::OP_SET_NAME, &params),
             (opcodes::OP_SET_ENABLED, &params),
             (opcodes::OP_SET_LOCK, &params),
-            (opcodes::OP_MOVE_TO, &params),
             (opcodes::OP_PLAY_SOUND, &params),
             (opcodes::OP_PLACE_AT_ME, &params),
         ];
+        // OP_MOVE_TO needs 20 bytes (ref + cell + xyz); test separately.
+        let move_params = [0x42u8, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0x80, 0x3F, 0, 0, 0x80, 0x3F, 0, 0, 0x80, 0x3F];
+        let mv = execute(opcodes::OP_MOVE_TO, &move_params);
+        assert_eq!(mv, vec![1], "OP_MOVE_TO should succeed with 20-byte params");
+        assert!(execute(opcodes::OP_MOVE_TO, &params).is_empty(), "short MOVE_TO rejected");
+        // OP_FIRE_WEAPON now calls the engine fire routine — a no-op
+        // returning 0 on non-x86 test hosts (no engine there). Assert it
+        // returns a byte either way (never empty/crash).
+        let fire = execute(opcodes::OP_FIRE_WEAPON, &params);
+        assert!(!fire.is_empty(), "OP_FIRE_WEAPON returned empty");
         for (opcode, p) in setters {
-            let result = execute(*opcode, p);
+            let result = execute(opcode, p);
             assert!(!result.is_empty(), "opcode {opcode:#06X} returned empty");
             assert_eq!(result[0], 1, "opcode {opcode:#06X} should return success byte 1");
         }

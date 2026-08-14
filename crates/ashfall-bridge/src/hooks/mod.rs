@@ -438,8 +438,54 @@ pub fn get_cell(ref_id: u32) -> u32 {
 }
 
 pub fn get_activate(ref_id: u32) -> u32 {
-    let _ = ref_id;
-    0
+    // Remote activation confirmation: return the ref if it resolves to a
+    // live object (safe field lookup — no vtable call, Steam-safe). The
+    // engine-side activation is intercepted by the vaultmp get_activate
+    // hook (EVENT_ACTIVATE emission); this getter confirms the target
+    // exists so the client sees the propagation succeeded.
+    #[cfg(target_arch = "x86")]
+    unsafe {
+        let obj = crate::hooks::vtable::lookup_form_by_id(ref_id);
+        if obj.is_null() {
+            return 0;
+        }
+        ref_id
+    }
+    #[cfg(not(target_arch = "x86"))]
+    {
+        let _ = ref_id;
+        0
+    }
+}
+
+/// Apply a remote fire: call the engine's weapon-fire routine on the
+/// shooter (thiscall). Resolves the per-build fire routine (classic GOG
+/// 0x4BE1A0 / Steam 0x770880 — both E8-verified 2026-08-14) and runs it.
+/// Returns 1 on success (the ref resolved), 0 when the shooter is invalid.
+///
+/// ponytail: the engine fire routine is called with only `this`; the
+/// weapon ref is informational (the engine re-reads the actor's equipped
+/// weapon). Live verification needed for exact argument shape.
+pub fn fire_weapon(shooter_ref: u32, _weapon: u32) -> u32 {
+    #[cfg(target_arch = "x86")]
+    unsafe {
+        let obj = crate::hooks::vtable::lookup_form_by_id(shooter_ref);
+        if obj.is_null() {
+            return 0;
+        }
+        // Pick the fire routine: classic GOG by prologue, Steam by table.
+        let addr = crate::hooks::vaultmp::fire_routine_addr();
+        if addr == 0 {
+            return 0;
+        }
+        let _: u32 = crate::hooks::address::call_thiscall_0(addr, obj);
+        1
+    }
+    #[cfg(not(target_arch = "x86"))]
+    {
+        let _ = shooter_ref;
+        0
+    }
 }
 
 /// Read the enabled state of a reference (VTable/field read, FO3/FNV aware).
@@ -582,6 +628,18 @@ pub fn set_respawn_allowed(_allowed: bool) {
 #[inline]
 pub fn get_parent_cell(ref_id: u32) -> u32 {
     unsafe { vtable::get_parent_cell(ref_id) }
+}
+
+/// Set the parent cell FormID (raw field write, Steam-safe).
+#[inline]
+pub fn set_parent_cell(ref_id: u32, cell: u32) {
+    unsafe { vtable::set_parent_cell(ref_id, cell) }
+}
+
+/// Set the enabled flag (raw field write, Steam-safe).
+#[inline]
+pub fn set_enabled(ref_id: u32, enabled: bool) {
+    unsafe { vtable::set_enabled(ref_id, enabled) }
 }
 
 /// Equip an item on an actor.

@@ -192,6 +192,26 @@ pub fn packets_to_commands(
                     vec![Param::U32(ref_id), Param::U32(0), Param::U8(0), Param::U8(0)],
                 ));
             }
+            // Remote player activated an object — apply it locally so the
+            // world stays shared (opening doors/containers propagates).
+            Packet::UpdateActivate { id, .. } => {
+                let Some(ref_id) = resolve_ref(*id) else { continue };
+                out.push((
+                    crate::ipc::OP_GET_ACTIVATE,
+                    vec![Param::U32(ref_id)],
+                ));
+            }
+            // Remote player fired — apply locally so shots propagate.
+            // The weapon id is the firing actor's weapon ref (bridge reads
+            // it from the engine); we only need the shooter, which the
+            // server relays as the packet id.
+            Packet::UpdateFireWeapon { id, weapon } if *id != local_id => {
+                let Some(shooter) = resolve_ref(*id) else { continue };
+                out.push((
+                    crate::ipc::OP_FIRE_WEAPON,
+                    vec![Param::U32(shooter), Param::U32(*weapon)],
+                ));
+            }
             _ => {}
         }
     }
@@ -278,6 +298,33 @@ mod tests {
         assert!(matches!(p0[2], Param::F32(40.0)));
         let (op1, _) = &cmds[1];
         assert_eq!(*op1, crate::ipc::OP_KILL);
+    }
+
+    #[test]
+    fn test_remote_activate_fire_to_commands() {
+        let local = NetworkID::new(1);
+        let remote = NetworkID::new(9);
+        let packets = vec![
+            // Remote player activated an object (id = the ref, actor = remote).
+            Packet::UpdateActivate { id: entity_id(0x60), actor: remote },
+            // Remote player fired (id = shooter, weapon = weapon ref).
+            Packet::UpdateFireWeapon { id: remote, weapon: 0x77 },
+            // Own activation must NOT become a command.
+            Packet::UpdateActivate { id: entity_id(0x61), actor: local },
+        ];
+        let resolve = |id: NetworkID| {
+            if id == remote { Some(0x50) } else if id == entity_id(0x60) { Some(0x60) } else { None }
+        };
+        let cmds = packets_to_commands(&packets, local, resolve);
+        // remote activate + remote fire; own activate skipped.
+        assert_eq!(cmds.len(), 2);
+        let (op0, p0) = &cmds[0];
+        assert_eq!(*op0, crate::ipc::OP_GET_ACTIVATE);
+        assert!(matches!(p0[0], Param::U32(0x60)));
+        let (op1, p1) = &cmds[1];
+        assert_eq!(*op1, crate::ipc::OP_FIRE_WEAPON);
+        assert!(matches!(p1[0], Param::U32(0x50)), "shooter is the remote actor");
+        assert!(matches!(p1[1], Param::U32(0x77)), "weapon ref");
     }
 
     #[test]

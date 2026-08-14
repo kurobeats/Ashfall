@@ -652,6 +652,31 @@ pub unsafe fn get_enabled_from_obj(obj: *mut u8) -> bool {
     (flags & 0x02) == 0
 }
 
+/// Set the enabled flag (raw field write, Steam-safe — inverse of
+/// `get_enabled`). Wired to OP_SET_ENABLED (2026-08-14).
+pub unsafe fn set_enabled(ref_id: u32, enabled: bool) {
+    let obj = lookup_form_by_id(ref_id);
+    if obj.is_null() {
+        return;
+    }
+    set_enabled_flags(obj, enabled);
+}
+
+/// Set the enabled flag on an already-resolved object pointer.
+pub unsafe fn set_enabled_flags(obj: *mut u8, enabled: bool) {
+    if obj.is_null() {
+        return;
+    }
+    let flags_offset: usize = if crate::hooks::is_fnv() { 0x54 } else { 0x50 };
+    let mut flags = read_field::<u32>(obj, flags_offset);
+    if enabled {
+        flags &= !0x02;
+    } else {
+        flags |= 0x02;
+    }
+    write_field::<u32>(obj, flags_offset, flags);
+}
+
 /// `TESObjectREFR::GetLocked()` vtable call → `TESObjectLOCK*`.
 const VTBL_REF_GET_LOCKED: usize = vtable_index(0xA0);
 
@@ -693,6 +718,17 @@ pub unsafe fn get_parent_cell_from_obj(obj: *mut u8) -> u32 {
     }
     let offset = parent_cell_offset();
     read_field::<u32>(obj, offset)
+}
+
+/// Set the parent cell FormID (raw field write — Steam-safe, matches the
+/// field read in `get_parent_cell_from_obj`). Wired to OP_SET_CELL so
+/// remote cell-moves propagate (2026-08-14).
+pub unsafe fn set_parent_cell(ref_id: u32, cell: u32) {
+    let obj = lookup_form_by_id(ref_id);
+    if obj.is_null() {
+        return;
+    }
+    write_field::<u32>(obj, parent_cell_offset(), cell);
 }
 
 /// Combat target offsets: `Actor+0x4E0` (FO3) / `+0x430` (FNV).
@@ -933,6 +969,32 @@ mod tests {
 
             write_field::<u32>(obj.as_mut_ptr(), 0x50, 0x00);
             assert!(get_enabled_from_obj(obj.as_mut_ptr()));
+        }
+    }
+
+    #[test]
+    fn test_set_enabled_roundtrip() {
+        unsafe {
+            // set_enabled flips the same bit get_enabled reads (+0x50 bit 0x02).
+            let mut obj = vec![0u8; 128];
+            // Enabled by default (flags 0).
+            assert!(get_enabled_from_obj(obj.as_mut_ptr()));
+            set_enabled_flags(obj.as_mut_ptr(), false);
+            assert!(!get_enabled_from_obj(obj.as_mut_ptr()));
+            set_enabled_flags(obj.as_mut_ptr(), true);
+            assert!(get_enabled_from_obj(obj.as_mut_ptr()));
+        }
+    }
+
+    #[test]
+    fn test_set_parent_cell_roundtrip() {
+        unsafe {
+            // FO3 parent cell at +0x3C (is_fnv() == false default).
+            let mut obj = vec![0u8; 128];
+            write_field::<u32>(obj.as_mut_ptr(), 0x3C, 0);
+            assert_eq!(get_parent_cell_from_obj(obj.as_mut_ptr()), 0);
+            write_field::<u32>(obj.as_mut_ptr(), 0x3C, 0x1234);
+            assert_eq!(get_parent_cell_from_obj(obj.as_mut_ptr()), 0x1234);
         }
     }
 

@@ -1249,3 +1249,25 @@ pub unsafe fn apply_classic_vaultmp() -> bool {
 pub unsafe fn apply_classic_vaultmp() -> bool {
     false // tests / x64 hosts — nothing to hook
 }
+
+/// Resolve the engine's weapon-fire routine for the running build.
+/// Classic/GOG: 0x4BE1A0 (SEH prologue `6a ff 68 da 2f c3 00`). Steam:
+/// 0x770880 (SEH prologue `53 8b dc 83 ec 08`). Picks by reading the
+/// candidate prologue bytes in-process; 0 when neither matches (non-game).
+pub fn fire_routine_addr() -> usize {
+    #[cfg(target_arch = "x86")]
+    {
+        use crate::hooks::read_bytes;
+        if read_bytes(0x004B_E1A0, 6) == [0x6A, 0xFF, 0x68, 0xDA, 0x2F, 0xC3] {
+            return 0x004B_E1A0; // classic/GOG
+        }
+        if read_bytes(0x0077_0880, 6) == [0x53, 0x8B, 0xDC, 0x83, 0xEC, 0x08] {
+            return 0x0077_0880; // Steam
+        }
+        0
+    }
+    #[cfg(not(target_arch = "x86"))]
+    {
+        0
+    }
+}
