@@ -532,6 +532,20 @@ pub unsafe fn get_actor_state(ref_id: u32) -> (u32, u8, u8, u8, bool, bool) {
     let alerted = false;
     let sneaking = false;
 
+    // Alerted/sneaking states: thin vtable-dispatch getters on the classic
+    // GOG build (alerted 0x6F6C70 = `[this+0x60]` obj vtable +0x450;
+    // sneaking 0x6F58B0 = `[this+0x184]` obj vtable +0x20). Verified against
+    // the Anniversary-Patcher catalog (2026-08-14 gh crawl) + GOG binary.
+    // Byte-guarded — no-op on Steam (both rewritten).
+    #[cfg(target_arch = "x86")]
+    if crate::hooks::read_bytes(0x006F_6C70, 4) == [0x83, 0x79, 0x60, 0x00] {
+        alerted = crate::hooks::address::call_thiscall_0::<u8>(0x006F_6C70, obj) != 0;
+    }
+    #[cfg(target_arch = "x86")]
+    if crate::hooks::read_bytes(0x006F_58B0, 4) == [0x83, 0xB9, 0x84, 0x01] {
+        sneaking = crate::hooks::address::call_thiscall_0::<u8>(0x006F_58B0, obj) != 0;
+    }
+
     // flags: diagonal movement detection not implemented (needs GetAsyncKeyState).
     // ponytail: returning 0. vaultmp's diagonal detection is unreliable anyway.
     let flags = 0u8;

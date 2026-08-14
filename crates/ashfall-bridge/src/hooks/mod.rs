@@ -71,6 +71,17 @@ pub mod fo3_17 {
     pub const FORM_HEAP_FREE: usize = 0x0040_1010;
     /// `DataHandler**` global.
     pub const DATA_HANDLER: usize = 0x0106_CDCC;
+    /// `TESObjectREFR::SetPos(x,y,z)` — the engine position setter
+    /// (verified via the Anniversary-Patcher catalog 2026-08-14; the
+    /// bridge uses raw field writes as the Steam-safe path instead).
+    pub const SET_POS: usize = 0x006F_2050;
+    /// `bool Actor::GetAlertedState()` — `[this+0x60]` obj vtable +0x450.
+    /// Verified via the Anniversary-Patcher catalog + GOG binary.
+    pub const ACTOR_GET_ALERTED: usize = 0x006F_6C70;
+    /// `bool Actor::GetSneakingState()` — `[this+0x184]` obj vtable +0x20.
+    pub const ACTOR_GET_SNEAKING: usize = 0x006F_58B0;
+    /// `QueueUIMessage` (HUD message queue).
+    pub const QUEUE_UI_MESSAGE: usize = 0x0061_B850;
 }
 
 // ═══════════════════════════════════════════════════════════════

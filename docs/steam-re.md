@@ -492,3 +492,42 @@ The bridge had several stub getters/OP handlers that ARE field-writable
 Remaining engine-bound OP stubs (no safe field path): OP_SET_NAME
 (SetName vtable slot unmapped), OP_PLAY_SOUND's engine call, OP_PLACE_AT_ME
 (engine spawn fn). These + the AV/anim vtable slots need the live host.
+
+## Session 2026-08-14h — gh crawl: Project Crossroads + Anniversary catalog
+
+Used `gh` (GitHub CLI, kurobeats auth, 5000-call budget) to crawl for
+solutions to the live-bound tasks. Findings:
+
+**Project Crossroads** (Brotaku-Vengeant, pushed 2026-08-14) — a VaultMP
+lineage revival with working FO3 two-player movement. Confirms the
+community direction: **Fallout Anniversary Patcher → classic 1.7.0.3 →
+FOSE 1.2 beta 2** (downgrade + classic table). The FO3 update zip ships:
+- `anniversary-patcher-1.7.0.3-patches.json` — the complete 31-patch site
+  catalog with byte-verification (expected prefixes). Matches every vaultmp
+  site we've been Steam-mapping exactly: respawn (0x6D5965/0x78B230),
+  ai_fix1-4, match_race (0x52F4DD/0x52F50F/0xF51ADC), fire_fix
+  (0x79236C/0x7923C5), get_activate (0x78A68D), place_at_me (0x539785/
+  0x6F1CB6), play_group/delegator/actor_value_fix/plugins. **Independent
+  validation that our classic table is the exact vaultmp lineage.**
+- `anniversary-patcher-1.7.0.3-catalog.json` — the 31 downgrade patches.
+- `fose-1.2.2-initialization-manifest.json` — 43 FOSE command-table writes
+  (classic addresses, already known).
+- `crossroads_fose_adapter.dll` — FOSE-API-based (no raw offsets; uses the
+  extender, so it sidesteps the vtable problem entirely).
+
+**New classic entry points from the catalog** (wired into `fo3_17`):
+- `set_pos` 0x6F2050 (engine SetPos; bridge uses field writes instead)
+- `alerted_state` 0x6F6C70 — `[this+0x60]` obj vtable +0x450 dispatch
+- `sneaking_state` 0x6F58B0 — `[this+0x184]` obj vtable +0x20 dispatch
+- `queue_ui_message` 0x61B850
+
+`get_actor_state` alerted/sneaking (previously hardcoded false) now call
+the classic getters (byte-guarded; both rewritten in Steam — the +0x60/
++0x184 field or +0x450/+0x20 vtable slots moved, confirmed no structural
+twin in the flat dump).
+
+**Crawl dead ends:** no public Anniversary vtable table exists (FOSE repo
+deleted; kFOSE/VisualObjectives/ButcherPete are classic-only); vaultmp
+forks all dead (2021 latest); the only active FO3 MP work is the downgrade
+path. Our per-site re-derivation remains the correct approach for the
+Steam/Anniversary build.
