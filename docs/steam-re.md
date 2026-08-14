@@ -534,3 +534,42 @@ deleted; kFOSE/VisualObjectives/ButcherPete are classic-only); vaultmp
 forks all dead (2021 latest); the only active FO3 MP work is the downgrade
 path. Our per-site re-derivation remains the correct approach for the
 Steam/Anniversary build.
+
+## Session 2026-08-14i — static RE exhausted + gh re-crawl (no game)
+
+Systematic pass over every remaining site with semantic fingerprints
+(reg/field/vtable-slot/singleton-xref), then a fresh gh crawl. Result:
+**all remaining Steam sites are statically underivable** — the recompile
+restructured every target function; only live probing (OP_PROBE_CODE /
+OP_PROBE_FORM) can settle them. Two new confirmed globals/functions below.
+
+**New confirmed (static, byte-verified against the flat dump):**
+
+| Item | Classic | Steam | Evidence |
+|---|---|---|---|
+| `__security_cookie` | 0x106AB70 | **0x1202954** | `mov eax,[cookie]` refs: GOG 8,935× (all `xor eax,esp`) vs Steam 16,311×. Trap: the recompile switched the canary XOR — Steam dominates with `xor eax,ebp` (15,915×) over `xor eax,esp` (383×), so a classic-style `33 c4` scan undercounts 40×. Cookie value 0x24BB3820. Useful for /GS-function identification |
+| Delegator fn | 0x6EDBE0 | **0x405E70** | `push ecx; push esi; mov esi,[0xd9b2a0]` (GOG, global-load) → `push ecx; push esi; mov esi,ecx` (Steam, thiscall — the singleton moved to a param). Stub span consistent: 7B before fn (GOG 0x6EDBD9/Steam 0x405E69, both already in `fo3_steam_17_vaultmp`) |
+
+**Per-site dead ends (don't re-tread):**
+
+| Site | Classic anchor | Why no static twin |
+|---|---|---|
+| match_race | +0x218 vtable ×2, +0x110 race field, +0x4c8 list | +0x218 slot gone (0 hits for `8b 82 18 02 00 00`); +0x4c8 field survives (4 hits) but the function was restructured; the vcdiff island 0x52F4E5→0x60E4F6 (`ff d0 84 c0 0f 84 a6`) is a cross-function coincidence |
+| play_group | `cmp eax,1; je; mov edx,[esi+4]; cmp edx,[PC]` | `cmp edx,[0x123c674]` has 6 hits, none matches the structure; PC singleton has 1,424 `mov ecx,[…]` refs (no discriminator) |
+| place_at_me internal (0x43DEF0) | SEH frame 0x30 + cookie + `mov edx,[esp+0x60]; xor esi; xor ebp` | body pattern 0 hits; `lea eax,[esp+0x44]; mov fs:[0]` (frame 0x30) 0 hits — frame size + body both changed |
+| ai_fix2/3 | `cmp [esi+0xFC],5; je; cmp …,3; je` in predicate 0x6FAE90 | Steam predicate 0x7F9B70 restructured: `cmp [edi+0xFC],5` @ 0x7F9C23 + `cmp [esi+0xFC],3` @ 0x7F9C76, different regs/targets — no 1:1 byte map |
+| fire_fix | vtable +0x224/+0x220 + helper 0x7CB510 | slots shifted, helper gone (re-confirmed) |
+| frame hook target (0x6E3E40) | `mov eax,[0x10769b0]; … mov al,[eax+0x49]` | +0x49 field gone, menu global 0x10769B0 gone |
+| delegator_src (0x6EEC86) | `mov ecx,[0x107a0d4]; call 0x6edbe0` | Steam `mov ecx,[0x123c5d4]; call` resolves to 0x9AE410/0x9B19E0 etc. — the delegator is now reached via those, not a direct E8 to 0x405E70 (only 1 direct call, local at 0x405F35) |
+
+**gh re-crawl (kurobeats, 5000-call budget):** code search for
+0x7F9B70 / 0x8D3BC8 / 0x123C674 → only `kurobeats/Ashfall` (no public
+Anniversary table anywhere). `c6-dev/ButcherPeteFOSE` (pushed 2026-08-11)
+is a full classic-FOSE source tree (GameObjects.h / GameForms.h /
+GameRTTI.h) — confirms the classic vtable/field layouts (Actor::lifeState
+0xFC, PlayerCharacter::firstPersonAnimData 0x5EC, disabledControlFlags
+0x5DC) but is classic-only, no Anniversary slots. FalloutAnniversaryPatcher
+ships only the vcdiff (already exhausted). Project Crossroads stays on the
+downgrade + FOSE-API path. **Verdict unchanged: per-site live probe is the
+only remaining path for fire_fix / match_race / place_at_me / ai_fix2-4 /
+play_idle_fix / play_group / delegator_src and the AV/anim vtable slots.**

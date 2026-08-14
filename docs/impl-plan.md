@@ -351,6 +351,16 @@ runtime (sections/layout identical, .data/.rsrc/.reloc byte-identical; only
 import + .bind unpacker) → **fnv_14 table applies to Steam unchanged, no
 re-derivation needed**. 483 tests, 0 warnings.
 
+2026-08-14 (i): static RE exhausted — semantic-fingerprint sweep over every
+remaining Steam site (fire_fix/match_race/place_at_me/ai_fix2-4/
+play_idle_fix/play_group/delegator_src) + the AV/anim vtable slots, then a
+fresh gh re-crawl. Confirmed all are statically underivable (recompile
+restructured each target function). New confirmed: Steam __security_cookie
+0x1202954 (canary XOR switched esp→ebp) + delegator fn 0x405E70 (thiscall;
+classic 0x6EDBE0 was global-load). No public Anniversary address table (gh
+code search → Ashfall only; ButcherPeteFOSE = classic FOSE source). Docs
+only — no bridge changes (low-confidence addresses would defeat byte-guards).
+
 2026-08-14 (d): vaultmp hook framework — the 8 REQUIRED_HOOKS implemented
 (resolver + x86 thunks + collectors), EVENT_ACTIVATE/EVENT_FIRE pipe events
 + client relay (UpdateActivate/UpdateFireWeapon), apply_classic_vaultmp()

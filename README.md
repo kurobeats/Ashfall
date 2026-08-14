@@ -168,11 +168,16 @@ lives in [docs/impl-plan.md](./docs/impl-plan.md). Recent highlights:
   alerted/sneaking call the classic engine getters (byte-guarded). A gh
   crawl found Project Crossroads' Anniversary-Patcher catalog — the full
   vaultmp site table byte-verified, independently confirming our classic
-  table (see docs/steam-re.md Session 2026-08-14h). Still to derive:
-  the AV/anim vtable slots (GetActorValue/State/
-  is_moving — reordered early region, need live probe), fire_fix,
-  match_race, place_at_me, ai_fix2/3/4, play_idle_fix. Remaining engine-
-  bound OP stubs: SET_NAME, PLAY_SOUND's engine call, PLACE_AT_ME.
+  table (see docs/steam-re.md Session 2026-08-14h). **2026-08-14i:** a
+  full static pass (semantic fingerprints + fresh gh re-crawl) confirmed
+  the remaining sites — fire_fix, match_race, place_at_me, ai_fix2/3/4,
+  play_idle_fix, play_group, delegator_src — plus the AV/anim vtable
+  slots (GetActorValue/State/is_moving) are all statically underivable
+  (recompile restructured every target function); they need live probe
+  (OP_PROBE_CODE/OP_PROBE_FORM). New confirmed: Steam `__security_cookie`
+  0x1202954 (canary XOR now `ebp`, not `esp`) + delegator fn 0x405E70.
+  Remaining engine-bound OP stubs: SET_NAME, PLAY_SOUND's engine call,
+  PLACE_AT_ME.
 - **Per-frame player hook** — wired for FNV (0x86B386 main-loop hook) and
   FO3 classic (0x6EEB2F); Steam/Anniversary per-frame + live verification
   remain

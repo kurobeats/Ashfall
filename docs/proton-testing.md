@@ -224,3 +224,10 @@ Everything client/server/bridge-side is built and tested. On the host:
    delegator stub spot 0x405E69, play_group_fix 0x4350F9. Live-probe those
    (OP_PROBE_CODE) before hooking. Steam FNV verified = GOG at runtime —
    no separate FNV Steam analysis needed.
+4. **2026-08-14i (static RE exhausted):** the remaining sites (fire_fix,
+   match_race, place_at_me, ai_fix2-4, play_idle_fix, play_group,
+   delegator_src) and the AV/anim vtable slots are all statically
+   underivable — recompile restructured each function. They need
+   OP_PROBE_CODE / OP_PROBE_FORM on the live host. New confirmed for the
+   probe list: Steam `__security_cookie` 0x1202954 (canary XOR is `ebp`,
+   not `esp`) + delegator fn 0x405E70.

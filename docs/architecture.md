@@ -1458,10 +1458,17 @@ vtable base 0xF938FC mapped (GET_LOCKED slot GOG +0xA0 → Steam +0xFC).
 revival) ships the Anniversary-Patcher catalog — the full 31-patch vaultmp
 site table + 8 engine entry points, byte-verified — independently
 confirming our classic table is the exact vaultmp lineage; added SET_POS
-0x6F2050 / QUEUE_UI_MESSAGE 0x61B850 to fo3_17. Remaining = fire-fix/
-match_race/place_at_me/ai_fix2-4/play_idle_fix + the Steam AV/anim vtable
-slots (GetActorValue/State/is_moving) live-probe (hooks::vaultmp recipes)
-— see docs/steam-re.md.
+0x6F2050 / QUEUE_UI_MESSAGE 0x61B850 to fo3_17. **2026-08-14i (static
+pass exhausted):** a full semantic-fingerprint sweep + fresh gh re-crawl
+confirmed every remaining site (fire_fix/match_race/place_at_me/ai_fix2-4/
+play_idle_fix/play_group/delegator_src) and the Steam AV/anim vtable slots
+(GetActorValue/State/is_moving) are statically underivable — the recompile
+restructured each target function (vtable slots shifted, singleton refs
+have 1,400+ hits, /GS frame sizes changed). New confirmed globals: Steam
+`__security_cookie` 0x1202954 (canary XOR switched esp→ebp) + delegator fn
+0x405E70. No public Anniversary address table exists (gh code search =
+Ashfall only; ButcherPeteFOSE is classic FOSE source). Remaining work =
+live probe on the game host (hooks::vaultmp recipes) — see docs/steam-re.md.
 
 ---
 

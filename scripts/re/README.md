@@ -260,3 +260,33 @@ vaultmp lineage. The alerted/sneaking getters were wired into
 `get_actor_state` (classic, byte-guarded). Download path:
 `repos/.../contents/updates/Project-Crossroads-Update-fallout3.zip` →
 profiles/*.json (the DLL is FOSE-API-based, no raw offsets).
+
+## 2026-08-14i — static RE exhausted + gh re-crawl (no game)
+
+Semantic-fingerprint sweep over every remaining Steam site (fire_fix,
+match_race, place_at_me, ai_fix2-4, play_idle_fix, play_group, delegator_src)
++ the AV/anim vtable slots, then a fresh gh re-crawl. Confirmed all are
+statically underivable (recompile restructured each target function).
+
+New confirmed (static, byte-verified against the flat dump):
+- `__security_cookie` Steam = **0x1202954** (classic 0x106AB70). Trap: the
+  recompile switched the canary XOR esp→ebp (15,915× `xor eax,ebp` vs 383×
+  `xor eax,esp`) — a classic-style `33 c4` scan undercounts 40×.
+- Delegator fn Steam = **0x405E70** (thiscall `push ecx; push esi; mov
+  esi,ecx`; classic 0x6EDBE0 was `mov esi,[0xd9b2a0]` global-load). Stub
+  span 7B before fn, consistent with the known 0x405E69.
+
+Per-site dead ends: match_race (+0x218 slot gone, +0x4c8 field survives but
+fn restructured), play_group (PC singleton 1,424 refs — no discriminator),
+place_at_me internal 0x43DEF0 (frame 0x30 + body both changed), ai_fix2/3
+(Steam predicate split regs), fire_fix (+0x224/+0x220 shifted, helper gone),
+frame-hook target 0x6E3E40 (+0x49 field + menu global gone), delegator_src
+(`mov ecx,[0x123c5d4]; call` now resolves to 0x9AE410, no direct E8 to
+0x405E70).
+
+gh re-crawl: code search for 0x7F9B70 / 0x8D3BC8 / 0x123C674 → Ashfall only.
+`c6-dev/ButcherPeteFOSE` (2026-08-11) = full classic FOSE source
+(GameObjects.h/GameForms.h/GameRTTI.h), classic-only. FalloutAnniversary-
+Patcher ships only the vcdiff (exhausted). Project Crossroads = downgrade +
+FOSE-API. Verdict: live probe (OP_PROBE_CODE/OP_PROBE_FORM) is the only
+remaining path for the last patch sites + AV/anim vtable slots.
