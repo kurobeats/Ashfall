@@ -212,6 +212,15 @@ pub fn packets_to_commands(
                     vec![Param::U32(shooter), Param::U32(*weapon)],
                 ));
             }
+            // Remote lock-state change (server broadcasts from the script
+            // host) — apply the lock byte locally.
+            Packet::UpdateLock { id, lock } => {
+                let Some(ref_id) = resolve_ref(*id) else { continue };
+                out.push((
+                    crate::ipc::OP_SET_LOCK,
+                    vec![Param::U32(ref_id), Param::U32(*lock)],
+                ));
+            }
             _ => {}
         }
     }
@@ -325,6 +334,22 @@ mod tests {
         assert_eq!(*op1, crate::ipc::OP_FIRE_WEAPON);
         assert!(matches!(p1[0], Param::U32(0x50)), "shooter is the remote actor");
         assert!(matches!(p1[1], Param::U32(0x77)), "weapon ref");
+    }
+
+    #[test]
+    fn test_remote_lock_to_command() {
+        let local = NetworkID::new(1);
+        let obj_id = entity_id(0x70);
+        let packets = vec![
+            Packet::UpdateLock { id: obj_id, lock: 1 },
+        ];
+        let resolve = |id: NetworkID| if id == obj_id { Some(0x70) } else { None };
+        let cmds = packets_to_commands(&packets, local, resolve);
+        assert_eq!(cmds.len(), 1);
+        let (op, p) = &cmds[0];
+        assert_eq!(*op, crate::ipc::OP_SET_LOCK);
+        assert!(matches!(p[0], Param::U32(0x70)));
+        assert!(matches!(p[1], Param::U32(1)));
     }
 
     #[test]

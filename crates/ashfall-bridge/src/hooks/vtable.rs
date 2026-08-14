@@ -685,6 +685,31 @@ pub unsafe fn get_lock(ref_id: u32) -> u32 {
     get_lock_from_obj(lookup_form_by_id(ref_id))
 }
 
+/// Set the lock state (raw field write on the lock byte at +0xA, bit 0 —
+/// the same byte the verified lock-state getter reads: `mov al,[ecx+0xa];
+/// and al,1; ret`, GOG 0x4017F0 / Steam 0x57C780, 2026-08-14). Steam-safe.
+pub unsafe fn set_lock(ref_id: u32, locked: bool) {
+    let obj = lookup_form_by_id(ref_id);
+    if obj.is_null() {
+        return;
+    }
+    set_lock_flags(obj, locked);
+}
+
+/// Set the lock byte on an already-resolved object pointer (+0xA bit 0).
+pub unsafe fn set_lock_flags(obj: *mut u8, locked: bool) {
+    if obj.is_null() {
+        return;
+    }
+    let mut byte = read_field::<u8>(obj, 0x0A);
+    if locked {
+        byte |= 0x01;
+    } else {
+        byte &= !0x01;
+    }
+    write_field::<u8>(obj, 0x0A, byte);
+}
+
 /// Read the lock pointer from an already-resolved object pointer.
 pub unsafe fn get_lock_from_obj(obj: *mut u8) -> u32 {
     if obj.is_null() {
@@ -995,6 +1020,20 @@ mod tests {
             assert_eq!(get_parent_cell_from_obj(obj.as_mut_ptr()), 0);
             write_field::<u32>(obj.as_mut_ptr(), 0x3C, 0x1234);
             assert_eq!(get_parent_cell_from_obj(obj.as_mut_ptr()), 0x1234);
+        }
+    }
+
+    #[test]
+    fn test_set_lock_roundtrip() {
+        unsafe {
+            // Lock byte at +0xA bit 0 (the verified getter's field).
+            let mut obj = vec![0u8; 64];
+            write_field::<u8>(obj.as_mut_ptr(), 0x0A, 0);
+            assert_eq!(read_field::<u8>(obj.as_mut_ptr(), 0x0A) & 0x01, 0);
+            set_lock_flags(obj.as_mut_ptr(), true);
+            assert_eq!(read_field::<u8>(obj.as_mut_ptr(), 0x0A) & 0x01, 1);
+            set_lock_flags(obj.as_mut_ptr(), false);
+            assert_eq!(read_field::<u8>(obj.as_mut_ptr(), 0x0A) & 0x01, 0);
         }
     }
 

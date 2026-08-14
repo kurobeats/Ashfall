@@ -243,8 +243,8 @@ pub fn execute(func: u32, params: &[u8]) -> Vec<u8> {
             if params.len() < 8 { return vec![]; }
             let ref_id = u32::from_le_bytes([params[0], params[1], params[2], params[3]]);
             let lock = u32::from_le_bytes([params[4], params[5], params[6], params[7]]);
-            // ponytail: no set_lock hook yet; stub success
-            let _ = (ref_id, lock);
+            // Lock state = byte +0xA bit 0 (verified getter reads it).
+            crate::hooks::set_lock(ref_id, lock != 0);
             vec![1]
         }
 

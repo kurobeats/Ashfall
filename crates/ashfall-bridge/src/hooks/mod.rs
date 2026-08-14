@@ -642,6 +642,13 @@ pub fn set_enabled(ref_id: u32, enabled: bool) {
     unsafe { vtable::set_enabled(ref_id, enabled) }
 }
 
+/// Set the lock state (raw byte write at +0xA bit 0, Steam-safe — matches
+/// the verified lock-state getter).
+#[inline]
+pub fn set_lock(ref_id: u32, locked: bool) {
+    unsafe { vtable::set_lock(ref_id, locked) }
+}
+
 /// Equip an item on an actor.
 pub fn equip_item(ref_id: u32, item_id: u32, equip_slot: u32, prevent_removal: u8) {
     let _ = (ref_id, item_id, equip_slot, prevent_removal);
