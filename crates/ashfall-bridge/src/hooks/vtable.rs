@@ -655,25 +655,23 @@ pub unsafe fn set_actor_value(ref_id: u32, index: u8, value: f32) {
     if obj.is_null() {
         return;
     }
-    if crate::hooks::is_fnv() {
-        // FNV: SetActorValue is an Actor vtable method whose slot is not
-        // statically derived (the ActorValueOwner member at +0xA4 has the
-        // GETters only). No-op until live-probed.
-        let _ = (index, value);
-        return;
-    }
-    // FO3: replicate the engine's ForceActorValue handler (0x521F20):
-    // current = GetActorValueF via avOwner (+0x9C) vtable slot 3, then
-    // apply the delta via Actor vtbl[0] slot +0x3A0 (thiscall, args
-    // index, delta, 0 — confirmed from the handler's push sequence).
-    let av = obj.add(0x9C);
+    // Replicate the engine's ForceActorValue handler for each build
+    // (FO3 0x521F20 / FNV 0x5BE190): current = GetActorValueF via the
+    // avOwner vtable slot 3, then apply the delta via Actor vtbl[0]
+    // slot +0x3A0 (FO3) / +0x3A4 (FNV), thiscall args index, delta, 0.
+    let (av_off, setter_slot) = if crate::hooks::is_fnv() {
+        (0xA4usize, 0x3A4usize) // FNV: avOwner member, setter confirmed 0x5BE190
+    } else {
+        (0x9Cusize, 0x3A0usize) // FO3: avOwner base sub-object, setter confirmed 0x521F20
+    };
+    let av = obj.add(av_off);
     let vt = read_field::<usize>(av, 0);
     if !(0x400000..0x1200000).contains(&vt) {
         return;
     }
-    let current = vcall_1::<u8, f32>(av, 0x0C, index);
+    let current = vcall_1::<u8, f32>(av, 0x0C, index); // GetActorValueF
     let delta = value - current;
-    let _: u32 = vcall_3::<u32, f32, u32, u32>(obj, 0x3A0, index as u32, delta, 0);
+    let _: u32 = vcall_3::<u32, f32, u32, u32>(obj, setter_slot, index as u32, delta, 0);
 }
 
 /// Read cell of a reference.

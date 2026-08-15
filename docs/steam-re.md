@@ -730,3 +730,17 @@ vtable slot 3 (GetActorValueF, +0x0C) / slot 1 (GetBaseActorValueF, +0x04)
 with a .rdata vtable-pointer guard. FO3 keeps returning 0.0 — the real
 GetActorValue needs a live OP_PROBE_FORM (the game's AV access is likely a
 direct function call, not a vtable call).
+
+**2026-08-14o — command-table route: AV path triple-confirmed + more handlers.**
+The static command tables exposed more:
+- **FO3 GetActorValue handler** (entry 0xF54DA8, opcode 0x100E) → engine fn
+  **0x50EF90**: `lea ecx,[actor+0x9C]` (avOwner; base-form path uses +0x100)
+  → `call [avowner_vtable+0xC]` = GetActorValueF slot 3. Triple-confirms the
+  wired path (ForceActorValue handler + GetActorValue handler + direct fn).
+- **FNV SetActorValue** (ForceActorValue handler 0x5BE190): current via
+  avOwner +0xA4 slot 3, delta applied via **Actor vtbl[0] slot +0x3A4**
+  (FO3 uses +0x3A0). `set_actor_value` now wired for both builds.
+- **Other handlers found** (classic): PlaySound 0x523590 (SoundManager
+  0x11790C8 → 0xBCFBB0, complex — OP_PLAY_SOUND stays stubbed), PlaceAtMe
+  0x53CA20 (internal 0x539280), PlayGroup 0x532690. OP_PLACE_AT_ME is
+  unused by server/client — left stubbed.
