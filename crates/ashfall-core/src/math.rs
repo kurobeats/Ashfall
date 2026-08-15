@@ -59,3 +59,45 @@ pub fn distance(a: [f32; 3], b: [f32; 3]) -> f32 {
 pub fn is_near(a: [f32; 3], b: [f32; 3], r: f32) -> bool {
     distance(a, b) <= r
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn valid_coordinates_accepted() {
+        assert!(is_valid_pos([0.0, 0.0, 0.0]));
+        assert!(is_valid_pos([299_999.0, -299_999.0, 123.5]));
+    }
+
+    #[test]
+    fn nan_inf_out_of_range_rejected() {
+        assert!(!is_valid_pos([f32::NAN, 0.0, 0.0]));
+        assert!(!is_valid_pos([f32::INFINITY, 0.0, 0.0]));
+        assert!(!is_valid_pos([300_001.0, 0.0, 0.0]));
+        assert!(!is_valid_pos([-300_001.0, 0.0, 0.0]));
+    }
+
+    #[test]
+    fn angle_bounds_enforced() {
+        assert!(is_valid_angle3([0.0, 90.0, 180.0]));
+        assert!(is_valid_angle3([-360.0, 360.0, 0.0]));
+        assert!(!is_valid_angle3([361.0, 0.0, 0.0]));
+        assert!(!is_valid_angle3([f32::NAN, 0.0, 0.0]));
+    }
+
+    #[test]
+    fn distance_and_near() {
+        assert_eq!(distance([0.0, 0.0, 0.0], [3.0, 4.0, 0.0]), 5.0);
+        assert!(is_near([0.0, 0.0, 0.0], [1.0, 1.0, 1.0], 2.0));
+        assert!(!is_near([0.0, 0.0, 0.0], [10.0, 0.0, 0.0], 2.0));
+    }
+
+    #[test]
+    fn vault_vector_conversions() {
+        let v = VaultVector::new(1.0, 2.0, 3.0);
+        assert_eq!(v.as_tuple(), (1.0, 2.0, 3.0));
+        let p = VaultVector::from_pos([4.0, 5.0, 6.0]);
+        assert_eq!(p.as_tuple(), (4.0, 5.0, 6.0));
+    }
+}
