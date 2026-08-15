@@ -316,7 +316,10 @@ mod tests {
         assert_eq!(f.opcode, PIPE_OP_COMMAND);
         // payload after the frame header: [func:4][count:1][params...]
         assert_eq!(f.payload[0..4], 0x42u32.to_le_bytes()); // key
-        assert_eq!(f.payload[4..8], crate::commands::opcodes::OP_GET_POS.to_le_bytes()); // func
+        assert_eq!(
+            f.payload[4..8],
+            crate::commands::opcodes::OP_GET_POS.to_le_bytes()
+        ); // func
         assert_eq!(f.payload[8], 8); // param count
         assert_eq!(&f.payload[9..], &[0xAA; 8]);
     }

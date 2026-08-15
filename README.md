@@ -39,7 +39,7 @@ This is an honest status. The plumbing is done; the polish is coming.
 | **Mod support** | ✅ Full ESM/ESP import → server database (both games + all DLC verified); optional load-order verification |
 | **Scripted game modes** | ✅ WASM scripting — servers can run custom game modes written in Rust/WASM |
 | **Combat** | ✅ Server-authoritative damage with Fallout's DR/DT formula |
-| **GUI** | 🚧 Client has a server browser + chat + top-down world view. A 3D view isn't there yet — the game window itself is your view. |
+| **GUI** | ✅ Client has a server browser + chat + top-down world view (health bars, player names, server GUI). The game window is the 3D view — a separate 3D renderer is out of scope. |
 | **NPC sync in-game** | 🚧 Fully wired client/server/bridge — discovery (classic + Steam re-derived + FNV ActorProcessManager), ownership, state sampling, remote application all built + tested. Needs live verification on the game host (see [What's Left](#whats-left)) |
 
 **The goal:** vanilla co-op — your group playing the actual game together,
@@ -191,8 +191,9 @@ lives in [docs/impl-plan.md](./docs/impl-plan.md). Recent highlights:
   re-derived 2026-08-14 via the respawn-struct frame-body twin; the hook
   derefs the SteamStub IAT slot so it's ASLR-safe). Live verification on
   the game host remains
-- **3D client view** — today the client shows a top-down projection; the
-  game window is the real view
+- ~~**3D client view**~~ — explicitly out of scope: the game window IS the
+  view (the client's top-down projection + health bars/names + server GUI
+  are the companion HUD)
 - **Windows-native client** — currently Linux-only (the bridge DLL already
   cross-compiles)
 - **Co-op game modes** — the script stack works; actual game modes (shared
