@@ -22,7 +22,10 @@ impl CallbackContext {
     }
 
     pub fn set_auth_result(&self, name: &str, allowed: bool) {
-        self.auth_results.lock().unwrap().insert(name.to_string(), allowed);
+        self.auth_results
+            .lock()
+            .unwrap()
+            .insert(name.to_string(), allowed);
     }
 
     pub fn take_auth_result(&self, name: &str) -> Option<bool> {
@@ -59,13 +62,19 @@ impl CallbackDispatcher {
     pub fn on_server_exit(_shutdown: bool) {}
 
     // ── Auth ──
-    pub fn on_client_authenticate(_name: &str, _password: &str) -> bool { true }
+    pub fn on_client_authenticate(_name: &str, _password: &str) -> bool {
+        true
+    }
 
     // ── Player ──
     pub fn on_player_disconnect(_player_id: NetworkID, _reason: u8) {}
-    pub fn on_player_request_game(_player_id: NetworkID) -> u32 { 0x0001A26E }
+    pub fn on_player_request_game(_player_id: NetworkID) -> u32 {
+        0x0001A26E
+    }
     pub fn on_spawn(_player_id: NetworkID) {}
-    pub fn on_player_chat(_player_id: NetworkID, _message: &str) -> bool { true }
+    pub fn on_player_chat(_player_id: NetworkID, _message: &str) -> bool {
+        true
+    }
 
     // ── Object ──
     pub fn on_create(_object_id: NetworkID) {}
@@ -89,7 +98,9 @@ impl CallbackDispatcher {
     pub fn on_actor_fire_weapon(_actor_id: NetworkID, _weapon: u32) {}
 
     // ── Combat ──
-    pub fn on_hit(_target_id: NetworkID, _attacker_id: NetworkID, _limb: u8, _damage: f32) -> bool { true }
+    pub fn on_hit(_target_id: NetworkID, _attacker_id: NetworkID, _limb: u8, _damage: f32) -> bool {
+        true
+    }
     pub fn on_equip(_actor_id: NetworkID, _item_id: NetworkID, _equipped: bool) {}
 
     // ── GUI ──
@@ -98,7 +109,12 @@ impl CallbackDispatcher {
     pub fn on_window_return(_player_id: NetworkID, _window_id: NetworkID) {}
     pub fn on_window_text_change(_player_id: NetworkID, _window_id: NetworkID, _text: &str) {}
     pub fn on_checkbox_select(_player_id: NetworkID, _checkbox_id: NetworkID, _selected: bool) {}
-    pub fn on_radio_button_select(_player_id: NetworkID, _radio_id: NetworkID, _prev_id: NetworkID) {}
+    pub fn on_radio_button_select(
+        _player_id: NetworkID,
+        _radio_id: NetworkID,
+        _prev_id: NetworkID,
+    ) {
+    }
     pub fn on_list_item_select(_player_id: NetworkID, _item_id: NetworkID, _selected: bool) {}
 
     // ── Quest ──

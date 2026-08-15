@@ -7,7 +7,9 @@
 //! Every single position, velocity, item count, and damage value goes through
 //! these checks before the server acts on it.
 
-use ashfall_core::constants::{MAX_SPEED, MAX_TELEPORT_DISTANCE, MAX_ITEM_STACK, MIN_SCALE, MAX_SCALE};
+use ashfall_core::constants::{
+    MAX_ITEM_STACK, MAX_SCALE, MAX_SPEED, MAX_TELEPORT_DISTANCE, MIN_SCALE,
+};
 use ashfall_core::math::{distance, is_valid_pos};
 use std::time::Duration;
 
@@ -17,7 +19,11 @@ impl AntiCheat {
     // ── Position ──
 
     /// Validate position update — reject NaN, infinite, teleport, speed hack.
-    pub fn validate_position(pos: [f32; 3], prev_pos: Option<[f32; 3]>, delta_time: Duration) -> bool {
+    pub fn validate_position(
+        pos: [f32; 3],
+        prev_pos: Option<[f32; 3]>,
+        delta_time: Duration,
+    ) -> bool {
         if !is_valid_pos(pos) {
             return false;
         }
@@ -32,7 +38,9 @@ impl AntiCheat {
             let dt = delta_time.as_secs_f32().max(0.001);
             let speed = dist / dt;
             if speed > MAX_SPEED {
-                tracing::warn!("AntiCheat: speed hack rejected — {speed:.0} u/s (dist={dist:.0}, dt={dt:.3}s)");
+                tracing::warn!(
+                    "AntiCheat: speed hack rejected — {speed:.0} u/s (dist={dist:.0}, dt={dt:.3}s)"
+                );
                 return false;
             }
         }
@@ -107,23 +115,39 @@ mod tests {
 
     #[test]
     fn test_validate_position_normal() {
-        assert!(AntiCheat::validate_position([100.0, 0.0, 0.0], Some([0.0, 0.0, 0.0]), Duration::from_millis(100)));
+        assert!(AntiCheat::validate_position(
+            [100.0, 0.0, 0.0],
+            Some([0.0, 0.0, 0.0]),
+            Duration::from_millis(100)
+        ));
     }
 
     #[test]
     fn test_validate_position_teleport_rejected() {
-        assert!(!AntiCheat::validate_position([20000.0, 0.0, 0.0], Some([0.0, 0.0, 0.0]), Duration::from_millis(100)));
+        assert!(!AntiCheat::validate_position(
+            [20000.0, 0.0, 0.0],
+            Some([0.0, 0.0, 0.0]),
+            Duration::from_millis(100)
+        ));
     }
 
     #[test]
     fn test_validate_position_speed_hack() {
         // 10000 units in 1ms = 10M u/s
-        assert!(!AntiCheat::validate_position([10000.0, 0.0, 0.0], Some([0.0, 0.0, 0.0]), Duration::from_millis(1)));
+        assert!(!AntiCheat::validate_position(
+            [10000.0, 0.0, 0.0],
+            Some([0.0, 0.0, 0.0]),
+            Duration::from_millis(1)
+        ));
     }
 
     #[test]
     fn test_validate_position_nan_rejected() {
-        assert!(!AntiCheat::validate_position([f32::NAN, 0.0, 0.0], None, Duration::from_millis(100)));
+        assert!(!AntiCheat::validate_position(
+            [f32::NAN, 0.0, 0.0],
+            None,
+            Duration::from_millis(100)
+        ));
     }
 
     #[test]

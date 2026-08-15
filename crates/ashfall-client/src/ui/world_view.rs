@@ -33,18 +33,36 @@ pub fn draw_world(
 
     // Background + border.
     painter.rect_filled(rect, 0.0, Color32::from_rgb(18, 22, 26));
-    painter.rect_stroke(rect, 0.0_f32, Stroke::new(1.0_f32, Color32::from_rgb(60, 70, 80)));
+    painter.rect_stroke(
+        rect,
+        0.0_f32,
+        Stroke::new(1.0_f32, Color32::from_rgb(60, 70, 80)),
+    );
 
     // Origin cross (in case the local player is elsewhere).
     let o = view.world_to_screen(0.0, 0.0);
     let o = egui::pos2(rect.left() + o[0], rect.top() + o[1]);
-    painter.line_segment([o + egui::vec2(-4.0_f32, 0.0_f32), o + egui::vec2(4.0_f32, 0.0_f32)], Stroke::new(1.0_f32, Color32::from_rgb(70, 80, 90)));
-    painter.line_segment([o + egui::vec2(0.0_f32, -4.0_f32), o + egui::vec2(0.0_f32, 4.0_f32)], Stroke::new(1.0_f32, Color32::from_rgb(70, 80, 90)));
+    painter.line_segment(
+        [
+            o + egui::vec2(-4.0_f32, 0.0_f32),
+            o + egui::vec2(4.0_f32, 0.0_f32),
+        ],
+        Stroke::new(1.0_f32, Color32::from_rgb(70, 80, 90)),
+    );
+    painter.line_segment(
+        [
+            o + egui::vec2(0.0_f32, -4.0_f32),
+            o + egui::vec2(0.0_f32, 4.0_f32),
+        ],
+        Stroke::new(1.0_f32, Color32::from_rgb(70, 80, 90)),
+    );
 
     // Remote objects.
     let ids: Vec<NetworkID> = registry.get_objects().map(|(id, _)| *id).collect();
     for id in ids {
-        let Some(pos) = registry.interpolated_pos(id) else { continue };
+        let Some(pos) = registry.interpolated_pos(id) else {
+            continue;
+        };
         let screen = view.world_to_screen(pos[0], pos[2]);
         let p = egui::pos2(rect.left() + screen[0], rect.top() + screen[1]);
         if !rect.expand(8.0).contains(p) {
@@ -52,9 +70,12 @@ pub fn draw_world(
         }
         // (color, health for bar, dead flag, name label)
         let (color, health, dead, name) = match registry.get(id) {
-            Some(ClientObject::Player { name, health, .. }) => {
-                (Color32::from_rgb(90, 200, 120), Some(*health), false, Some(name.clone()))
-            }
+            Some(ClientObject::Player { name, health, .. }) => (
+                Color32::from_rgb(90, 200, 120),
+                Some(*health),
+                false,
+                Some(name.clone()),
+            ),
             Some(ClientObject::Actor { health, dead, .. }) => {
                 (Color32::from_rgb(220, 90, 90), Some(*health), *dead, None)
             }

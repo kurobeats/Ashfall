@@ -7,7 +7,7 @@
 //! server-driven model works for MVP).
 
 use ashfall_core::protocol::transport::{
-    decode_varint_seq, encode_ctrl_ack, encode_varint_seq, CHANNEL_RELIABLE_FLAG, CHANNEL_CTRL,
+    decode_varint_seq, encode_ctrl_ack, encode_varint_seq, CHANNEL_CTRL, CHANNEL_RELIABLE_FLAG,
 };
 use ashfall_core::protocol::{Channel, Packet};
 use std::collections::VecDeque;
@@ -85,7 +85,9 @@ impl ClientNetwork {
         let mut buf = vec![0u8; 65536];
         let mut packets = Vec::new();
         // ponytail: single recv per poll. Batch in production.
-        if let Some(p) = self.recv(&mut buf).await? { packets.push(p) }
+        if let Some(p) = self.recv(&mut buf).await? {
+            packets.push(p)
+        }
         Ok(packets)
     }
 
@@ -123,7 +125,9 @@ impl ClientNetwork {
             payload
         };
 
-        postcard::from_bytes(packet_data).map(Some).map_err(|e| anyhow::anyhow!("{e}"))
+        postcard::from_bytes(packet_data)
+            .map(Some)
+            .map_err(|e| anyhow::anyhow!("{e}"))
     }
 
     /// The local UDP socket address (used by tests and diagnostics).
@@ -147,7 +151,9 @@ mod tests {
     };
 
     fn chat(message: &str) -> Packet {
-        Packet::GameChat { message: message.into() }
+        Packet::GameChat {
+            message: message.into(),
+        }
     }
 
     /// Parse a wire frame: returns (channel_byte, reliable_seq, owned payload).
@@ -222,8 +228,9 @@ mod tests {
             let mut buf = vec![0u8; 2048];
             let _len = peer.recv(&mut buf).await.unwrap();
             assert_eq!(buf[2], CHANNEL_CTRL, "first frame is the ACK");
-            let decoded = decode_ctrl_frame(&buf[3..3 + u16::from_le_bytes([buf[0], buf[1]]) as usize])
-                .unwrap();
+            let decoded =
+                decode_ctrl_frame(&buf[3..3 + u16::from_le_bytes([buf[0], buf[1]]) as usize])
+                    .unwrap();
             assert_eq!(decoded, CtrlFrame::Ack(7));
 
             let len = peer.recv(&mut buf).await.unwrap();
@@ -242,7 +249,10 @@ mod tests {
             let peer_addr = peer.local_addr().unwrap();
 
             let mut client = ClientNetwork::connect(peer_addr).await.unwrap();
-            let pos = Packet::UpdatePos { id: 5.into(), pos: [1.0, 2.0, 3.0] };
+            let pos = Packet::UpdatePos {
+                id: 5.into(),
+                pos: [1.0, 2.0, 3.0],
+            };
             client.send(&pos).await.unwrap();
 
             let mut buf = vec![0u8; 2048];

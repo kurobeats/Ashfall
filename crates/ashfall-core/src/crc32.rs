@@ -54,7 +54,11 @@ mod tests {
         let path = dir.join("ashfall_crc_test.bin");
         let data: Vec<u8> = (0..300_000u32).map(|i| (i % 251) as u8).collect();
         std::fs::write(&path, &data).unwrap();
-        assert_eq!(file_crc32(&path).unwrap(), crc32(&data), "streamed == in-memory");
+        assert_eq!(
+            file_crc32(&path).unwrap(),
+            crc32(&data),
+            "streamed == in-memory"
+        );
         std::fs::remove_file(&path).ok();
     }
 }

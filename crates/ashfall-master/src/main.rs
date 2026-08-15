@@ -17,7 +17,10 @@ const HEADER_SIZE: usize = 3;
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
-    tracing::info!("Ashfall master server v{}", ashfall_core::constants::MASTER_VERSION);
+    tracing::info!(
+        "Ashfall master server v{}",
+        ashfall_core::constants::MASTER_VERSION
+    );
 
     let addr: SocketAddr = "0.0.0.0:1660".parse()?;
     let socket = UdpSocket::bind(addr).await?;
@@ -67,10 +70,23 @@ async fn handle_packet(
     packet: Packet,
 ) {
     match packet {
-        Packet::MasterAnnounce { name, map, players, max_players, mod_files, game_type, .. } => {
+        Packet::MasterAnnounce {
+            name,
+            map,
+            players,
+            max_players,
+            mod_files,
+            game_type,
+            ..
+        } => {
             servers.upsert(src, name, map, players, max_players, game_type, mod_files);
         }
-        Packet::MasterUpdate { name, map, players, max_players } => {
+        Packet::MasterUpdate {
+            name,
+            map,
+            players,
+            max_players,
+        } => {
             if max_players == 0 {
                 servers.remove(src);
             } else {

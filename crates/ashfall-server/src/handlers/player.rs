@@ -1,22 +1,23 @@
 //! Player handler — spawn, controls, cell context, console.
 
-use ashfall_core::id::NetworkID;
-use ashfall_core::protocol::Packet;
 use crate::session::Session;
 use crate::world::cell::CellContext;
 use crate::world::objects::Player;
 use crate::world::registry::ObjectRegistry;
+use ashfall_core::id::NetworkID;
+use ashfall_core::protocol::Packet;
 use std::sync::Arc;
 
 /// Handle PlayerNew — create player, insert into registry, broadcast.
-pub fn handle_player_new(
-    registry: &Arc<ObjectRegistry>,
-    packet: &Packet,
-) -> Option<Packet> {
+pub fn handle_player_new(registry: &Arc<ObjectRegistry>, packet: &Packet) -> Option<Packet> {
     let (id, ref_id, base_id, controls, scale) = match packet {
-        Packet::PlayerNew { id, ref_id, base_id, controls, scale } => {
-            (*id, *ref_id, *base_id, controls.clone(), *scale)
-        }
+        Packet::PlayerNew {
+            id,
+            ref_id,
+            base_id,
+            controls,
+            scale,
+        } => (*id, *ref_id, *base_id, controls.clone(), *scale),
         _ => return None,
     };
 
@@ -58,10 +59,16 @@ pub fn handle_update_control(
 fn entity_new_packet(registry: &ObjectRegistry, id: NetworkID) -> Option<Packet> {
     let arc = registry.get(id)?;
     let guard = arc.read();
-    if let Some(obj) = guard.as_any().downcast_ref::<crate::world::objects::Object>() {
+    if let Some(obj) = guard
+        .as_any()
+        .downcast_ref::<crate::world::objects::Object>()
+    {
         return Some(obj.to_new_packet());
     }
-    if let Some(cont) = guard.as_any().downcast_ref::<crate::world::objects::Container>() {
+    if let Some(cont) = guard
+        .as_any()
+        .downcast_ref::<crate::world::objects::Container>()
+    {
         // ContainerNew + ObjectNew pair; keep it to one packet here (ObjectNew
         // carries the position/state — ContainerNew is the identity link).
         return Some(cont.object.to_new_packet());
@@ -69,10 +76,16 @@ fn entity_new_packet(registry: &ObjectRegistry, id: NetworkID) -> Option<Packet>
     if let Some(item) = guard.as_any().downcast_ref::<crate::world::objects::Item>() {
         return Some(item.to_new_packet());
     }
-    if let Some(actor) = guard.as_any().downcast_ref::<crate::world::objects::Actor>() {
+    if let Some(actor) = guard
+        .as_any()
+        .downcast_ref::<crate::world::objects::Actor>()
+    {
         return Some(actor.to_new_packet());
     }
-    if let Some(player) = guard.as_any().downcast_ref::<crate::world::objects::Player>() {
+    if let Some(player) = guard
+        .as_any()
+        .downcast_ref::<crate::world::objects::Player>()
+    {
         return Some(player.to_new_packet());
     }
     None
@@ -82,13 +95,22 @@ fn entity_new_packet(registry: &ObjectRegistry, id: NetworkID) -> Option<Packet>
 fn entity_cell(registry: &ObjectRegistry, id: NetworkID) -> Option<u32> {
     let arc = registry.get(id)?;
     let guard = arc.read();
-    if let Some(obj) = guard.as_any().downcast_ref::<crate::world::objects::Object>() {
+    if let Some(obj) = guard
+        .as_any()
+        .downcast_ref::<crate::world::objects::Object>()
+    {
         return Some(obj.cell);
     }
-    if let Some(actor) = guard.as_any().downcast_ref::<crate::world::objects::Actor>() {
+    if let Some(actor) = guard
+        .as_any()
+        .downcast_ref::<crate::world::objects::Actor>()
+    {
         return Some(actor.container.object.cell);
     }
-    if let Some(player) = guard.as_any().downcast_ref::<crate::world::objects::Player>() {
+    if let Some(player) = guard
+        .as_any()
+        .downcast_ref::<crate::world::objects::Player>()
+    {
         return Some(player.actor.container.object.cell);
     }
     None
@@ -106,7 +128,9 @@ pub fn handle_update_context(
     if session.player_id != Some(id) {
         return Vec::new();
     }
-    let old_ctx = CellContext { cells: session.cell_context };
+    let old_ctx = CellContext {
+        cells: session.cell_context,
+    };
     let new_ctx = CellContext { cells };
 
     session.update_cell_context(cells);
@@ -144,7 +168,10 @@ pub fn handle_update_context(
                 .map(|c| new_cells.contains(&c))
                 .unwrap_or(false);
             if !still_visible {
-                packets.push(Packet::ObjectRemove { id: obj_id, silent: true });
+                packets.push(Packet::ObjectRemove {
+                    id: obj_id,
+                    silent: true,
+                });
             }
         }
     }
@@ -154,7 +181,11 @@ pub fn handle_update_context(
 }
 
 /// Handle console toggle.
-pub fn handle_console(registry: &Arc<ObjectRegistry>, id: NetworkID, enabled: bool) -> Option<Packet> {
+pub fn handle_console(
+    registry: &Arc<ObjectRegistry>,
+    id: NetworkID,
+    enabled: bool,
+) -> Option<Packet> {
     if let Some(arc) = registry.get(id) {
         let mut guard = arc.write();
         if let Some(player) = guard.as_any_mut().downcast_mut::<Player>() {

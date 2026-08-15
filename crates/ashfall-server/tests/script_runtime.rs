@@ -7,6 +7,7 @@
 //!   - timer callback routing (create_timer → exported fn)
 //!   - the script effect queue (chat_message → ScriptEffect::PrivateChat)
 
+use ashfall_core::id::NetworkID;
 use ashfall_server::ai::factions::FactionMatrix;
 use ashfall_server::quest::QuestManager;
 use ashfall_server::script::engine::{ScriptEngine, ScriptState};
@@ -14,7 +15,6 @@ use ashfall_server::script::state::{GameTime, ScriptEffect};
 use ashfall_server::world::globals::GlobalState;
 use ashfall_server::world::registry::ObjectRegistry;
 use ashfall_server::world::weather::WeatherState;
-use ashfall_core::id::NetworkID;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
@@ -261,7 +261,9 @@ fn new_state() -> ScriptState {
 fn boot_with(state: ScriptState) -> ScriptEngine {
     let mut engine = ScriptEngine::new().expect("engine init");
     let bytes = wat::parse_str(TEST_MODE).expect("valid WAT");
-    engine.load_module_bytes("test-mode", &bytes).expect("module loads");
+    engine
+        .load_module_bytes("test-mode", &bytes)
+        .expect("module loads");
     engine.instantiate_all(state).expect("instantiation");
     engine
 }
@@ -274,10 +276,19 @@ fn boot_with(state: ScriptState) -> ScriptEngine {
 fn test_on_server_init_host_calls_are_real() {
     let state = new_state();
     let _engine = boot_with(state.clone());
-    assert_eq!(state.weather.get(), 0x00012345, "on_server_init set weather");
+    assert_eq!(
+        state.weather.get(),
+        0x00012345,
+        "on_server_init set weather"
+    );
     assert_eq!(
         state.game_time.get(),
-        GameTime { year: 2277, month: 1, day: 2, hour: 3 },
+        GameTime {
+            year: 2277,
+            month: 1,
+            day: 2,
+            hour: 3
+        },
         "on_server_init set game time"
     );
 }
@@ -286,7 +297,10 @@ fn test_on_server_init_host_calls_are_real() {
 fn test_quest_host_functions_are_real() {
     let state = new_state();
     let mut engine = boot_with(state.clone());
-    assert!(engine.call_export_void("quest_work", &[]), "quest_work runs");
+    assert!(
+        engine.call_export_void("quest_work", &[]),
+        "quest_work runs"
+    );
     assert_eq!(state.quests.get_stage(0x1000), 5, "set_quest_stage is real");
     assert!(state.quests.get_flag(7), "set_dialogue_flag is real");
 }
@@ -308,7 +322,10 @@ fn test_auth_dispatch() {
 fn test_chat_dispatch() {
     let state = new_state();
     let mut engine = boot_with(state);
-    assert!(engine.dispatch_chat(1, "hello world"), "normal chat allowed");
+    assert!(
+        engine.dispatch_chat(1, "hello world"),
+        "normal chat allowed"
+    );
     assert!(!engine.dispatch_chat(1, "!kickme"), "block rule honored");
 }
 
@@ -326,12 +343,19 @@ fn test_notify_callbacks() {
     engine.notify_spawn(42);
     assert_eq!(
         engine.drain_effects(),
-        vec![ScriptEffect::PrivateChat { player_id: 42, message: "Hello from script!".into() }],
+        vec![ScriptEffect::PrivateChat {
+            player_id: 42,
+            message: "Hello from script!".into()
+        }],
         "on_spawn private-chat effect queued"
     );
 
     engine.notify_actor_death(100, 200, 2, 1);
-    assert_eq!(state.quests.get_stage(0x1000), 10, "on_actor_death set quest stage");
+    assert_eq!(
+        state.quests.get_stage(0x1000),
+        10,
+        "on_actor_death set quest stage"
+    );
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -352,7 +376,11 @@ fn test_timer_routing_calls_wasm_callback() {
     for (id, cb) in fired {
         engine.dispatch_timer(id, &cb);
     }
-    assert_eq!(state.weather.get(), 0x00007777, "tick_cb changed the weather");
+    assert_eq!(
+        state.weather.get(),
+        0x00007777,
+        "tick_cb changed the weather"
+    );
 }
 
 #[test]
@@ -360,7 +388,10 @@ fn test_player_count_host_function() {
     let state = new_state();
     let mut engine = boot_with(state);
     // Simulate the server maintaining the live player count
-    let arc = engine.player_count.clone().expect("handle set at instantiation");
+    let arc = engine
+        .player_count
+        .clone()
+        .expect("handle set at instantiation");
     arc.store(3, Ordering::Relaxed);
     assert!(engine.call_export_void("update_player_count", &[]));
     assert_eq!(engine.call_export_i32("get_player_count", &[]), Some(3));
@@ -373,7 +404,10 @@ fn test_effect_queue_private_chat() {
     assert!(engine.call_export_void("say_hello", &[]));
     assert_eq!(
         engine.drain_effects(),
-        vec![ScriptEffect::PrivateChat { player_id: 42, message: "Hello from script!".into() }]
+        vec![ScriptEffect::PrivateChat {
+            player_id: 42,
+            message: "Hello from script!".into()
+        }]
     );
     assert!(engine.drain_effects().is_empty(), "queue drained");
 }
@@ -394,27 +428,50 @@ fn test_quest_stage_notification() {
 fn test_object_actor_crud_host_functions() {
     let state = new_state();
     let mut engine = boot_with(state.clone());
-    assert!(engine.call_export_void("spawn_work", &[]), "spawn_work runs");
+    assert!(
+        engine.call_export_void("spawn_work", &[]),
+        "spawn_work runs"
+    );
 
     let obj_id = NetworkID::new(engine.call_export_i64("get_obj_id", &[]).unwrap() as u64);
-    assert_eq!(engine.call_export_f32("get_obj_pos_x", &[]), Some(10.0), "set/get_pos round-trip");
-    assert_eq!(engine.call_export_f32("get_actor_hp", &[]), Some(75.5), "set/get_actor_value round-trip");
+    assert_eq!(
+        engine.call_export_f32("get_obj_pos_x", &[]),
+        Some(10.0),
+        "set/get_pos round-trip"
+    );
+    assert_eq!(
+        engine.call_export_f32("get_actor_hp", &[]),
+        Some(75.5),
+        "set/get_actor_value round-trip"
+    );
 
     // Host-side visibility: the registry holds the spawned object + actor.
     let arc = state.registry.get(obj_id).expect("object in registry");
     let guard = arc.read();
-    let obj = guard.as_any().downcast_ref::<ashfall_server::world::objects::Object>()
+    let obj = guard
+        .as_any()
+        .downcast_ref::<ashfall_server::world::objects::Object>()
         .expect("spawned object is an Object");
-    assert_eq!(obj.game_pos, [10.0, 20.0, 30.0], "set_pos mutated authoritative state");
+    assert_eq!(
+        obj.game_pos,
+        [10.0, 20.0, 30.0],
+        "set_pos mutated authoritative state"
+    );
 
     let actor_id = NetworkID::new(engine.call_export_i64("get_actor_id", &[]).unwrap() as u64);
     drop(guard);
     let arc = state.registry.get(actor_id).expect("actor in registry");
     let guard = arc.read();
-    let actor = guard.as_any().downcast_ref::<ashfall_server::world::objects::Actor>()
+    let actor = guard
+        .as_any()
+        .downcast_ref::<ashfall_server::world::objects::Actor>()
         .expect("spawned actor is an Actor");
     assert!(actor.dead, "kill_actor marked the actor dead");
-    assert_eq!(actor.values.get(&0x14), Some(&75.5), "set_actor_value stored");
+    assert_eq!(
+        actor.values.get(&0x14),
+        Some(&75.5),
+        "set_actor_value stored"
+    );
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -431,14 +488,21 @@ fn test_item_host_functions() {
     assert!(engine.call_export_void("item_work", &[]), "item_work runs");
 
     let item_id = NetworkID::new(engine.call_export_i64("get_item_id", &[]).unwrap() as u64);
-    assert_eq!(engine.call_export_i32("item_count", &[]), Some(1), "get_item_count reads state (Item::new count=1)");
+    assert_eq!(
+        engine.call_export_i32("item_count", &[]),
+        Some(1),
+        "get_item_count reads state (Item::new count=1)"
+    );
 
     // Host-side: the item is linked into the actor's container and equipped
     let actor_id = NetworkID::new(engine.call_export_i64("get_actor_id", &[]).unwrap() as u64);
     let arc = state.registry.get(actor_id).expect("actor exists");
     let guard = arc.read();
     let actor = guard.as_any().downcast_ref::<Actor>().unwrap();
-    assert!(actor.container.items.contains(&item_id), "item linked into actor container");
+    assert!(
+        actor.container.items.contains(&item_id),
+        "item linked into actor container"
+    );
     drop(guard);
 
     let arc = state.registry.get(item_id).expect("item in registry");
@@ -450,11 +514,17 @@ fn test_item_host_functions() {
 
     // remove_item destroys the item + unlinks it
     assert!(engine.call_export_void("drop_item", &[]));
-    assert!(state.registry.get(item_id).is_none(), "remove_item destroyed item");
+    assert!(
+        state.registry.get(item_id).is_none(),
+        "remove_item destroyed item"
+    );
     let arc = state.registry.get(actor_id).unwrap();
     let guard = arc.read();
     let actor = guard.as_any().downcast_ref::<Actor>().unwrap();
-    assert!(!actor.container.items.contains(&item_id), "item unlinked from container");
+    assert!(
+        !actor.container.items.contains(&item_id),
+        "item unlinked from container"
+    );
 }
 
 #[test]
@@ -473,8 +543,16 @@ fn test_combat_value_host_functions() {
         actor.set_value(0x29, 0.5, false);
         actor.set_value(0x2A, 4.0, false);
     }
-    assert_eq!(engine.call_export_f32("get_dr", &[]), Some(0.5), "get_damage_resistance reads value");
-    assert_eq!(engine.call_export_f32("get_dt", &[]), Some(4.0), "get_damage_threshold reads value");
+    assert_eq!(
+        engine.call_export_f32("get_dr", &[]),
+        Some(0.5),
+        "get_damage_resistance reads value"
+    );
+    assert_eq!(
+        engine.call_export_f32("get_dt", &[]),
+        Some(4.0),
+        "get_damage_threshold reads value"
+    );
 }
 
 #[test]
@@ -482,10 +560,18 @@ fn test_server_meta_host_functions() {
     let state = new_state();
     let mut engine = boot_with(state.clone());
     assert!(engine.call_export_void("name_server", &[]));
-    assert_eq!(*state.server_name.lock().unwrap(), "My Server", "set_server_name stored");
+    assert_eq!(
+        *state.server_name.lock().unwrap(),
+        "My Server",
+        "set_server_name stored"
+    );
 
     assert!(engine.call_export_void("read_max_players", &[]));
-    assert_eq!(engine.call_export_i32("get_cfg_max", &[]), Some(4), "get_config_int(max_players)");
+    assert_eq!(
+        engine.call_export_i32("get_cfg_max", &[]),
+        Some(4),
+        "get_config_int(max_players)"
+    );
 }
 
 #[test]
@@ -500,7 +586,10 @@ fn test_time_scale_host_function() {
 fn test_gui_widget_host_functions() {
     let state = new_state();
     let mut engine = boot_with(state.clone());
-    assert!(engine.call_export_void("make_window", &[]), "make_window runs");
+    assert!(
+        engine.call_export_void("make_window", &[]),
+        "make_window runs"
+    );
 
     let effects = engine.drain_effects();
     assert!(
@@ -531,7 +620,10 @@ fn test_hit_gate_dispatch() {
     let mut engine = boot_with(state.clone());
     assert!(engine.dispatch_hit(10, 20, 0, 50.0), "normal hit allowed");
     assert!(state.quests.get_flag(66), "on_hit fired for allowed hit");
-    assert!(!engine.dispatch_hit(10, 20, 0, 500.0), "over-100 damage blocked");
+    assert!(
+        !engine.dispatch_hit(10, 20, 0, 500.0),
+        "over-100 damage blocked"
+    );
 }
 
 #[test]
@@ -604,7 +696,10 @@ fn test_coop_host_functions_are_real() {
     let mut engine = boot_with(state.clone());
 
     // Spawn an actor + object, kill the actor, then run coop_work.
-    assert!(engine.call_export_void("spawn_work", &[]), "spawn_work runs");
+    assert!(
+        engine.call_export_void("spawn_work", &[]),
+        "spawn_work runs"
+    );
     let actor_id = NetworkID::new(engine.call_export_i64("get_actor_id", &[]).unwrap() as u64);
     let obj_id = NetworkID::new(engine.call_export_i64("get_obj_id", &[]).unwrap() as u64);
     assert!(
@@ -614,7 +709,10 @@ fn test_coop_host_functions_are_real() {
     {
         let arc = state.registry.get(actor_id).unwrap();
         let guard = arc.read();
-        assert!(guard.as_any().downcast_ref::<Actor>().unwrap().dead, "spawn_work killed the actor");
+        assert!(
+            guard.as_any().downcast_ref::<Actor>().unwrap().dead,
+            "spawn_work killed the actor"
+        );
     }
 
     assert!(engine.call_export_void("coop_work", &[]), "coop_work runs");
@@ -623,7 +721,10 @@ fn test_coop_host_functions_are_real() {
     {
         let arc = state.registry.get(actor_id).unwrap();
         let guard = arc.read();
-        assert!(!guard.as_any().downcast_ref::<Actor>().unwrap().dead, "resurrect_actor revives");
+        assert!(
+            !guard.as_any().downcast_ref::<Actor>().unwrap().dead,
+            "resurrect_actor revives"
+        );
     }
 
     // set_faction_relation: (1,2) -> Enemy.
@@ -638,13 +739,18 @@ fn test_coop_host_functions_are_real() {
     let locks: Vec<_> = effects
         .iter()
         .filter_map(|e| match e {
-            ScriptEffect::BroadcastPacket(ashfall_core::protocol::Packet::UpdateLock { id, lock }) => {
-                Some((*id, *lock))
-            }
+            ScriptEffect::BroadcastPacket(ashfall_core::protocol::Packet::UpdateLock {
+                id,
+                lock,
+            }) => Some((*id, *lock)),
             _ => None,
         })
         .collect();
-    assert_eq!(locks, vec![(obj_id, 100), (obj_id, 0)], "lock then unlock broadcast");
+    assert_eq!(
+        locks,
+        vec![(obj_id, 100), (obj_id, 0)],
+        "lock then unlock broadcast"
+    );
 }
 
 #[test]

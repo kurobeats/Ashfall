@@ -13,26 +13,26 @@ use std::sync::{LazyLock, Mutex};
 /// TESHitEvent — dispatched when an actor takes damage.
 #[repr(C)]
 pub struct TESHitEvent {
-    pub target: u32,      // RefID
-    pub attacker: u32,    // RefID
+    pub target: u32,   // RefID
+    pub attacker: u32, // RefID
     pub damage: f32,
-    pub weapon: u32,      // FormID
-    pub projectile: u32,  // FormID
+    pub weapon: u32,     // FormID
+    pub projectile: u32, // FormID
     pub flags: u32,
 }
 
 /// TESActivateEvent — dispatched when an object is activated.
 #[repr(C)]
 pub struct TESActivateEvent {
-    pub activator: u32,   // RefID
-    pub target: u32,      // RefID
+    pub activator: u32, // RefID
+    pub target: u32,    // RefID
 }
 
 /// TESEquipEvent — dispatched when equipment is equipped/unequipped.
 #[repr(C)]
 pub struct TESEquipEvent {
-    pub actor: u32,       // RefID
-    pub base_obj: u32,    // FormID
+    pub actor: u32,    // RefID
+    pub base_obj: u32, // FormID
     pub equip_slot: u32,
     pub equipped: bool,
 }
@@ -40,7 +40,7 @@ pub struct TESEquipEvent {
 /// TESCellChangeEvent — dispatched when a reference changes cell.
 #[repr(C)]
 pub struct TESCellChangeEvent {
-    pub reference: u32,   // RefID
+    pub reference: u32, // RefID
     pub old_cell: u32,
     pub new_cell: u32,
 }
@@ -48,8 +48,8 @@ pub struct TESCellChangeEvent {
 /// TESDeathEvent — dispatched when an actor dies.
 #[repr(C)]
 pub struct TESDeathEvent {
-    pub actor: u32,       // RefID
-    pub killer: u32,      // RefID
+    pub actor: u32,  // RefID
+    pub killer: u32, // RefID
     pub limbs: u16,
     pub cause: i8,
 }
@@ -63,9 +63,9 @@ pub struct TESLoadGameEvent {
 /// TESMagicEffectApplyEvent — dispatched when a magic effect applies.
 #[repr(C)]
 pub struct TESMagicEffectApplyEvent {
-    pub caster: u32,       // RefID
-    pub target: u32,       // RefID
-    pub effect_code: u32,  // Magic effect FormID
+    pub caster: u32,      // RefID
+    pub target: u32,      // RefID
+    pub effect_code: u32, // Magic effect FormID
     pub magnitude: f32,
 }
 

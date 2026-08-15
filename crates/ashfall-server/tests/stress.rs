@@ -1,9 +1,9 @@
 //! Stress tests — verify stability under load, no memory leaks or panics.
 
 use ashfall_core::id::NetworkID;
+use ashfall_server::session::Session;
 use ashfall_server::world::objects::Object;
 use ashfall_server::world::registry::ObjectRegistry;
-use ashfall_server::session::Session;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -64,11 +64,7 @@ fn test_many_sessions_no_panic() {
     // Create 20 mock sessions — verify no panic
     let mut sessions: Vec<Session> = Vec::new();
     for i in 0..20 {
-        let session = Session::new(
-            NetworkID::new((i + 1) as u64),
-            addr,
-            format!("Player{i}"),
-        );
+        let session = Session::new(NetworkID::new((i + 1) as u64), addr, format!("Player{i}"));
         sessions.push(session);
     }
 

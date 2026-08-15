@@ -1,22 +1,18 @@
 //! Combat resolver — server-authoritative hit validation + damage application.
 
-use ashfall_core::id::NetworkID;
-use ashfall_core::math::distance;
-use ashfall_core::protocol::{self, Packet};
 use crate::combat::DamageFormula;
 use crate::world::objects::{Actor, Player};
 use crate::world::position_history::PositionHistory;
 use crate::world::registry::ObjectRegistry;
+use ashfall_core::id::NetworkID;
+use ashfall_core::math::distance;
+use ashfall_core::protocol::{self, Packet};
 use std::sync::Arc;
 use std::time::Instant;
 
 /// Read-only actor access covering both Actor and Player entities
 /// (Player wraps an Actor by composition, not inheritance).
-fn with_actor(
-    registry: &ObjectRegistry,
-    id: NetworkID,
-    f: impl FnOnce(&Actor),
-) -> Option<()> {
+fn with_actor(registry: &ObjectRegistry, id: NetworkID, f: impl FnOnce(&Actor)) -> Option<()> {
     let arc = registry.get(id)?;
     let guard = arc.read();
     if let Some(a) = guard.as_any().downcast_ref::<Actor>() {
@@ -55,10 +51,7 @@ pub struct CombatResolver;
 impl CombatResolver {
     /// Process an ActorHit from a client. Validate, calculate damage, apply.
     /// Returns packets to broadcast.
-    pub fn resolve_hit(
-        registry: &Arc<ObjectRegistry>,
-        hit: &Packet,
-    ) -> Option<Vec<Packet>> {
+    pub fn resolve_hit(registry: &Arc<ObjectRegistry>, hit: &Packet) -> Option<Vec<Packet>> {
         Self::resolve_hit_compensated(registry, hit, &PositionHistory::new())
     }
 
@@ -72,9 +65,23 @@ impl CombatResolver {
         history: &PositionHistory,
     ) -> Option<Vec<Packet>> {
         let (target_id, attacker_id, limb, base_damage, flags, weapon_id, _projectile) = match hit {
-            Packet::ActorHit { target, attacker, limb, base_damage, flags, weapon_id, projectile } => {
-                (*target, *attacker, *limb, *base_damage, *flags, *weapon_id, *projectile)
-            }
+            Packet::ActorHit {
+                target,
+                attacker,
+                limb,
+                base_damage,
+                flags,
+                weapon_id,
+                projectile,
+            } => (
+                *target,
+                *attacker,
+                *limb,
+                *base_damage,
+                *flags,
+                *weapon_id,
+                *projectile,
+            ),
             _ => return None,
         };
 
@@ -99,9 +106,13 @@ impl CombatResolver {
         // Validate distance (anti-teleport-hack) with lag compensation:
         // use the attacker's position as of ~1 RTT ago when available.
         let mut target_pos = [0.0; 3];
-        with_actor(registry, target_id, |a| target_pos = a.container.object.net_pos)?;
+        with_actor(registry, target_id, |a| {
+            target_pos = a.container.object.net_pos
+        })?;
         let mut attacker_pos = [0.0; 3];
-        with_actor(registry, attacker_id, |a| attacker_pos = a.container.object.net_pos)?;
+        with_actor(registry, attacker_id, |a| {
+            attacker_pos = a.container.object.net_pos
+        })?;
         let compensated = history.lag_compensated(attacker_id, Instant::now());
         if let Some(comp) = compensated {
             attacker_pos = comp;
@@ -122,24 +133,28 @@ impl CombatResolver {
             dr = Self::get_actor_dr(a);
             dt = Self::get_actor_dt(a); // 0 for FO3
         });
-        let crit_mult = if flags & protocol::HIT_FLAG_CRITICAL != 0 { 1.5 } else { 1.0 };
+        let crit_mult = if flags & protocol::HIT_FLAG_CRITICAL != 0 {
+            1.5
+        } else {
+            1.0
+        };
 
         let final_damage = DamageFormula::calculate(base_damage, limb_mult, dr, dt, crit_mult);
 
         // Apply damage to target's health (actor value index 0x14 = health)
         let new_health = (target_health - final_damage).max(0.0);
-        with_actor_mut(registry, target_id, |a| a.set_value(0x14, new_health, false));
+        with_actor_mut(registry, target_id, |a| {
+            a.set_value(0x14, new_health, false)
+        });
 
         // Check for death
-        let mut packets = vec![
-            Packet::ActorDamaged {
-                target: target_id,
-                attacker: attacker_id,
-                limb,
-                final_damage,
-                flags,
-            }
-        ];
+        let mut packets = vec![Packet::ActorDamaged {
+            target: target_id,
+            attacker: attacker_id,
+            limb,
+            final_damage,
+            flags,
+        }];
 
         if new_health <= 0.0 {
             let is_headshot = limb == 1;

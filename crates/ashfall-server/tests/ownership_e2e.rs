@@ -30,7 +30,9 @@ struct TestClient {
 impl TestClient {
     async fn connect(port: u16) -> Self {
         let sock = UdpSocket::bind("127.0.0.1:0").await.unwrap();
-        sock.connect(SocketAddr::from(([127, 0, 0, 1], port))).await.unwrap();
+        sock.connect(SocketAddr::from(([127, 0, 0, 1], port)))
+            .await
+            .unwrap();
         TestClient { sock, seq: 0 }
     }
 
@@ -38,7 +40,11 @@ impl TestClient {
         let payload = postcard::to_stdvec(packet).unwrap();
         let seq = self.seq;
         self.seq = self.seq.wrapping_add(1);
-        let seq_bytes: Vec<u8> = if seq < 128 { vec![0x80 | seq as u8] } else { vec![0; 3] };
+        let seq_bytes: Vec<u8> = if seq < 128 {
+            vec![0x80 | seq as u8]
+        } else {
+            vec![0; 3]
+        };
         let mut buf = Vec::new();
         buf.extend_from_slice(&((seq_bytes.len() + payload.len()) as u16).to_le_bytes());
         buf.push(CHANNEL_RELIABLE_FLAG);
@@ -51,7 +57,9 @@ impl TestClient {
     async fn recv_packet(&self) -> Option<Packet> {
         let mut buf = vec![0u8; 2048];
         let n = tokio::time::timeout(Duration::from_millis(400), self.sock.recv(&mut buf))
-            .await.ok()?.ok()?;
+            .await
+            .ok()?
+            .ok()?;
         let len = u16::from_le_bytes([buf[0], buf[1]]) as usize;
         let ch = buf[2];
         if ch == 0xFF {
@@ -80,10 +88,18 @@ impl TestClient {
 async fn boot() -> (DedicatedServer, u16) {
     let seq = SEQ.fetch_add(1, Ordering::SeqCst);
     // Empty script dir — plain server, no auth gates.
-    let dir = std::env::temp_dir().join(format!("ashfall_owner_scripts_{}_{}", std::process::id(), seq));
+    let dir = std::env::temp_dir().join(format!(
+        "ashfall_owner_scripts_{}_{}",
+        std::process::id(),
+        seq
+    ));
     std::fs::create_dir_all(&dir).unwrap();
 
-    let db = std::env::temp_dir().join(format!("ashfall_owner_db_{}_{}.sqlite3", std::process::id(), seq));
+    let db = std::env::temp_dir().join(format!(
+        "ashfall_owner_db_{}_{}.sqlite3",
+        std::process::id(),
+        seq
+    ));
     let port = {
         let s = std::net::UdpSocket::bind("127.0.0.1:0").unwrap();
         s.local_addr().unwrap().port()
@@ -163,13 +179,20 @@ async fn test_ownership_transfer_roundtrip() {
 
         // Join handshake: GameLoad + world state + settings + clock.
         let alice_join = alice.drain().await;
-        assert!(alice_join.iter().any(|p| matches!(p, Packet::GameLoad)), "GameLoad");
         assert!(
-            alice_join.iter().any(|p| matches!(p, Packet::ServerSettings { pvp_enabled: true })),
+            alice_join.iter().any(|p| matches!(p, Packet::GameLoad)),
+            "GameLoad"
+        );
+        assert!(
+            alice_join
+                .iter()
+                .any(|p| matches!(p, Packet::ServerSettings { pvp_enabled: true })),
             "ServerSettings broadcast (pvp=true from config)"
         );
         assert!(
-            alice_join.iter().any(|p| matches!(p, Packet::GameTime { .. })),
+            alice_join
+                .iter()
+                .any(|p| matches!(p, Packet::GameTime { .. })),
             "GameTime clock sent on join"
         );
         let bob_join = bob.drain().await;
@@ -179,20 +202,31 @@ async fn test_ownership_transfer_roundtrip() {
         alice.send_reliable(&actor_new_packet(100, 0x500)).await;
         let alice_grant = alice.drain().await;
         assert!(
-            alice_grant.iter().any(|p| matches!(p, Packet::OwnershipGranted { id } if *id == nid(100))),
+            alice_grant
+                .iter()
+                .any(|p| matches!(p, Packet::OwnershipGranted { id } if *id == nid(100))),
             "sender granted ownership"
         );
         let bob_saw_actor = bob.drain().await;
         assert!(
-            bob_saw_actor.iter().any(|p| matches!(p, Packet::ActorNew { id, .. } if *id == nid(100))),
+            bob_saw_actor
+                .iter()
+                .any(|p| matches!(p, Packet::ActorNew { id, .. } if *id == nid(100))),
             "bob renders the actor"
         );
 
         // Bob (non-owner) tries to mutate the NPC → silently rejected.
         bob.send_reliable(&Packet::UpdateActorState {
-            id: nid(100), idle: 9, moving: 9, moving_xy: 9, weapon: 9,
-            alerted: true, sneaking: true, firing: false,
-        }).await;
+            id: nid(100),
+            idle: 9,
+            moving: 9,
+            moving_xy: 9,
+            weapon: 9,
+            alerted: true,
+            sneaking: true,
+            firing: false,
+        })
+        .await;
         assert!(
             bob.drain().await.is_empty(),
             "non-owner state update not relayed to anyone"
@@ -202,15 +236,20 @@ async fn test_ownership_transfer_roundtrip() {
         alice.send_reliable(&Packet::GameEnd { reason: 0 }).await;
         let bob_release = bob.drain().await;
         assert!(
-            bob_release.iter().any(|p| matches!(p, Packet::OwnershipReleased { id } if *id == nid(100))),
+            bob_release
+                .iter()
+                .any(|p| matches!(p, Packet::OwnershipReleased { id } if *id == nid(100))),
             "release broadcast after owner disconnect"
         );
 
         // Bob reclaims.
-        bob.send_reliable(&Packet::OwnershipClaim { id: nid(100) }).await;
+        bob.send_reliable(&Packet::OwnershipClaim { id: nid(100) })
+            .await;
         let bob_claim = bob.drain().await;
         assert!(
-            bob_claim.iter().any(|p| matches!(p, Packet::OwnershipGranted { id } if *id == nid(100))),
+            bob_claim
+                .iter()
+                .any(|p| matches!(p, Packet::OwnershipGranted { id } if *id == nid(100))),
             "survivor reclaims ownership"
         );
     };
@@ -224,9 +263,17 @@ fn _unused(_: PathBuf) {}
 
 async fn boot_with_mods(expected: Vec<String>) -> (DedicatedServer, u16) {
     let seq = SEQ.fetch_add(1, Ordering::SeqCst);
-    let dir = std::env::temp_dir().join(format!("ashfall_mods_scripts_{}_{}", std::process::id(), seq));
+    let dir = std::env::temp_dir().join(format!(
+        "ashfall_mods_scripts_{}_{}",
+        std::process::id(),
+        seq
+    ));
     std::fs::create_dir_all(&dir).unwrap();
-    let db = std::env::temp_dir().join(format!("ashfall_mods_db_{}_{}.sqlite3", std::process::id(), seq));
+    let db = std::env::temp_dir().join(format!(
+        "ashfall_mods_db_{}_{}.sqlite3",
+        std::process::id(),
+        seq
+    ));
     let port = {
         let s = std::net::UdpSocket::bind("127.0.0.1:0").unwrap();
         s.local_addr().unwrap().port()
@@ -261,7 +308,8 @@ async fn test_mod_policy_rejects_mismatch() {
         authenticate(&mut sock, "Wanderer").await;
         sock.send_reliable(&Packet::GameModList {
             mods: vec![("Oblivion.esm".into(), 0xC092218B)],
-        }).await;
+        })
+        .await;
         let mut saw_end = false;
         for _ in 0..8 {
             if let Some(Packet::GameEnd { .. }) = sock.recv_packet().await {
@@ -274,9 +322,11 @@ async fn test_mod_policy_rejects_mismatch() {
         // Matching load order → accepted (GameLoad arrives).
         let mut sock2 = TestClient::connect(port).await;
         authenticate(&mut sock2, "Wanderer").await;
-        sock2.send_reliable(&Packet::GameModList {
-            mods: vec![("Fallout3.esm".into(), 0xC092218B)],
-        }).await;
+        sock2
+            .send_reliable(&Packet::GameModList {
+                mods: vec![("Fallout3.esm".into(), 0xC092218B)],
+            })
+            .await;
         let mut saw_load = false;
         for _ in 0..12 {
             if let Some(pkt) = sock2.recv_packet().await {

@@ -14,7 +14,8 @@ pub struct Npc {
 
 impl Database {
     pub fn get_npc(&self, base_id: u32) -> Option<Npc> {
-        let mut stmt = self.conn()
+        let mut stmt = self
+            .conn()
             .prepare("SELECT baseID, name, race, female, health, level FROM npcs WHERE baseID = ?1")
             .ok()?;
         stmt.query_row(rusqlite::params![base_id], |row| {
@@ -26,11 +27,13 @@ impl Database {
                 health: row.get::<_, i32>(4)? as u32,
                 level: row.get::<_, i32>(5)? as u32,
             })
-        }).ok()
+        })
+        .ok()
     }
 
     pub fn load_all_npcs(&self) -> Vec<Npc> {
-        let mut stmt = match self.conn()
+        let mut stmt = match self
+            .conn()
             .prepare("SELECT baseID, name, race, female, health, level FROM npcs")
         {
             Ok(s) => s,

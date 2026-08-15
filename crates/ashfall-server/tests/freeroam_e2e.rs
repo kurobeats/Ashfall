@@ -34,7 +34,9 @@ struct TestClient {
 impl TestClient {
     async fn connect(port: u16) -> Self {
         let sock = UdpSocket::bind("127.0.0.1:0").await.unwrap();
-        sock.connect(SocketAddr::from(([127, 0, 0, 1], port))).await.unwrap();
+        sock.connect(SocketAddr::from(([127, 0, 0, 1], port)))
+            .await
+            .unwrap();
         TestClient { sock, seq: 0 }
     }
 
@@ -42,7 +44,11 @@ impl TestClient {
         let payload = postcard::to_stdvec(packet).unwrap();
         let seq = self.seq;
         self.seq = self.seq.wrapping_add(1);
-        let seq_bytes: Vec<u8> = if seq < 128 { vec![0x80 | seq as u8] } else { vec![0; 3] };
+        let seq_bytes: Vec<u8> = if seq < 128 {
+            vec![0x80 | seq as u8]
+        } else {
+            vec![0; 3]
+        };
         let mut buf = Vec::new();
         buf.extend_from_slice(&((seq_bytes.len() + payload.len()) as u16).to_le_bytes());
         buf.push(CHANNEL_RELIABLE_FLAG);
@@ -54,7 +60,9 @@ impl TestClient {
     async fn recv_packet(&self) -> Option<Packet> {
         let mut buf = vec![0u8; 2048];
         let n = tokio::time::timeout(Duration::from_millis(400), self.sock.recv(&mut buf))
-            .await.ok()?.ok()?;
+            .await
+            .ok()?
+            .ok()?;
         let len = u16::from_le_bytes([buf[0], buf[1]]) as usize;
         let ch = buf[2];
         if ch == 0xFF {
@@ -74,11 +82,19 @@ impl TestClient {
 async fn boot() -> (DedicatedServer, u16) {
     let seq = SEQ.fetch_add(1, Ordering::SeqCst);
     let wasm = freeroam_wasm().expect("freeroam.wasm built — run: cd scripts/freeroam && cargo build --release --target wasm32-unknown-unknown");
-    let dir = std::env::temp_dir().join(format!("ashfall_freeroam_scripts_{}_{}", std::process::id(), seq));
+    let dir = std::env::temp_dir().join(format!(
+        "ashfall_freeroam_scripts_{}_{}",
+        std::process::id(),
+        seq
+    ));
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::copy(&wasm, dir.join("freeroam.wasm")).unwrap();
 
-    let db = std::env::temp_dir().join(format!("ashfall_freeroam_db_{}_{}.sqlite3", std::process::id(), seq));
+    let db = std::env::temp_dir().join(format!(
+        "ashfall_freeroam_db_{}_{}.sqlite3",
+        std::process::id(),
+        seq
+    ));
     let port = {
         let s = std::net::UdpSocket::bind("127.0.0.1:0").unwrap();
         s.local_addr().unwrap().port()
@@ -121,9 +137,12 @@ async fn test_real_freeroam_module_end_to_end() {
         let mut sock = TestClient::connect(port).await;
 
         // Reject an empty name (freeroam auth gate)
-        sock.send_reliable(&Packet::GameAuth { name: String::new(), password: String::new(),
+        sock.send_reliable(&Packet::GameAuth {
+            name: String::new(),
+            password: String::new(),
             version: ashfall_core::constants::DEDICATED_VERSION.into(),
-        }).await;
+        })
+        .await;
         let mut saw_end = false;
         for _ in 0..8 {
             if let Some(Packet::GameEnd { .. }) = sock.recv_packet().await {
@@ -134,9 +153,12 @@ async fn test_real_freeroam_module_end_to_end() {
         assert!(saw_end, "empty name rejected by freeroam auth");
 
         // Accept a normal name; script-set weather + spawn welcome must arrive
-        sock.send_reliable(&Packet::GameAuth { name: "Wanderer".into(), password: String::new(),
+        sock.send_reliable(&Packet::GameAuth {
+            name: "Wanderer".into(),
+            password: String::new(),
             version: ashfall_core::constants::DEDICATED_VERSION.into(),
-        }).await;
+        })
+        .await;
         let mut saw_load = false;
         let mut saw_weather = false;
         let mut saw_welcome = false;
@@ -149,14 +171,19 @@ async fn test_real_freeroam_module_end_to_end() {
                     }
                     Packet::GameChat { message } => {
                         use ashfall_core::string_cache::StringTable;
-                        saw_welcome = message.resolve(&mut StringTable::new()).starts_with("Welcome to the Wasteland!");
+                        saw_welcome = message
+                            .resolve(&mut StringTable::new())
+                            .starts_with("Welcome to the Wasteland!");
                     }
                     _ => {}
                 }
             }
         }
         assert!(saw_load, "auth accepted -> GameLoad");
-        assert!(saw_weather, "on_server_init weather (0x15E5E) reached the client");
+        assert!(
+            saw_weather,
+            "on_server_init weather (0x15E5E) reached the client"
+        );
         assert!(saw_welcome, "on_spawn welcome chat delivered");
     };
 

@@ -81,6 +81,12 @@ pub struct FormIDSync {
 
 impl FormIDSync {
     pub fn new(form_id: FormID, pos: [f32; 3], angle: [f32; 3], scale: f32, flags: u32) -> Self {
-        FormIDSync { form_id, pos, angle, scale, flags }
+        FormIDSync {
+            form_id,
+            pos,
+            angle,
+            scale,
+            flags,
+        }
     }
 }

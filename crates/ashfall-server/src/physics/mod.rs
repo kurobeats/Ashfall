@@ -1,6 +1,6 @@
 //! Physics validator — server-authoritative velocity + position bounds.
 
-use ashfall_core::constants::{MAX_SPEED, MAX_TELEPORT_DISTANCE, MIN_SCALE, MAX_SCALE};
+use ashfall_core::constants::{MAX_SCALE, MAX_SPEED, MAX_TELEPORT_DISTANCE, MIN_SCALE};
 use ashfall_core::math::is_valid_pos;
 
 /// Validate physics updates from clients.

@@ -18,9 +18,15 @@ fn test_cell_context_enter_leave() {
     assert!(!enter.is_empty(), "should have enter cells");
     assert!(!leave.is_empty(), "should have leave cells");
     // Old center cell (0x01000002) should be in leave
-    assert!(leave.contains(&0x01000002), "old center should be in leave cells");
+    assert!(
+        leave.contains(&0x01000002),
+        "old center should be in leave cells"
+    );
     // New center cell (0x01000004) should be in enter
-    assert!(enter.contains(&0x01000004), "new center should be in enter cells");
+    assert!(
+        enter.contains(&0x01000004),
+        "new center should be in enter cells"
+    );
 }
 
 #[test]

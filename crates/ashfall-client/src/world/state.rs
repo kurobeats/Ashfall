@@ -89,7 +89,11 @@ impl InterpBuffer {
                 let (a, b) = (w[0], w[1]);
                 if render_time >= a.t && render_time <= b.t {
                     let dt = b.t - a.t;
-                    let tt = if dt > 0.0001 { (render_time - a.t) / dt } else { 0.0 };
+                    let tt = if dt > 0.0001 {
+                        (render_time - a.t) / dt
+                    } else {
+                        0.0
+                    };
                     return [
                         a.pos[0] + tt * (b.pos[0] - a.pos[0]),
                         a.pos[1] + tt * (b.pos[1] - a.pos[1]),
@@ -139,7 +143,11 @@ mod tests {
         let mut b = InterpBuffer::new();
         b.push([5.0, 0.0, 0.0], 1.0);
         assert_eq!(b.render(0.5, 1.0), [5.0, 0.0, 0.0]);
-        assert_eq!(b.render(2.0, 2.5), [5.0, 0.0, 0.0], "no extrapolation with 1 sample");
+        assert_eq!(
+            b.render(2.0, 2.5),
+            [5.0, 0.0, 0.0],
+            "no extrapolation with 1 sample"
+        );
     }
 
     #[test]
@@ -159,7 +167,7 @@ mod tests {
         let mut b = InterpBuffer::new();
         b.push([0.0, 0.0, 0.0], 1.0);
         b.push([10.0, 0.0, 0.0], 2.0); // vel = 10 u/s
-        // Render 0.25s past the newest → 10 + 10*0.25 = 12.5.
+                                       // Render 0.25s past the newest → 10 + 10*0.25 = 12.5.
         assert_eq!(b.render(2.25, 2.25), [12.5, 0.0, 0.0]);
     }
 

@@ -15,7 +15,12 @@ pub struct GameTime {
 
 impl Default for GameTime {
     fn default() -> Self {
-        GameTime { year: 2277, month: 8, day: 17, hour: 9 }
+        GameTime {
+            year: 2277,
+            month: 8,
+            day: 17,
+            hour: 9,
+        }
     }
 }
 

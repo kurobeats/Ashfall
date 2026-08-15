@@ -15,7 +15,12 @@ use tokio::net::UdpSocket;
 /// Parse a wire frame: returns (channel_byte, reliable_seq, payload).
 fn parse_frame(data: &[u8]) -> (u8, Option<u16>, &[u8]) {
     let length = u16::from_le_bytes([data[0], data[1]]) as usize;
-    assert!(data.len() >= 3 + length, "truncated frame: {} < {}", data.len(), 3 + length);
+    assert!(
+        data.len() >= 3 + length,
+        "truncated frame: {} < {}",
+        data.len(),
+        3 + length
+    );
     let channel = data[2];
     let payload = &data[3..3 + length];
     if channel & CHANNEL_RELIABLE_FLAG != 0 {
@@ -27,12 +32,16 @@ fn parse_frame(data: &[u8]) -> (u8, Option<u16>, &[u8]) {
 }
 
 fn chat(message: &str) -> Packet {
-    Packet::GameChat { message: message.into() }
+    Packet::GameChat {
+        message: message.into(),
+    }
 }
 
 #[tokio::test]
 async fn test_reliable_roundtrip_over_udp() {
-    let mut server = NetworkManager::bind("127.0.0.1:0".parse().unwrap()).await.unwrap();
+    let mut server = NetworkManager::bind("127.0.0.1:0".parse().unwrap())
+        .await
+        .unwrap();
     let server_addr = server.socket().local_addr().unwrap();
 
     let client = UdpSocket::bind("127.0.0.1:0").await.unwrap();
@@ -41,13 +50,20 @@ async fn test_reliable_roundtrip_over_udp() {
     server.register_session(client_addr);
 
     // Server → client reliable send
-    server.send_reliable(client_addr, &chat("hello world")).await.unwrap();
+    server
+        .send_reliable(client_addr, &chat("hello world"))
+        .await
+        .unwrap();
 
     let mut buf = vec![0u8; 2048];
     let len = client.recv(&mut buf).await.unwrap();
     let (channel, seq, payload) = parse_frame(&buf[..len]);
 
-    assert_eq!(channel & CHANNEL_RELIABLE_FLAG, CHANNEL_RELIABLE_FLAG, "reliable flag set");
+    assert_eq!(
+        channel & CHANNEL_RELIABLE_FLAG,
+        CHANNEL_RELIABLE_FLAG,
+        "reliable flag set"
+    );
     assert_eq!(seq, Some(0), "first seq");
     let decoded: Packet = postcard::from_bytes(payload).unwrap();
     assert_eq!(decoded, chat("hello world"));
@@ -55,7 +71,9 @@ async fn test_reliable_roundtrip_over_udp() {
 
 #[tokio::test]
 async fn test_unreliable_roundtrip_over_udp() {
-    let mut server = NetworkManager::bind("127.0.0.1:0".parse().unwrap()).await.unwrap();
+    let mut server = NetworkManager::bind("127.0.0.1:0".parse().unwrap())
+        .await
+        .unwrap();
     let server_addr = server.socket().local_addr().unwrap();
 
     let client = UdpSocket::bind("127.0.0.1:0").await.unwrap();
@@ -64,14 +82,21 @@ async fn test_unreliable_roundtrip_over_udp() {
     server.register_session(client_addr);
 
     // UpdatePos is unreliable per Channel::is_unreliable
-    let pos = Packet::UpdatePos { id: 42.into(), pos: [1.0, 2.0, 3.0] };
+    let pos = Packet::UpdatePos {
+        id: 42.into(),
+        pos: [1.0, 2.0, 3.0],
+    };
     server.send_unreliable(client_addr, &pos).await.unwrap();
 
     let mut buf = vec![0u8; 2048];
     let len = client.recv(&mut buf).await.unwrap();
     let (channel, seq, payload) = parse_frame(&buf[..len]);
 
-    assert_eq!(channel & CHANNEL_RELIABLE_FLAG, 0, "no reliable flag on unreliable frame");
+    assert_eq!(
+        channel & CHANNEL_RELIABLE_FLAG,
+        0,
+        "no reliable flag on unreliable frame"
+    );
     assert_eq!(seq, None, "no sequence number");
     let decoded: Packet = postcard::from_bytes(payload).unwrap();
     assert_eq!(decoded, pos);
@@ -79,7 +104,9 @@ async fn test_unreliable_roundtrip_over_udp() {
 
 #[tokio::test]
 async fn test_ack_drains_send_window() {
-    let mut server = NetworkManager::bind("127.0.0.1:0".parse().unwrap()).await.unwrap();
+    let mut server = NetworkManager::bind("127.0.0.1:0".parse().unwrap())
+        .await
+        .unwrap();
     let server_addr = server.socket().local_addr().unwrap();
 
     let client = UdpSocket::bind("127.0.0.1:0").await.unwrap();
@@ -89,7 +116,10 @@ async fn test_ack_drains_send_window() {
 
     // Fill the window (MAX_INFLIGHT = 32)
     for i in 0..32 {
-        server.send_reliable(client_addr, &chat(&format!("packet {i}"))).await.unwrap();
+        server
+            .send_reliable(client_addr, &chat(&format!("packet {i}")))
+            .await
+            .unwrap();
     }
     // 33rd send is throttled
     let err = server.send_reliable(client_addr, &chat("overflow")).await;
@@ -106,10 +136,16 @@ async fn test_ack_drains_send_window() {
     let ack = encode_ctrl_ack(31);
     let mut raw = vec![0u8; 2048];
     raw[..ack.len()].copy_from_slice(&ack);
-    assert!(server.try_recv(client_addr, &raw[..ack.len()]).is_none(), "ACK yields no packet");
+    assert!(
+        server.try_recv(client_addr, &raw[..ack.len()]).is_none(),
+        "ACK yields no packet"
+    );
 
     // Window is open again
-    server.send_reliable(client_addr, &chat("after ack")).await.unwrap();
+    server
+        .send_reliable(client_addr, &chat("after ack"))
+        .await
+        .unwrap();
     let len = client.recv(&mut buf).await.unwrap();
     let (_, seq, payload) = parse_frame(&buf[..len]);
     assert_eq!(seq, Some(32), "next seq after ACK-drained window");
@@ -119,7 +155,9 @@ async fn test_ack_drains_send_window() {
 
 #[tokio::test]
 async fn test_retransmission_on_rto_timeout() {
-    let mut server = NetworkManager::bind("127.0.0.1:0".parse().unwrap()).await.unwrap();
+    let mut server = NetworkManager::bind("127.0.0.1:0".parse().unwrap())
+        .await
+        .unwrap();
     let server_addr = server.socket().local_addr().unwrap();
 
     let client = UdpSocket::bind("127.0.0.1:0").await.unwrap();
@@ -128,7 +166,10 @@ async fn test_retransmission_on_rto_timeout() {
     server.register_session(client_addr);
 
     // Send but never ACK (simulated loss of the ACK or the frame)
-    server.send_reliable(client_addr, &chat("lost in transit")).await.unwrap();
+    server
+        .send_reliable(client_addr, &chat("lost in transit"))
+        .await
+        .unwrap();
 
     // Client receives the first copy...
     let mut buf = vec![0u8; 2048];
@@ -150,7 +191,9 @@ async fn test_retransmission_on_rto_timeout() {
 
 #[tokio::test]
 async fn test_out_of_order_nack_recovers() {
-    let mut server = NetworkManager::bind("127.0.0.1:0".parse().unwrap()).await.unwrap();
+    let mut server = NetworkManager::bind("127.0.0.1:0".parse().unwrap())
+        .await
+        .unwrap();
     let server_addr = server.socket().local_addr().unwrap();
 
     let client = UdpSocket::bind("127.0.0.1:0").await.unwrap();
@@ -160,8 +203,14 @@ async fn test_out_of_order_nack_recovers() {
 
     // Server sends two reliable packets; the client "drops" the first
     // (simulated loss) so it receives seq 1 before seq 0.
-    server.send_reliable(client_addr, &chat("first")).await.unwrap();
-    server.send_reliable(client_addr, &chat("second")).await.unwrap();
+    server
+        .send_reliable(client_addr, &chat("first"))
+        .await
+        .unwrap();
+    server
+        .send_reliable(client_addr, &chat("second"))
+        .await
+        .unwrap();
 
     let mut buf = vec![0u8; 2048];
     // Client receives both frames (owned copies — buf is reused below)
@@ -212,7 +261,9 @@ fn encode_reliable_frame(seq: u16, payload: &[u8]) -> Vec<u8> {
 /// authenticate after the reliability layer landed.
 #[tokio::test]
 async fn test_first_contact_bootstraps_reliable_channel() {
-    let mut server = NetworkManager::bind("127.0.0.1:0".parse().unwrap()).await.unwrap();
+    let mut server = NetworkManager::bind("127.0.0.1:0".parse().unwrap())
+        .await
+        .unwrap();
     let server_addr = server.socket().local_addr().unwrap();
 
     let client = UdpSocket::bind("127.0.0.1:0").await.unwrap();
@@ -220,20 +271,36 @@ async fn test_first_contact_bootstraps_reliable_channel() {
     let client_addr = client.local_addr().unwrap();
     // NOTE: no server.register_session(client_addr) — this is first contact.
 
-    let auth = Packet::GameAuth { name: "Wanderer".into(), password: String::new(), version: ashfall_core::constants::DEDICATED_VERSION.into() };
+    let auth = Packet::GameAuth {
+        name: "Wanderer".into(),
+        password: String::new(),
+        version: ashfall_core::constants::DEDICATED_VERSION.into(),
+    };
     let payload = postcard::to_stdvec(&auth).unwrap();
-    client.send(&encode_reliable_frame(0, &payload)).await.unwrap();
+    client
+        .send(&encode_reliable_frame(0, &payload))
+        .await
+        .unwrap();
 
     let mut buf = vec![0u8; 2048];
     let (len, _) = server.recv_raw(&mut buf).await.unwrap();
     let pkt = server.try_recv(client_addr, &buf[..len]);
-    assert!(pkt.is_some(), "first-contact reliable frame must be delivered");
+    assert!(
+        pkt.is_some(),
+        "first-contact reliable frame must be delivered"
+    );
     assert_eq!(pkt.unwrap(), auth);
 
     // The server can now reply reliably (channel was bootstrapped)
-    server.send_reliable(client_addr, &chat("welcome")).await.unwrap();
+    server
+        .send_reliable(client_addr, &chat("welcome"))
+        .await
+        .unwrap();
     let n = client.recv(&mut buf).await.unwrap();
     let (channel, _, payload) = parse_frame(&buf[..n]);
     assert_eq!(channel & CHANNEL_RELIABLE_FLAG, CHANNEL_RELIABLE_FLAG);
-    assert_eq!(postcard::from_bytes::<Packet>(payload).unwrap(), chat("welcome"));
+    assert_eq!(
+        postcard::from_bytes::<Packet>(payload).unwrap(),
+        chat("welcome")
+    );
 }

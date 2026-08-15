@@ -16,7 +16,10 @@ fn reliable_frame_size(pkt: &Packet) -> usize {
 #[test]
 fn test_position_sync_bandwidth_budget() {
     // 30 Hz position updates, unreliable channel (no seq/ack overhead)
-    let pos = Packet::UpdatePos { id: NetworkID::new(42), pos: [100.0, 200.0, 30.5] };
+    let pos = Packet::UpdatePos {
+        id: NetworkID::new(42),
+        pos: [100.0, 200.0, 30.5],
+    };
     let payload = postcard::to_stdvec(&pos).unwrap();
     let frame = 3 + payload.len(); // [len u16][channel][payload]
     let per_sec = frame * 30;
@@ -61,8 +64,13 @@ fn test_world_state_handoff_size() {
 
 #[test]
 fn test_chat_and_event_sizes() {
-    let chat = Packet::GameChat { message: "hello world".repeat(5).into() };
-    let quest = Packet::QuestStage { quest_id: 0x6136D, stage: 100 };
+    let chat = Packet::GameChat {
+        message: "hello world".repeat(5).into(),
+    };
+    let quest = Packet::QuestStage {
+        quest_id: 0x6136D,
+        stage: 100,
+    };
     let hit = Packet::ActorHit {
         target: NetworkID::new(1),
         attacker: NetworkID::new(2),
@@ -72,15 +80,30 @@ fn test_chat_and_event_sizes() {
         weapon_id: 0x1234,
         projectile: 0,
     };
-    println!("GameChat: {} B, QuestStage: {} B, ActorHit: {} B",
-             reliable_frame_size(&chat), reliable_frame_size(&quest), reliable_frame_size(&hit));
+    println!(
+        "GameChat: {} B, QuestStage: {} B, ActorHit: {} B",
+        reliable_frame_size(&chat),
+        reliable_frame_size(&quest),
+        reliable_frame_size(&hit)
+    );
     assert!(reliable_frame_size(&hit) < 256);
 }
 
 #[test]
 fn test_channel_classification() {
     use Channel::*;
-    assert_eq!(Channel::from_packet(&Packet::UpdatePos { id: NetworkID::new(1), pos: [0.0; 3] }), Game);
-    assert_eq!(Channel::from_packet(&Packet::GameChat { message: "x".into() }), Chat);
+    assert_eq!(
+        Channel::from_packet(&Packet::UpdatePos {
+            id: NetworkID::new(1),
+            pos: [0.0; 3]
+        }),
+        Game
+    );
+    assert_eq!(
+        Channel::from_packet(&Packet::GameChat {
+            message: "x".into()
+        }),
+        Chat
+    );
     assert_eq!(Channel::from_packet(&Packet::GameLoad), System);
 }

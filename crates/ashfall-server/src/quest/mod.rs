@@ -40,7 +40,10 @@ impl QuestManager {
     }
 
     pub fn get_flag(&self, flag_id: u32) -> bool {
-        self.dialogue_flags.get(&flag_id).map(|f| *f.value()).unwrap_or(false)
+        self.dialogue_flags
+            .get(&flag_id)
+            .map(|f| *f.value())
+            .unwrap_or(false)
     }
 
     pub fn set_flag(&self, flag_id: u32, value: bool) {

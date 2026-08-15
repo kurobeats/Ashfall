@@ -144,8 +144,7 @@ pub unsafe fn collect_actor_ptr(actor: usize) {
     if actor == 0 {
         return;
     }
-    let ref_id =
-        crate::hooks::vtable::read_field::<u32>(actor as *mut u8, REFR_REFID_OFFSET);
+    let ref_id = crate::hooks::vtable::read_field::<u32>(actor as *mut u8, REFR_REFID_OFFSET);
     if ref_id == 0 {
         return;
     }
@@ -159,8 +158,12 @@ pub unsafe fn collect_actor_ptr(actor: usize) {
 /// Call at 10 Hz (STR `cDelayBetweenSnapshots`): the collector accumulates a
 /// frame's worth of processed actors, this turns the delta into events.
 pub fn flush_npc_diff() -> Vec<(u8, u32)> {
-    use ashfall_core::event::{encode_npc_remove_event, encode_npc_spawn_event, NpcRemoveEvent, NpcSpawnEvent};
-    let current: Vec<u32> = std::mem::take(&mut *CURRENT.lock().unwrap()).into_iter().collect();
+    use ashfall_core::event::{
+        encode_npc_remove_event, encode_npc_spawn_event, NpcRemoveEvent, NpcSpawnEvent,
+    };
+    let current: Vec<u32> = std::mem::take(&mut *CURRENT.lock().unwrap())
+        .into_iter()
+        .collect();
     let mut out = Vec::new();
 
     // ponytail: an empty window is a processing gap (idle frame), not a
@@ -255,7 +258,7 @@ mod tests {
         mem.insert(n1 + 4, n2 as u32);
         mem.insert(n2, 0x5100); // node2.data = actor B
         mem.insert(n2 + 4, 0); // end of chain
-        // Actors: refid at +0x0C (0x100 / player).
+                               // Actors: refid at +0x0C (0x100 / player).
         mem.insert(0x5000 + REFR_REFID_OFFSET, 0x100);
         mem.insert(0x5100 + REFR_REFID_OFFSET, LOCAL_PLAYER_REF);
         // Head: data = 0 (unused), next = n1.

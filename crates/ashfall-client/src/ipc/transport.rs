@@ -1,8 +1,8 @@
 //! IPC transport layer — TCP, Unix sockets, or stub.
 
+use std::path::PathBuf;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpStream, UnixStream};
-use std::path::PathBuf;
 
 /// How to connect to the game engine bridge.
 pub enum IpcMode {
@@ -82,12 +82,8 @@ impl IpcTransport {
     /// Receive raw bytes. Returns number of bytes read.
     pub async fn recv(&mut self, buf: &mut [u8]) -> usize {
         match self {
-            IpcTransport::Tcp(ref mut stream) => {
-                stream.read(buf).await.unwrap_or(0)
-            }
-            IpcTransport::Unix(ref mut stream) => {
-                stream.read(buf).await.unwrap_or(0)
-            }
+            IpcTransport::Tcp(ref mut stream) => stream.read(buf).await.unwrap_or(0),
+            IpcTransport::Unix(ref mut stream) => stream.read(buf).await.unwrap_or(0),
             IpcTransport::Stub => {
                 // Return a fake framed wakeup so the frame parser stays happy.
                 if buf.len() >= 3 {

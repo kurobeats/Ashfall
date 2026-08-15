@@ -19,7 +19,11 @@ pub struct WorldView {
 impl WorldView {
     /// Center on a world position, keeping the current scale/size.
     pub fn centered_on(center: [f32; 2], scale: f32, size: [f32; 2]) -> Self {
-        WorldView { center, scale, size }
+        WorldView {
+            center,
+            scale,
+            size,
+        }
     }
 
     /// Viewport center in screen points.

@@ -78,8 +78,18 @@ impl GuiState {
     pub fn apply_packet(&mut self, packet: &Packet) -> bool {
         use Packet::*;
         match packet {
-            WindowNew { id, parent, label, pos, size, locked, visible, text } => {
-                let mut w = GuiWindow::new(*id, Some(*parent), label.clone(), GuiWidgetKind::Window);
+            WindowNew {
+                id,
+                parent,
+                label,
+                pos,
+                size,
+                locked,
+                visible,
+                text,
+            } => {
+                let mut w =
+                    GuiWindow::new(*id, Some(*parent), label.clone(), GuiWidgetKind::Window);
                 w.pos = *pos;
                 w.size = *size;
                 w.locked = *locked;
@@ -87,8 +97,18 @@ impl GuiState {
                 w.text = text.clone();
                 self.widgets.insert(*id, w);
             }
-            ButtonNew { id, parent, label, pos, size, locked, visible, text } => {
-                let mut w = GuiWindow::new(*id, Some(*parent), label.clone(), GuiWidgetKind::Button);
+            ButtonNew {
+                id,
+                parent,
+                label,
+                pos,
+                size,
+                locked,
+                visible,
+                text,
+            } => {
+                let mut w =
+                    GuiWindow::new(*id, Some(*parent), label.clone(), GuiWidgetKind::Button);
                 w.pos = *pos;
                 w.size = *size;
                 w.locked = *locked;
@@ -96,7 +116,16 @@ impl GuiState {
                 w.text = text.clone();
                 self.widgets.insert(*id, w);
             }
-            TextNew { id, parent, label, pos, size, locked, visible, text } => {
+            TextNew {
+                id,
+                parent,
+                label,
+                pos,
+                size,
+                locked,
+                visible,
+                text,
+            } => {
                 let mut w = GuiWindow::new(*id, Some(*parent), label.clone(), GuiWidgetKind::Text);
                 w.pos = *pos;
                 w.size = *size;
@@ -105,7 +134,18 @@ impl GuiState {
                 w.text = text.clone();
                 self.widgets.insert(*id, w);
             }
-            EditNew { id, parent, label, pos, size, locked, visible, text, max_len, validation } => {
+            EditNew {
+                id,
+                parent,
+                label,
+                pos,
+                size,
+                locked,
+                visible,
+                text,
+                max_len,
+                validation,
+            } => {
                 let mut w = GuiWindow::new(*id, Some(*parent), label.clone(), GuiWidgetKind::Edit);
                 w.pos = *pos;
                 w.size = *size;
@@ -116,8 +156,19 @@ impl GuiState {
                 w.validation = validation.clone();
                 self.widgets.insert(*id, w);
             }
-            CheckboxNew { id, parent, label, pos, size, locked, visible, text, selected } => {
-                let mut w = GuiWindow::new(*id, Some(*parent), label.clone(), GuiWidgetKind::Checkbox);
+            CheckboxNew {
+                id,
+                parent,
+                label,
+                pos,
+                size,
+                locked,
+                visible,
+                text,
+                selected,
+            } => {
+                let mut w =
+                    GuiWindow::new(*id, Some(*parent), label.clone(), GuiWidgetKind::Checkbox);
                 w.pos = *pos;
                 w.size = *size;
                 w.locked = *locked;
@@ -126,8 +177,24 @@ impl GuiState {
                 w.selected = *selected;
                 self.widgets.insert(*id, w);
             }
-            RadioButtonNew { id, parent, label, pos, size, locked, visible, text, selected, group } => {
-                let mut w = GuiWindow::new(*id, Some(*parent), label.clone(), GuiWidgetKind::RadioButton);
+            RadioButtonNew {
+                id,
+                parent,
+                label,
+                pos,
+                size,
+                locked,
+                visible,
+                text,
+                selected,
+                group,
+            } => {
+                let mut w = GuiWindow::new(
+                    *id,
+                    Some(*parent),
+                    label.clone(),
+                    GuiWidgetKind::RadioButton,
+                );
                 w.pos = *pos;
                 w.size = *size;
                 w.locked = *locked;
@@ -137,7 +204,17 @@ impl GuiState {
                 w.group = *group;
                 self.widgets.insert(*id, w);
             }
-            ListNew { id, parent, label, pos, size, locked, visible, text, multiselect } => {
+            ListNew {
+                id,
+                parent,
+                label,
+                pos,
+                size,
+                locked,
+                visible,
+                text,
+                multiselect,
+            } => {
                 let mut w = GuiWindow::new(*id, Some(*parent), label.clone(), GuiWidgetKind::List);
                 w.pos = *pos;
                 w.size = *size;
@@ -147,8 +224,14 @@ impl GuiState {
                 w.multiselect = *multiselect;
                 self.widgets.insert(*id, w);
             }
-            ListItemNew { id, container, text, selected } => {
-                let mut w = GuiWindow::new(*id, Some(*container), text.clone(), GuiWidgetKind::ListItem);
+            ListItemNew {
+                id,
+                container,
+                text,
+                selected,
+            } => {
+                let mut w =
+                    GuiWindow::new(*id, Some(*container), text.clone(), GuiWidgetKind::ListItem);
                 w.selected = *selected;
                 if let Some(list) = self.widgets.get_mut(container) {
                     list.items.push(*id);
@@ -261,7 +344,11 @@ pub fn render_server_gui(ui: &mut egui::Ui, gui: &mut GuiState) {
     }
     let windows: Vec<GuiWindow> = gui.top_windows().into_iter().cloned().collect();
     for window in windows {
-        let title = if window.label.is_empty() { "Window" } else { &window.label };
+        let title = if window.label.is_empty() {
+            "Window"
+        } else {
+            &window.label
+        };
         let mut open = window.visible;
         egui::Window::new(title)
             .open(&mut open)
@@ -312,12 +399,19 @@ fn render_widget(ui: &mut egui::Ui, w: &GuiWindow, gui: &mut GuiState) {
             }
         }
         GuiWidgetKind::List => {
-            let items: Vec<String> = w.items.iter().filter_map(|i| gui.widgets.get(i)).map(|i| i.text.clone()).collect();
-            egui::ScrollArea::vertical().max_height(120.0).show(ui, |ui| {
-                for item in &items {
-                    let _ = ui.selectable_label(false, item);
-                }
-            });
+            let items: Vec<String> = w
+                .items
+                .iter()
+                .filter_map(|i| gui.widgets.get(i))
+                .map(|i| i.text.clone())
+                .collect();
+            egui::ScrollArea::vertical()
+                .max_height(120.0)
+                .show(ui, |ui| {
+                    for item in &items {
+                        let _ = ui.selectable_label(false, item);
+                    }
+                });
         }
         GuiWidgetKind::ListItem => {
             ui.label(&w.text);
@@ -339,17 +433,28 @@ mod tests {
         let mut gui = GuiState::new();
         let id = nid(1);
         assert!(gui.apply_packet(&Packet::WindowNew {
-            id, parent: nid(0), label: "Test".into(),
-            pos: [10.0, 20.0, 0.0, 0.0], size: [300.0, 200.0, 0.0, 0.0],
-            locked: true, visible: true, text: String::new(),
+            id,
+            parent: nid(0),
+            label: "Test".into(),
+            pos: [10.0, 20.0, 0.0, 0.0],
+            size: [300.0, 200.0, 0.0, 0.0],
+            locked: true,
+            visible: true,
+            text: String::new(),
         }));
         let w = gui.widgets.get(&id).expect("window created");
         assert_eq!(w.kind, GuiWidgetKind::Window);
         assert_eq!(w.label, "Test");
         assert!(w.locked);
-        assert!(gui.apply_packet(&Packet::UpdateWindowPos { id, pos: [1.0, 2.0, 3.0, 4.0] }));
+        assert!(gui.apply_packet(&Packet::UpdateWindowPos {
+            id,
+            pos: [1.0, 2.0, 3.0, 4.0]
+        }));
         assert_eq!(gui.widgets.get(&id).unwrap().pos, [1.0, 2.0, 3.0, 4.0]);
-        assert!(gui.apply_packet(&Packet::UpdateWindowText { id, text: "hi".into() }));
+        assert!(gui.apply_packet(&Packet::UpdateWindowText {
+            id,
+            text: "hi".into()
+        }));
         assert_eq!(gui.widgets.get(&id).unwrap().text, "hi");
         assert!(gui.apply_packet(&Packet::UpdateWindowVisible { id, visible: false }));
         assert!(!gui.widgets.get(&id).unwrap().visible);
@@ -367,31 +472,65 @@ mod tests {
         let list = nid(104);
         let item = nid(105);
         let new_win = |id: NetworkID, label: &str| Packet::WindowNew {
-            id, parent: nid(0), label: label.into(),
-            pos: [0.0; 4], size: [0.0; 4], locked: false, visible: true, text: String::new(),
+            id,
+            parent: nid(0),
+            label: label.into(),
+            pos: [0.0; 4],
+            size: [0.0; 4],
+            locked: false,
+            visible: true,
+            text: String::new(),
         };
         assert!(gui.apply_packet(&new_win(win, "W")));
         assert!(gui.apply_packet(&Packet::ButtonNew {
-            id: btn, parent: win, label: "Go".into(),
-            pos: [0.0; 4], size: [0.0; 4], locked: false, visible: true, text: String::new(),
+            id: btn,
+            parent: win,
+            label: "Go".into(),
+            pos: [0.0; 4],
+            size: [0.0; 4],
+            locked: false,
+            visible: true,
+            text: String::new(),
         }));
         assert!(gui.apply_packet(&Packet::EditNew {
-            id: edit, parent: win, label: "Name".into(),
-            pos: [0.0; 4], size: [0.0; 4], locked: false, visible: true, text: String::new(),
-            max_len: 16, validation: "alpha".into(),
+            id: edit,
+            parent: win,
+            label: "Name".into(),
+            pos: [0.0; 4],
+            size: [0.0; 4],
+            locked: false,
+            visible: true,
+            text: String::new(),
+            max_len: 16,
+            validation: "alpha".into(),
         }));
         assert!(gui.apply_packet(&Packet::CheckboxNew {
-            id: chk, parent: win, label: "On".into(),
-            pos: [0.0; 4], size: [0.0; 4], locked: false, visible: true, text: String::new(),
+            id: chk,
+            parent: win,
+            label: "On".into(),
+            pos: [0.0; 4],
+            size: [0.0; 4],
+            locked: false,
+            visible: true,
+            text: String::new(),
             selected: true,
         }));
         assert!(gui.apply_packet(&Packet::ListNew {
-            id: list, parent: win, label: "L".into(),
-            pos: [0.0; 4], size: [0.0; 4], locked: false, visible: true, text: String::new(),
+            id: list,
+            parent: win,
+            label: "L".into(),
+            pos: [0.0; 4],
+            size: [0.0; 4],
+            locked: false,
+            visible: true,
+            text: String::new(),
             multiselect: true,
         }));
         assert!(gui.apply_packet(&Packet::ListItemNew {
-            id: item, container: list, text: "entry".into(), selected: false,
+            id: item,
+            container: list,
+            text: "entry".into(),
+            selected: false,
         }));
 
         assert_eq!(gui.widgets.get(&btn).unwrap().kind, GuiWidgetKind::Button);
@@ -399,16 +538,35 @@ mod tests {
         assert!(gui.widgets.get(&chk).unwrap().selected);
         assert!(gui.widgets.get(&list).unwrap().multiselect);
         assert!(gui.widgets.get(&list).unwrap().items.contains(&item));
-        assert_eq!(gui.children(win).len(), 4, "button/edit/checkbox/list are window children");
-        assert!(!gui.children(list).is_empty(), "list item parented to the list");
+        assert_eq!(
+            gui.children(win).len(),
+            4,
+            "button/edit/checkbox/list are window children"
+        );
+        assert!(
+            !gui.children(list).is_empty(),
+            "list item parented to the list"
+        );
 
-        assert!(gui.apply_packet(&Packet::UpdateCheckboxSelected { id: chk, selected: false }));
+        assert!(gui.apply_packet(&Packet::UpdateCheckboxSelected {
+            id: chk,
+            selected: false
+        }));
         assert!(!gui.widgets.get(&chk).unwrap().selected);
-        assert!(gui.apply_packet(&Packet::UpdateListItemSelected { id: item, selected: true }));
+        assert!(gui.apply_packet(&Packet::UpdateListItemSelected {
+            id: item,
+            selected: true
+        }));
         assert!(gui.widgets.get(&item).unwrap().selected);
-        assert!(gui.apply_packet(&Packet::UpdateListMultiSelect { id: list, multiselect: false }));
+        assert!(gui.apply_packet(&Packet::UpdateListMultiSelect {
+            id: list,
+            multiselect: false
+        }));
         assert!(!gui.widgets.get(&list).unwrap().multiselect);
-        assert!(gui.apply_packet(&Packet::UpdateEditMaxLen { id: edit, max_len: 32 }));
+        assert!(gui.apply_packet(&Packet::UpdateEditMaxLen {
+            id: edit,
+            max_len: 32
+        }));
         assert_eq!(gui.widgets.get(&edit).unwrap().max_len, 32);
     }
 
@@ -422,7 +580,9 @@ mod tests {
     #[test]
     fn test_unrelated_packets_not_handled() {
         let mut gui = GuiState::new();
-        assert!(!gui.apply_packet(&Packet::GameChat { message: "x".into() }));
+        assert!(!gui.apply_packet(&Packet::GameChat {
+            message: "x".into()
+        }));
         assert!(!gui.apply_packet(&Packet::GameLoad));
     }
 }

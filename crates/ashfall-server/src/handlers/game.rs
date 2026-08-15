@@ -1,14 +1,14 @@
 //! Game lifecycle handlers — GameLoad, GameStart, GameWeather, GameGlobal, etc.
 
-use ashfall_core::id::NetworkID;
-use ashfall_core::protocol::Packet;
-use ashfall_core::types::{GameObject, Reason};
+use crate::quest::QuestManager;
 use crate::session::Session;
 use crate::world::globals::GlobalState;
 use crate::world::objects::{Actor, Container, Item, Object, Player};
 use crate::world::registry::ObjectRegistry;
 use crate::world::weather::WeatherState;
-use crate::quest::QuestManager;
+use ashfall_core::id::NetworkID;
+use ashfall_core::protocol::Packet;
+use ashfall_core::types::{GameObject, Reason};
 use std::sync::Arc;
 
 /// Parse a config mod entry "filename:crc" (crc hex) into a pair.
@@ -26,14 +26,26 @@ pub fn handle_mod_list(expected: &[(String, u32)], mods: &[(String, u32)]) -> Op
         return None; // policy off — accept anything
     }
     if mods.len() != expected.len() {
-        tracing::warn!("ModList rejected: {} mods, server expects {}", mods.len(), expected.len());
-        return Some(Packet::GameEnd { reason: Reason::Denied as u8 });
+        tracing::warn!(
+            "ModList rejected: {} mods, server expects {}",
+            mods.len(),
+            expected.len()
+        );
+        return Some(Packet::GameEnd {
+            reason: Reason::Denied as u8,
+        });
     }
     for (i, (client_m, client_crc)) in mods.iter().enumerate() {
         let (server_m, server_crc) = &expected[i];
         if client_m != server_m || client_crc != server_crc {
-            tracing::warn!("ModList rejected: index {i} {:?} != expected {:?}", client_m, server_m);
-            return Some(Packet::GameEnd { reason: Reason::Denied as u8 });
+            tracing::warn!(
+                "ModList rejected: index {i} {:?} != expected {:?}",
+                client_m,
+                server_m
+            );
+            return Some(Packet::GameEnd {
+                reason: Reason::Denied as u8,
+            });
         }
     }
     tracing::info!("ModList accepted: {} mods match", mods.len());
@@ -51,7 +63,9 @@ pub fn send_world_state(
     let mut packets = Vec::new();
 
     // Weather
-    packets.push(Packet::GameWeather { weather: weather.get() });
+    packets.push(Packet::GameWeather {
+        weather: weather.get(),
+    });
 
     // All global variables
     for (id, value) in globals.all() {
@@ -68,34 +82,40 @@ pub fn send_world_state(
     for obj_id in &cell_objects {
         if let Some(arc) = registry.get(*obj_id) {
             let guard = arc.read();
-            let packet: Option<Packet> = if let Some(cont) = guard.as_any().downcast_ref::<Container>() {
-                let (cid, ref_id, base_id) = (cont.id(), cont.ref_data.ref_id, cont.ref_data.base_id);
-                drop(guard);
-                Some(Packet::ContainerNew { id: cid, ref_id, base_id })
-            } else if let Some(obj) = guard.as_any().downcast_ref::<Object>() {
-                let pkt = obj.to_new_packet();
-                drop(guard);
-                Some(pkt)
-            } else if let Some(item) = guard.as_any().downcast_ref::<Item>() {
-                let pkt = item.to_new_packet();
-                drop(guard);
-                Some(pkt)
-            } else if let Some(actor) = guard.as_any().downcast_ref::<Actor>() {
-                let pkt = actor.to_new_packet();
-                drop(guard);
-                Some(pkt)
-            } else if let Some(player) = guard.as_any().downcast_ref::<Player>() {
-                // Skip self — PlayerNew sent separately
-                if player.id() == session.player_id.unwrap_or(NetworkID::NULL) {
-                    None
-                } else {
-                    let pkt = player.to_new_packet();
+            let packet: Option<Packet> =
+                if let Some(cont) = guard.as_any().downcast_ref::<Container>() {
+                    let (cid, ref_id, base_id) =
+                        (cont.id(), cont.ref_data.ref_id, cont.ref_data.base_id);
+                    drop(guard);
+                    Some(Packet::ContainerNew {
+                        id: cid,
+                        ref_id,
+                        base_id,
+                    })
+                } else if let Some(obj) = guard.as_any().downcast_ref::<Object>() {
+                    let pkt = obj.to_new_packet();
                     drop(guard);
                     Some(pkt)
-                }
-            } else {
-                None
-            };
+                } else if let Some(item) = guard.as_any().downcast_ref::<Item>() {
+                    let pkt = item.to_new_packet();
+                    drop(guard);
+                    Some(pkt)
+                } else if let Some(actor) = guard.as_any().downcast_ref::<Actor>() {
+                    let pkt = actor.to_new_packet();
+                    drop(guard);
+                    Some(pkt)
+                } else if let Some(player) = guard.as_any().downcast_ref::<Player>() {
+                    // Skip self — PlayerNew sent separately
+                    if player.id() == session.player_id.unwrap_or(NetworkID::NULL) {
+                        None
+                    } else {
+                        let pkt = player.to_new_packet();
+                        drop(guard);
+                        Some(pkt)
+                    }
+                } else {
+                    None
+                };
             if let Some(pkt) = packet {
                 packets.push(pkt);
             }
@@ -103,9 +123,7 @@ pub fn send_world_state(
     }
 
     // Existing players (PlayerNew for each)
-    let player_ids = registry.get_by_kind(
-        ashfall_core::types::ObjectKind::Player as u32,
-    );
+    let player_ids = registry.get_by_kind(ashfall_core::types::ObjectKind::Player as u32);
     for pid in player_ids {
         if let Some(player) = registry.get_typed::<crate::world::objects::Player>(pid) {
             if pid != session.player_id.unwrap_or(NetworkID::NULL) {
@@ -179,7 +197,10 @@ mod tests {
         assert!(handle_mod_list(&expected, &bad_crc).is_some());
 
         // Wrong filename → reject.
-        let bad_name = vec![("Oblivion.esm".to_string(), expected[0].1), expected[1].clone()];
+        let bad_name = vec![
+            ("Oblivion.esm".to_string(), expected[0].1),
+            expected[1].clone(),
+        ];
         assert!(handle_mod_list(&expected, &bad_name).is_some());
     }
 }

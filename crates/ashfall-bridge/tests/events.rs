@@ -42,7 +42,9 @@ extern "C" fn hit_sink(event_type: u32, event_data: *const c_void) {
 }
 
 extern "C" fn death_sink(_event_type: u32, _event_data: *const c_void) {
-    unsafe { CALLBACK_DEATH_FIRED += 1; }
+    unsafe {
+        CALLBACK_DEATH_FIRED += 1;
+    }
 }
 
 fn reset_counters() {
@@ -104,7 +106,14 @@ fn test_event_sink_multiple_sinks_per_type() {
     events::register_event_sink(EVENT_ON_HIT, hit_sink);
     events::register_event_sink(EVENT_ON_HIT, death_sink);
 
-    let ev = TESHitEvent { target: 1, attacker: 2, damage: 3.0, weapon: 0, projectile: 0, flags: 0 };
+    let ev = TESHitEvent {
+        target: 1,
+        attacker: 2,
+        damage: 3.0,
+        weapon: 0,
+        projectile: 0,
+        flags: 0,
+    };
     let count = events::dispatch_event(EVENT_ON_HIT, &ev as *const _ as *const c_void);
     assert_eq!(count, 2);
     assert_eq!(stat!(CALLBACK_HIT_FIRED), 1);
@@ -136,7 +145,12 @@ fn test_event_sink_multiple_types() {
     assert!(events::has_event_sinks(EVENT_ON_DEATH));
 
     reset_counters();
-    let ev = TESDeathEvent { actor: 7, killer: 8, limbs: 2, cause: 1 };
+    let ev = TESDeathEvent {
+        actor: 7,
+        killer: 8,
+        limbs: 2,
+        cause: 1,
+    };
     let count = events::dispatch_event(EVENT_ON_DEATH, &ev as *const _ as *const c_void);
     assert_eq!(count, 1);
     assert_eq!(stat!(CALLBACK_DEATH_FIRED), 1);
@@ -168,17 +182,32 @@ fn test_event_frame_hit() {
     assert_eq!(frame.len(), 1 + 4 + std::mem::size_of::<TESHitEvent>());
 
     // Spot-check payload fields at their struct offsets
-    assert_eq!(u32::from_le_bytes([frame[5], frame[6], frame[7], frame[8]]), 0x1234);
-    assert_eq!(u32::from_le_bytes([frame[9], frame[10], frame[11], frame[12]]), 0x5678);
+    assert_eq!(
+        u32::from_le_bytes([frame[5], frame[6], frame[7], frame[8]]),
+        0x1234
+    );
+    assert_eq!(
+        u32::from_le_bytes([frame[9], frame[10], frame[11], frame[12]]),
+        0x5678
+    );
     let damage = f32::from_le_bytes([frame[13], frame[14], frame[15], frame[16]]);
     assert_eq!(damage, 25.5);
-    assert_eq!(u32::from_le_bytes([frame[17], frame[18], frame[19], frame[20]]), 0x999);
+    assert_eq!(
+        u32::from_le_bytes([frame[17], frame[18], frame[19], frame[20]]),
+        0x999
+    );
 }
 
 #[test]
 fn test_event_frame_equip_roundtrip_payload() {
-    let ev = TESEquipEvent { actor: 1, base_obj: 2, equip_slot: 3, equipped: true };
-    let frame = hooks::encode_event_frame(EVENT_ON_EQUIP, &ev as *const _ as *const c_void).unwrap();
+    let ev = TESEquipEvent {
+        actor: 1,
+        base_obj: 2,
+        equip_slot: 3,
+        equipped: true,
+    };
+    let frame =
+        hooks::encode_event_frame(EVENT_ON_EQUIP, &ev as *const _ as *const c_void).unwrap();
     assert_eq!(frame[0], ashfall_bridge::network::PIPE_OP_EVENT);
     assert_eq!(frame_event_type(&frame), EVENT_ON_EQUIP);
     assert_eq!(frame.len(), 1 + 4 + std::mem::size_of::<TESEquipEvent>());
@@ -188,22 +217,79 @@ fn test_event_frame_equip_roundtrip_payload() {
 
 #[test]
 fn test_event_frame_all_types_len() {
-    let hit = TESHitEvent { target: 0, attacker: 0, damage: 0.0, weapon: 0, projectile: 0, flags: 0 };
-    let act = TESActivateEvent { activator: 0, target: 0 };
-    let equ = TESEquipEvent { actor: 0, base_obj: 0, equip_slot: 0, equipped: false };
-    let cell = TESCellChangeEvent { reference: 0, old_cell: 0, new_cell: 0 };
-    let death = TESDeathEvent { actor: 0, killer: 0, limbs: 0, cause: 0 };
+    let hit = TESHitEvent {
+        target: 0,
+        attacker: 0,
+        damage: 0.0,
+        weapon: 0,
+        projectile: 0,
+        flags: 0,
+    };
+    let act = TESActivateEvent {
+        activator: 0,
+        target: 0,
+    };
+    let equ = TESEquipEvent {
+        actor: 0,
+        base_obj: 0,
+        equip_slot: 0,
+        equipped: false,
+    };
+    let cell = TESCellChangeEvent {
+        reference: 0,
+        old_cell: 0,
+        new_cell: 0,
+    };
+    let death = TESDeathEvent {
+        actor: 0,
+        killer: 0,
+        limbs: 0,
+        cause: 0,
+    };
     let load = TESLoadGameEvent { loaded: true };
-    let magic = TESMagicEffectApplyEvent { caster: 0, target: 0, effect_code: 0, magnitude: 0.0 };
+    let magic = TESMagicEffectApplyEvent {
+        caster: 0,
+        target: 0,
+        effect_code: 0,
+        magnitude: 0.0,
+    };
 
     let cases = [
-        (EVENT_ON_HIT, &hit as *const _ as *const c_void, std::mem::size_of::<TESHitEvent>()),
-        (EVENT_ON_ACTIVATE, &act as *const _ as *const c_void, std::mem::size_of::<TESActivateEvent>()),
-        (EVENT_ON_EQUIP, &equ as *const _ as *const c_void, std::mem::size_of::<TESEquipEvent>()),
-        (EVENT_ON_CELL_CHANGE, &cell as *const _ as *const c_void, std::mem::size_of::<TESCellChangeEvent>()),
-        (EVENT_ON_DEATH, &death as *const _ as *const c_void, std::mem::size_of::<TESDeathEvent>()),
-        (EVENT_ON_LOAD_GAME, &load as *const _ as *const c_void, std::mem::size_of::<TESLoadGameEvent>()),
-        (EVENT_ON_MAGIC_EFFECT, &magic as *const _ as *const c_void, std::mem::size_of::<TESMagicEffectApplyEvent>()),
+        (
+            EVENT_ON_HIT,
+            &hit as *const _ as *const c_void,
+            std::mem::size_of::<TESHitEvent>(),
+        ),
+        (
+            EVENT_ON_ACTIVATE,
+            &act as *const _ as *const c_void,
+            std::mem::size_of::<TESActivateEvent>(),
+        ),
+        (
+            EVENT_ON_EQUIP,
+            &equ as *const _ as *const c_void,
+            std::mem::size_of::<TESEquipEvent>(),
+        ),
+        (
+            EVENT_ON_CELL_CHANGE,
+            &cell as *const _ as *const c_void,
+            std::mem::size_of::<TESCellChangeEvent>(),
+        ),
+        (
+            EVENT_ON_DEATH,
+            &death as *const _ as *const c_void,
+            std::mem::size_of::<TESDeathEvent>(),
+        ),
+        (
+            EVENT_ON_LOAD_GAME,
+            &load as *const _ as *const c_void,
+            std::mem::size_of::<TESLoadGameEvent>(),
+        ),
+        (
+            EVENT_ON_MAGIC_EFFECT,
+            &magic as *const _ as *const c_void,
+            std::mem::size_of::<TESMagicEffectApplyEvent>(),
+        ),
     ];
     for (event_type, ptr, size) in cases {
         let frame = hooks::encode_event_frame(event_type, ptr).unwrap();

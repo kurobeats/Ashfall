@@ -104,7 +104,12 @@ pub unsafe fn vcall_1<T: Copy, R: Copy>(obj: *mut u8, index: usize, a1: T) -> R 
 
 /// thiscall with two stack arguments (callee cleans both).
 #[cfg(target_arch = "x86")]
-pub unsafe fn vcall_2<T1: Copy, T2: Copy, R: Copy>(obj: *mut u8, index: usize, a1: T1, a2: T2) -> R {
+pub unsafe fn vcall_2<T1: Copy, T2: Copy, R: Copy>(
+    obj: *mut u8,
+    index: usize,
+    a1: T1,
+    a2: T2,
+) -> R {
     let fn_ptr: usize = vtable_entry(obj, index).expect("vcall_2: null vtable entry");
     let arg1: usize = std::mem::transmute_copy(&a1);
     let arg2: usize = std::mem::transmute_copy(&a2);
@@ -185,7 +190,12 @@ pub unsafe fn vcall_1<T: Copy, R: Copy>(obj: *mut u8, index: usize, a1: T) -> R 
 }
 
 #[cfg(not(target_arch = "x86"))]
-pub unsafe fn vcall_2<T1: Copy, T2: Copy, R: Copy>(obj: *mut u8, index: usize, a1: T1, a2: T2) -> R {
+pub unsafe fn vcall_2<T1: Copy, T2: Copy, R: Copy>(
+    obj: *mut u8,
+    index: usize,
+    a1: T1,
+    a2: T2,
+) -> R {
     let fn_ptr: unsafe extern "system" fn(*mut u8, T1, T2) -> R =
         vtable_entry(obj, index).expect("vcall_2: null vtable entry");
     fn_ptr(obj, a1, a2)
@@ -257,9 +267,15 @@ pub fn fo3_lookup_addr() -> usize {
         select_candidate(
             &[
                 // GOG/classic prologue: push ecx; mov <global>,%ecx
-                Candidate { addr: LOOKUP_FORM_FO3_GOG, signature: &[0x51, 0x8B, 0x0D, 0x14] },
+                Candidate {
+                    addr: LOOKUP_FORM_FO3_GOG,
+                    signature: &[0x51, 0x8B, 0x0D, 0x14],
+                },
                 // Steam post-2023 prologue: push ebp; mov ebp,esp; push ebx
-                Candidate { addr: LOOKUP_FORM_FO3_STEAM, signature: &[0x55, 0x8B, 0xEC, 0x53] },
+                Candidate {
+                    addr: LOOKUP_FORM_FO3_STEAM,
+                    signature: &[0x55, 0x8B, 0xEC, 0x53],
+                },
             ],
             LOOKUP_FORM_FO3_GOG,
         )
@@ -285,9 +301,7 @@ pub fn is_game_process() -> bool {
             use std::os::windows::ffi::OsStringExt;
             use windows_sys::Win32::System::LibraryLoader::GetModuleFileNameW;
             let mut buf = [0u16; 260];
-            let n = unsafe {
-                GetModuleFileNameW(0, buf.as_mut_ptr(), buf.len() as u32)
-            };
+            let n = unsafe { GetModuleFileNameW(0, buf.as_mut_ptr(), buf.len() as u32) };
             if n == 0 {
                 return false;
             }
@@ -343,12 +357,12 @@ pub unsafe fn lookup_form_by_id(form_id: u32) -> *mut u8 {
 /// ponytail: we read raw field offsets as fallback; VTable call for correctness.
 /// Only referenced on the Windows target (in-process patching).
 #[allow(dead_code)]
-const VTBL_REF_GET_POS: usize = vtable_index(0x30);        // index 12 (x86)
-// VTBL_ACTOR_GET_VALUE (+0x68) / VTBL_ACTOR_GET_BASE_VALUE (+0x70) were
-// REMOVED 2026-08-14k — the audit proved the documented vtable bases are
-// run-start artifacts and +0x68/+0x70 are flag-setter/ret-stub slots, not
-// AV getters (see get_actor_value's ponytail note).
-const VTBL_ACTOR_ANIM_DATA: usize = vtable_index(0x01E4);   // index 121 (x86, vaultmp.cpp GetActorState)
+const VTBL_REF_GET_POS: usize = vtable_index(0x30); // index 12 (x86)
+                                                    // VTBL_ACTOR_GET_VALUE (+0x68) / VTBL_ACTOR_GET_BASE_VALUE (+0x70) were
+                                                    // REMOVED 2026-08-14k — the audit proved the documented vtable bases are
+                                                    // run-start artifacts and +0x68/+0x70 are flag-setter/ret-stub slots, not
+                                                    // AV getters (see get_actor_value's ponytail note).
+const VTBL_ACTOR_ANIM_DATA: usize = vtable_index(0x01E4); // index 121 (x86, vaultmp.cpp GetActorState)
 
 // ═══════════════════════════════════════════════════════════════
 // Steam (post-2023) vtable — re-derived 2026-08-14 (static, see steam-re.md)
@@ -422,12 +436,20 @@ const OFFSET_REF_ID: usize = 0x0C;
 //   FO3: rot 0x20/0x24/0x28, pos 0x2C/0x30/0x34, parentCell 0x3C
 //   FNV: rot 0x24/0x28/0x2C, pos 0x30/0x34/0x38, parentCell 0x40
 fn pos_offset(index: usize) -> usize {
-    if crate::hooks::is_fnv() { 0x30 + index * 4 } else { 0x2C + index * 4 }
+    if crate::hooks::is_fnv() {
+        0x30 + index * 4
+    } else {
+        0x2C + index * 4
+    }
 }
 /// Scale field: immediately after the position triple.
 /// FO3: pos 0x2C/0x30/0x34 → scale 0x38. FNV: pos 0x30/0x34/0x38 → 0x3C.
 fn scale_offset() -> usize {
-    if crate::hooks::is_fnv() { 0x3C } else { 0x38 }
+    if crate::hooks::is_fnv() {
+        0x3C
+    } else {
+        0x38
+    }
 }
 /// Read the reference scale (raw field, Steam-safe).
 pub unsafe fn get_scale(ref_id: u32) -> f32 {
@@ -450,11 +472,19 @@ pub unsafe fn set_scale(ref_id: u32, scale: f32) {
     write_field::<f32>(obj, scale_offset(), scale);
 }
 fn angle_offset(index: usize) -> usize {
-    if crate::hooks::is_fnv() { 0x24 + index * 4 } else { 0x20 + index * 4 }
+    if crate::hooks::is_fnv() {
+        0x24 + index * 4
+    } else {
+        0x20 + index * 4
+    }
 }
 /// `TESObjectREFR::parentCell` — FO3 0x3C / FNV 0x40.
 fn parent_cell_offset() -> usize {
-    if crate::hooks::is_fnv() { 0x40 } else { 0x3C }
+    if crate::hooks::is_fnv() {
+        0x40
+    } else {
+        0x3C
+    }
 }
 
 // Anim data struct offsets (from vaultmp.cpp GetActorState: VTable+0x01E4 → struct)
@@ -624,7 +654,9 @@ pub unsafe fn set_pos(ref_id: u32, pos: [f32; 3]) {
     #[cfg(target_arch = "x86_64")]
     {
         const VTBL_REF_SET_POS: usize = vtable_index(0x38); // x86_64 index 7
-        if let Some(set_pos_fn) = vtable_entry::<unsafe extern "system" fn(*mut u8, f32, f32, f32)>(obj, VTBL_REF_SET_POS) {
+        if let Some(set_pos_fn) =
+            vtable_entry::<unsafe extern "system" fn(*mut u8, f32, f32, f32)>(obj, VTBL_REF_SET_POS)
+        {
             set_pos_fn(obj, pos[0], pos[1], pos[2]);
             return;
         }
@@ -1087,7 +1119,11 @@ mod tests {
             write_field::<u32>(cell.as_mut_ptr(), 0x0C, 0xCAFE);
 
             let mut obj = vec![0u8; 128];
-            write_field::<usize>(obj.as_mut_ptr(), parent_cell_offset(), cell.as_ptr() as usize);
+            write_field::<usize>(
+                obj.as_mut_ptr(),
+                parent_cell_offset(),
+                cell.as_ptr() as usize,
+            );
 
             assert_eq!(get_cell_from_obj(obj.as_mut_ptr()), 0xCAFE);
 
@@ -1187,7 +1223,11 @@ mod tests {
             // rotZ at +0x28 must NOT be interpreted as the parent cell
             let mut obj2 = vec![0u8; 128];
             write_field::<u32>(obj2.as_mut_ptr(), 0x28, 0xDEADBEEF);
-            assert_eq!(get_parent_cell_from_obj(obj2.as_mut_ptr()), 0, "0x28 is rotZ, not a cell");
+            assert_eq!(
+                get_parent_cell_from_obj(obj2.as_mut_ptr()),
+                0,
+                "0x28 is rotZ, not a cell"
+            );
         }
     }
 
@@ -1226,9 +1266,16 @@ mod tests {
     #[test]
     fn test_actor_value_constants() {
         let vals = [
-            AV_HEALTH, AV_ACTION_POINTS, AV_CARRY_WEIGHT, AV_DAMAGE_RESIST,
-            AV_DAMAGE_THRESHOLD, AV_SPEED_MULT, AV_RADIATION,
-            AV_DEHYDRATION, AV_HUNGER, AV_SLEEP,
+            AV_HEALTH,
+            AV_ACTION_POINTS,
+            AV_CARRY_WEIGHT,
+            AV_DAMAGE_RESIST,
+            AV_DAMAGE_THRESHOLD,
+            AV_SPEED_MULT,
+            AV_RADIATION,
+            AV_DEHYDRATION,
+            AV_HUNGER,
+            AV_SLEEP,
         ];
         for i in 0..vals.len() {
             for j in i + 1..vals.len() {
@@ -1247,8 +1294,14 @@ mod process_tests {
 
     #[test]
     fn test_exe_base_name() {
-        assert_eq!(exe_base_name(r"C:\Games\Fallout 3\Fallout3.exe"), Some("Fallout3.exe"));
-        assert_eq!(exe_base_name("Z:\\games\\FalloutNV.exe"), Some("FalloutNV.exe"));
+        assert_eq!(
+            exe_base_name(r"C:\Games\Fallout 3\Fallout3.exe"),
+            Some("Fallout3.exe")
+        );
+        assert_eq!(
+            exe_base_name("Z:\\games\\FalloutNV.exe"),
+            Some("FalloutNV.exe")
+        );
         assert_eq!(exe_base_name("/opt/loader.exe"), Some("loader.exe"));
         assert_eq!(exe_base_name(""), None);
         assert_eq!(exe_base_name("noslash"), Some("noslash"));

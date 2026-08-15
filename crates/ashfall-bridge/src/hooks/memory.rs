@@ -21,8 +21,8 @@ use std::ptr;
 mod windows_impl {
     use super::*;
     use windows_sys::Win32::System::Memory::{
-        VirtualProtect, VirtualAlloc, VirtualFree,
-        MEM_COMMIT, MEM_RELEASE, MEM_RESERVE, PAGE_EXECUTE_READWRITE,
+        VirtualAlloc, VirtualFree, VirtualProtect, MEM_COMMIT, MEM_RELEASE, MEM_RESERVE,
+        PAGE_EXECUTE_READWRITE,
     };
 
     // ── RAII memory protection guard ──
@@ -40,7 +40,11 @@ mod windows_impl {
             if ok == 0 {
                 return None;
             }
-            Some(Self { addr, size, old_protect })
+            Some(Self {
+                addr,
+                size,
+                old_protect,
+            })
         }
     }
 
@@ -87,8 +91,17 @@ mod windows_impl {
 
     /// Allocate executable memory.
     pub unsafe fn alloc_exec(size: usize) -> Option<*mut u8> {
-        let ptr = VirtualAlloc(ptr::null(), size, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
-        if ptr.is_null() { None } else { Some(ptr as *mut u8) }
+        let ptr = VirtualAlloc(
+            ptr::null(),
+            size,
+            MEM_COMMIT | MEM_RESERVE,
+            PAGE_EXECUTE_READWRITE,
+        );
+        if ptr.is_null() {
+            None
+        } else {
+            Some(ptr as *mut u8)
+        }
     }
 
     /// Free executable memory.
@@ -166,7 +179,11 @@ impl Patch {
     pub unsafe fn new(addr: *const u8, data: &[u8]) -> Self {
         let mut original = Vec::with_capacity(data.len());
         original.extend_from_slice(std::slice::from_raw_parts(addr, data.len()));
-        Patch { addr, original, patch_data: data.to_vec() }
+        Patch {
+            addr,
+            original,
+            patch_data: data.to_vec(),
+        }
     }
 
     pub unsafe fn apply(&self) -> Option<MemoryProtect> {
@@ -207,7 +224,10 @@ pub unsafe fn write_rel_jump(from: usize, to: usize) {
 ///
 /// Panics if `original_len < 5` (a relative jump needs its full 5 bytes).
 pub unsafe fn write_rel_jump_padded(from: usize, to: usize, original_len: usize) {
-    assert!(original_len >= 5, "write_rel_jump_padded: original_len must be >= 5");
+    assert!(
+        original_len >= 5,
+        "write_rel_jump_padded: original_len must be >= 5"
+    );
     write_rel_jump(from, to);
     for i in 5..original_len {
         safe_write8(from + i, 0x90); // NOP

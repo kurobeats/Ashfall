@@ -458,7 +458,10 @@ pub fn recipes(t: &Fo3SteamClassic) -> Vec<Recipe> {
         Recipe::Bytes {
             name: "play_group_fix_block",
             addr: t.play_group_fix_dest,
-            bytes: &[0x85, 0xC9, 0x0F, 0x84, 0xFF, 0x00, 0x00, 0x00, 0x8B, 0x71, 0x0C, 0x85, 0xF6, 0xEB, 0x6A],
+            bytes: &[
+                0x85, 0xC9, 0x0F, 0x84, 0xFF, 0x00, 0x00, 0x00, 0x8B, 0x71, 0x0C, 0x85, 0xF6, 0xEB,
+                0x6A,
+            ],
         },
         Recipe::Bytes {
             name: "play_group_fix_jmp",
@@ -562,7 +565,9 @@ pub unsafe fn apply(
                 p.apply();
                 out.push(p);
             }
-            Recipe::Write { addr, value, width, .. } => {
+            Recipe::Write {
+                addr, value, width, ..
+            } => {
                 let bytes: Vec<u8> = match width {
                     1 => vec![*value as u8],
                     2 => vec![(*value & 0xFF) as u8, ((*value >> 8) & 0xFF) as u8],
@@ -627,7 +632,6 @@ pub const STEAM_AI_PREDICATE: usize = 0x007F_9B70;
 /// Expected prologue: `55 8B EC 51 57`.
 #[cfg(target_arch = "x86")]
 const STEAM_AI_PREDICATE_PROLOGUE: [u8; 5] = [0x55, 0x8B, 0xEC, 0x51, 0x57];
-
 
 /// The Rust collector called by the thunk (cdecl: actor on the stack).
 #[no_mangle]
@@ -706,10 +710,7 @@ pub fn apply_actor_discovery() -> bool {
                 None => return false, // trampoline alloc failed (non-Windows)
             };
             let trampoline: usize = d.trampoline_ptr::<usize>();
-            ashfall_trampoline_addr.store(
-                trampoline as u32,
-                std::sync::atomic::Ordering::SeqCst,
-            );
+            ashfall_trampoline_addr.store(trampoline as u32, std::sync::atomic::Ordering::SeqCst);
             d.install();
             *guard = Some(d);
         }
@@ -782,7 +783,10 @@ pub fn apply_fnv_frame_hook() -> bool {
             crate::hooks::discovery::collect_ref_ids(&refs);
             result
         }
-        crate::hooks::memory::write_rel_call(FNV_FRAME_HOOK_SITE, fnv_frame_hook as *const () as usize);
+        crate::hooks::memory::write_rel_call(
+            FNV_FRAME_HOOK_SITE,
+            fnv_frame_hook as *const () as usize,
+        );
     }
     true
 }
@@ -826,7 +830,10 @@ pub fn apply_fo3_frame_hook() -> bool {
             crate::network::report_player_state_due();
             result
         }
-        crate::hooks::memory::write_rel_call(FO3_FRAME_HOOK_SITE, fo3_frame_hook as *const () as usize);
+        crate::hooks::memory::write_rel_call(
+            FO3_FRAME_HOOK_SITE,
+            fo3_frame_hook as *const () as usize,
+        );
     }
     true
 }
@@ -869,9 +876,8 @@ pub fn apply_steam_frame_hook() -> bool {
     unsafe {
         unsafe extern "C" fn steam_frame_hook() -> u32 {
             // call the original through the IAT slot (resolved at load)
-            let orig: unsafe extern "C" fn() -> u32 = unsafe {
-                std::mem::transmute(*(STEAM_FRAME_IAT_SLOT as *const usize))
-            };
+            let orig: unsafe extern "C" fn() -> u32 =
+                unsafe { std::mem::transmute(*(STEAM_FRAME_IAT_SLOT as *const usize)) };
             let result = orig();
             crate::network::report_player_state_due();
             result
@@ -881,10 +887,8 @@ pub fn apply_steam_frame_hook() -> bool {
             steam_frame_hook as *const () as usize,
         );
         // the original indirect call is 6 bytes; the redirect is 5 — NOP the tail
-        let tail = crate::hooks::memory::Patch::new(
-            (STEAM_FRAME_HOOK_SITE + 5) as *const u8,
-            &[0x90],
-        );
+        let tail =
+            crate::hooks::memory::Patch::new((STEAM_FRAME_HOOK_SITE + 5) as *const u8, &[0x90]);
         tail.apply();
     }
     true
@@ -968,7 +972,8 @@ pub mod hooks {
             // refID at object+0x0C (xFOSE STATIC_ASSERT).
             let ref_id = crate::hooks::vtable::read_field::<u32>(obj as *mut u8, 0x0C);
             crate::network::push_event_frame(ashfall_core::event::encode_ref_event(
-                ashfall_core::event::EVENT_ACTIVATE, ref_id,
+                ashfall_core::event::EVENT_ACTIVATE,
+                ref_id,
             ));
         }
     }
@@ -978,7 +983,8 @@ pub mod hooks {
         if obj != 0 {
             let ref_id = crate::hooks::vtable::read_field::<u32>(obj as *mut u8, 0x0C);
             crate::network::push_event_frame(ashfall_core::event::encode_ref_event(
-                ashfall_core::event::EVENT_FIRE, ref_id,
+                ashfall_core::event::EVENT_FIRE,
+                ref_id,
             ));
         }
     }
@@ -1013,37 +1019,31 @@ pub mod hooks {
         ".globl ashfall_get_activate_thunk",
         ".globl ashfall_place_at_me_thunk",
         ".globl ashfall_fire_weapon_thunk",
-
         "ashfall_respawn_detour_thunk:",
         "    pushad",
         "    call ashfall_hook_respawn",
         "    popad",
         "    ret",
-
         "ashfall_bethesda_delegator_thunk:",
         "    pushad",
         "    call ashfall_hook_delegator",
         "    popad",
         "    ret",
-
         "ashfall_play_idle_detour_thunk:",
         "    pushad",
         "    call ashfall_hook_play_idle",
         "    popad",
         "    ret",
-
         "ashfall_anim_detour_thunk:",
         "    pushad",
         "    call ashfall_hook_anim",
         "    popad",
         "    ret",
-
         "ashfall_av_fix_thunk:",
         "    pushad",
         "    call ashfall_hook_av",
         "    popad",
         "    ret",
-
         "ashfall_get_activate_thunk:",
         "    pushad",
         "    push eax",
@@ -1051,13 +1051,11 @@ pub mod hooks {
         "    add esp, 4",
         "    popad",
         "    ret",
-
         "ashfall_place_at_me_thunk:",
         "    pushad",
         "    call ashfall_hook_anim",
         "    popad",
         "    ret",
-
         "ashfall_fire_weapon_thunk:",
         "    pushad",
         "    push eax",
@@ -1152,8 +1150,8 @@ mod tests {
     fn ref_event_encodes_ref_id() {
         // The bridge collectors encode ref-id events; the client decodes
         // them. Round-trip through the shared encode/decode.
-        let frame = ashfall_core::event::encode_ref_event(
-            ashfall_core::event::EVENT_ACTIVATE, 0x1234);
+        let frame =
+            ashfall_core::event::encode_ref_event(ashfall_core::event::EVENT_ACTIVATE, 0x1234);
         let (frames, _) = ashfall_core::event::split_frames(&frame);
         let (et, data) = ashfall_core::event::decode_event(&frames[0].payload).unwrap();
         assert_eq!(et, ashfall_core::event::EVENT_ACTIVATE);
@@ -1179,12 +1177,22 @@ mod tests {
     fn steam_vaultmp_sites_consistent() {
         use fo3_steam_17_vaultmp as s;
         // All Steam sites in image range.
-        for a in [s::PLAY_IDLE_CALL_SRC, s::LOCK_FIX, s::AI_FIX1,
-                  s::GET_ACTIVATE_JMP, s::GET_ACTIVATE_RET,
-                  s::DELEGATOR_DEST,
-                  s::DELEGATOR_CALL_SRC, s::PLAY_GROUP_FIX,
-                  s::AV_FIX_SRC, s::AV_FIX_RET, s::AV_FIX_TERM,
-                  s::FIRE_WEAPON_JMP, s::FIRE_WEAPON_CALL, s::PLUGINS_VMP] {
+        for a in [
+            s::PLAY_IDLE_CALL_SRC,
+            s::LOCK_FIX,
+            s::AI_FIX1,
+            s::GET_ACTIVATE_JMP,
+            s::GET_ACTIVATE_RET,
+            s::DELEGATOR_DEST,
+            s::DELEGATOR_CALL_SRC,
+            s::PLAY_GROUP_FIX,
+            s::AV_FIX_SRC,
+            s::AV_FIX_RET,
+            s::AV_FIX_TERM,
+            s::FIRE_WEAPON_JMP,
+            s::FIRE_WEAPON_CALL,
+            s::PLUGINS_VMP,
+        ] {
             assert!((0x400000..0x1200000).contains(&a), "{a:#x} out of range");
         }
         // plugins.txt: ".txt" sits 9 bytes into ".\\Plugins.txt" (GOG layout).
@@ -1209,16 +1217,40 @@ mod tests {
         // FO3 loads at 0x400000; code+data live below 0x1200000.
         let t = &FO3_STEAM_CLASSIC;
         let addrs = [
-            t.plugins_vmp, t.play_group, t.delegator_src, t.delegator_dest,
-            t.delegator_call_src, t.no_respawn_nop, t.no_respawn_jmp_src,
-            t.no_respawn_jmp_dest, t.play_idle_call_src, t.play_idle_fix_src,
-            t.match_race_nop1, t.match_race_nop2, t.match_race_patch,
-            t.match_race_param, t.lock_fix, t.ai_fix1, t.ai_fix2, t.ai_fix3,
-            t.ai_fix4, t.play_group_fix, t.play_group_fix_src,
-            t.play_group_fix_dest, t.av_fix_src, t.av_fix_ret, t.av_fix_term,
-            t.fire_fix_jmp, t.fire_fix_patch, t.get_activate_jmp,
-            t.get_activate_ret, t.place_at_me_jmp, t.place_at_me_call,
-            t.place_at_me_fix, t.place_at_me_fix_dest, t.fire_weapon_jmp,
+            t.plugins_vmp,
+            t.play_group,
+            t.delegator_src,
+            t.delegator_dest,
+            t.delegator_call_src,
+            t.no_respawn_nop,
+            t.no_respawn_jmp_src,
+            t.no_respawn_jmp_dest,
+            t.play_idle_call_src,
+            t.play_idle_fix_src,
+            t.match_race_nop1,
+            t.match_race_nop2,
+            t.match_race_patch,
+            t.match_race_param,
+            t.lock_fix,
+            t.ai_fix1,
+            t.ai_fix2,
+            t.ai_fix3,
+            t.ai_fix4,
+            t.play_group_fix,
+            t.play_group_fix_src,
+            t.play_group_fix_dest,
+            t.av_fix_src,
+            t.av_fix_ret,
+            t.av_fix_term,
+            t.fire_fix_jmp,
+            t.fire_fix_patch,
+            t.get_activate_jmp,
+            t.get_activate_ret,
+            t.place_at_me_jmp,
+            t.place_at_me_call,
+            t.place_at_me_fix,
+            t.place_at_me_fix_dest,
+            t.fire_weapon_jmp,
             t.fire_weapon_call,
         ];
         for a in addrs {
@@ -1289,10 +1321,8 @@ mod tests {
     #[test]
     fn every_required_hook_is_requested() {
         let r = recipes(&FO3_STEAM_CLASSIC);
-        let requested: std::collections::BTreeSet<_> = r
-            .iter()
-            .filter_map(Recipe::required_hook)
-            .collect();
+        let requested: std::collections::BTreeSet<_> =
+            r.iter().filter_map(Recipe::required_hook).collect();
         for h in REQUIRED_HOOKS {
             assert!(requested.contains(h), "hook {h} not requested by recipes");
         }

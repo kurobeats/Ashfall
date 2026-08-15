@@ -3,11 +3,11 @@
 //! Provides re-exports of core types and ergonomic macros for
 //! defining host imports and callback exports.
 
-pub use ashfall_core::id::NetworkID;
-pub use ashfall_core::types::{ObjectKind, Reason};
-pub use ashfall_core::protocol;
 pub use ashfall_core::constants;
 pub use ashfall_core::form_id::FormID;
+pub use ashfall_core::id::NetworkID;
+pub use ashfall_core::protocol;
+pub use ashfall_core::types::{ObjectKind, Reason};
 
 // ═══════════════════════════════════════════════════════════════
 // Type aliases for script authors

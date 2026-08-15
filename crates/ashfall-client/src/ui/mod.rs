@@ -8,5 +8,5 @@
 pub mod app;
 pub mod chat;
 pub mod server_browser;
-pub mod world_view;
 pub mod widgets;
+pub mod world_view;

@@ -49,12 +49,22 @@ fn test_plugin_info_long_name() {
 
 /// Minimal engine interface (FOSE/NVSE layout) for Query/Load tests.
 fn fake_interface(version: u32) -> ashfall_bridge::plugin::NVSEInterface {
-    unsafe extern "C" fn noop_command(_: *mut std::ffi::c_void) -> bool { true }
+    unsafe extern "C" fn noop_command(_: *mut std::ffi::c_void) -> bool {
+        true
+    }
     unsafe extern "C" fn noop_set(_: u32) {}
-    unsafe extern "C" fn noop_query(_: u32) -> *mut std::ffi::c_void { std::ptr::null_mut() }
-    unsafe extern "C" fn noop_handle() -> u32 { 0 }
-    unsafe extern "C" fn noop_typed(_: *mut std::ffi::c_void, _: u32) -> bool { true }
-    unsafe extern "C" fn noop_dir() -> *const std::ffi::c_char { std::ptr::null() }
+    unsafe extern "C" fn noop_query(_: u32) -> *mut std::ffi::c_void {
+        std::ptr::null_mut()
+    }
+    unsafe extern "C" fn noop_handle() -> u32 {
+        0
+    }
+    unsafe extern "C" fn noop_typed(_: *mut std::ffi::c_void, _: u32) -> bool {
+        true
+    }
+    unsafe extern "C" fn noop_dir() -> *const std::ffi::c_char {
+        std::ptr::null()
+    }
     ashfall_bridge::plugin::NVSEInterface {
         nvse_version: version,
         runtime_version: 0x01070030, // 1.7.0.3

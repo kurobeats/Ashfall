@@ -23,8 +23,7 @@ impl AshfallApp {
 impl eframe::App for AshfallApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         if let Ok(mut game) = self.game.lock() {
-            let connected =
-                matches!(game.state, crate::game::ClientState::InGame);
+            let connected = matches!(game.state, crate::game::ClientState::InGame);
 
             // Top bar
             egui::TopBottomPanel::top("top_bar").show(ctx, |ui| {
@@ -59,9 +58,7 @@ impl eframe::App for AshfallApp {
                         ui.label("Address:");
                         ui.text_edit_singleline(&mut self.connect_addr);
                         ui.label("Port:");
-                        ui.add(
-                            egui::DragValue::new(&mut self.connect_port).range(1..=65535),
-                        );
+                        ui.add(egui::DragValue::new(&mut self.connect_port).range(1..=65535));
                         if ui.button("Connect").clicked() {
                             self.connecting = true;
                         }
@@ -71,10 +68,7 @@ impl eframe::App for AshfallApp {
                 egui::CentralPanel::default().show(ctx, |ui| {
                     ui.label("🌍 Wasteland — Connected to server");
                     ui.separator();
-                    ui.label(format!(
-                        "Objects tracked: {}",
-                        game.registry.object_count()
-                    ));
+                    ui.label(format!("Objects tracked: {}", game.registry.object_count()));
                     if let Some(ref id) = game.local_player_id {
                         ui.label(format!("Player ID: {id}"));
                     }
@@ -94,16 +88,20 @@ impl eframe::App for AshfallApp {
                     );
                     ui.separator();
                     // Remote objects with interpolated positions
-                    ui.collapsing(format!("Objects ({})", game.registry.object_count()), |ui| {
-                        let ids: Vec<ashfall_core::id::NetworkID> =
-                            game.registry.get_objects().map(|(id, _)| *id).collect();
-                        for id in ids {
-                            if let Some(pos) = game.registry.interpolated_pos(id) {
-                                let p = format!("({:.1}, {:.1}, {:.1})", pos[0], pos[1], pos[2]);
-                                ui.label(format!("{id} @ {p}"));
+                    ui.collapsing(
+                        format!("Objects ({})", game.registry.object_count()),
+                        |ui| {
+                            let ids: Vec<ashfall_core::id::NetworkID> =
+                                game.registry.get_objects().map(|(id, _)| *id).collect();
+                            for id in ids {
+                                if let Some(pos) = game.registry.interpolated_pos(id) {
+                                    let p =
+                                        format!("({:.1}, {:.1}, {:.1})", pos[0], pos[1], pos[2]);
+                                    ui.label(format!("{id} @ {p}"));
+                                }
                             }
-                        }
-                    });
+                        },
+                    );
                 });
 
                 // Chat

@@ -87,18 +87,29 @@ impl ClientRegistry {
     pub fn apply_packet(&mut self, packet: &Packet) {
         match packet {
             Packet::ObjectNew {
-                id, ref_id, name, net_pos, angle, scale, cell, enabled, ..
+                id,
+                ref_id,
+                name,
+                net_pos,
+                angle,
+                scale,
+                cell,
+                enabled,
+                ..
             } => {
                 let name = name.resolve(&mut self.string_table);
-                self.interp
-                    .entry(*id)
-                    .or_default()
-                    .push_now(*net_pos);
+                self.interp.entry(*id).or_default().push_now(*net_pos);
                 self.objects.insert(
                     *id,
                     ClientObject::Object {
-                        ref_id: *ref_id, base_id: 0, name,
-                        pos: *net_pos, angle: *angle, scale: *scale, cell: *cell, enabled: *enabled,
+                        ref_id: *ref_id,
+                        base_id: 0,
+                        name,
+                        pos: *net_pos,
+                        angle: *angle,
+                        scale: *scale,
+                        cell: *cell,
+                        enabled: *enabled,
                     },
                 );
             }
@@ -108,40 +119,119 @@ impl ClientRegistry {
                     *n = name;
                 }
             }
-            Packet::UpdatePos { id, pos } => { self.update_pos(*id, *pos); }
-            Packet::ObjectRemove { id, .. } => { self.objects.remove(id); self.interp.remove(id); }
-            Packet::ItemNew { id, base_id, count, condition, equipped, .. } => {
-                self.objects.insert(*id, ClientObject::Item {
-                    base_id: *base_id, cond: *condition, count: *count, equipped: *equipped,
-                });
+            Packet::UpdatePos { id, pos } => {
+                self.update_pos(*id, *pos);
+            }
+            Packet::ObjectRemove { id, .. } => {
+                self.objects.remove(id);
+                self.interp.remove(id);
+            }
+            Packet::ItemNew {
+                id,
+                base_id,
+                count,
+                condition,
+                equipped,
+                ..
+            } => {
+                self.objects.insert(
+                    *id,
+                    ClientObject::Item {
+                        base_id: *base_id,
+                        cond: *condition,
+                        count: *count,
+                        equipped: *equipped,
+                    },
+                );
             }
             Packet::UpdateItemCount { id, count, .. } => {
-                if let Some(ClientObject::Item { count: c, .. }) = self.objects.get_mut(id) { *c = *count; }
-            }
-            Packet::UpdateItemCondition { id, condition, .. } => {
-                if let Some(ClientObject::Item { cond: c, .. }) = self.objects.get_mut(id) { *c = *condition; }
-            }
-            Packet::UpdateItemEquipped { id, equipped, .. } => {
-                if let Some(ClientObject::Item { equipped: e, .. }) = self.objects.get_mut(id) { *e = *equipped; }
-            }
-            Packet::ActorNew { id, ref_id, values, dead, .. } => {
-                let health = values.get(&0x14).copied().unwrap_or(100.0);
-                self.objects.insert(*id, ClientObject::Actor {
-                    ref_id: *ref_id, pos: [0.0; 3], angle: [0.0; 3], dead: *dead, health, alerted: false, sneaking: false,
-                    moving: 0, weapon: 0,
-                });
-            }
-            Packet::UpdateActorState { id, alerted, sneaking, moving, weapon, .. } => {
-                if let Some(ClientObject::Actor { alerted: a, sneaking: s, moving: m, weapon: w, .. }) = self.objects.get_mut(id) {
-                    *a = *alerted; *s = *sneaking; *m = *moving; *w = *weapon;
+                if let Some(ClientObject::Item { count: c, .. }) = self.objects.get_mut(id) {
+                    *c = *count;
                 }
             }
-            Packet::ActorStateDelta { id, moving, weapon, alerted, sneaking, .. } => {
-                if let Some(ClientObject::Actor { moving: m, weapon: w, alerted: a, sneaking: s, .. }) = self.objects.get_mut(id) {
-                    if let Some(v) = moving { *m = *v; }
-                    if let Some(v) = weapon { *w = *v; }
-                    if let Some(v) = alerted { *a = *v; }
-                    if let Some(v) = sneaking { *s = *v; }
+            Packet::UpdateItemCondition { id, condition, .. } => {
+                if let Some(ClientObject::Item { cond: c, .. }) = self.objects.get_mut(id) {
+                    *c = *condition;
+                }
+            }
+            Packet::UpdateItemEquipped { id, equipped, .. } => {
+                if let Some(ClientObject::Item { equipped: e, .. }) = self.objects.get_mut(id) {
+                    *e = *equipped;
+                }
+            }
+            Packet::ActorNew {
+                id,
+                ref_id,
+                values,
+                dead,
+                ..
+            } => {
+                let health = values.get(&0x14).copied().unwrap_or(100.0);
+                self.objects.insert(
+                    *id,
+                    ClientObject::Actor {
+                        ref_id: *ref_id,
+                        pos: [0.0; 3],
+                        angle: [0.0; 3],
+                        dead: *dead,
+                        health,
+                        alerted: false,
+                        sneaking: false,
+                        moving: 0,
+                        weapon: 0,
+                    },
+                );
+            }
+            Packet::UpdateActorState {
+                id,
+                alerted,
+                sneaking,
+                moving,
+                weapon,
+                ..
+            } => {
+                if let Some(ClientObject::Actor {
+                    alerted: a,
+                    sneaking: s,
+                    moving: m,
+                    weapon: w,
+                    ..
+                }) = self.objects.get_mut(id)
+                {
+                    *a = *alerted;
+                    *s = *sneaking;
+                    *m = *moving;
+                    *w = *weapon;
+                }
+            }
+            Packet::ActorStateDelta {
+                id,
+                moving,
+                weapon,
+                alerted,
+                sneaking,
+                ..
+            } => {
+                if let Some(ClientObject::Actor {
+                    moving: m,
+                    weapon: w,
+                    alerted: a,
+                    sneaking: s,
+                    ..
+                }) = self.objects.get_mut(id)
+                {
+                    if let Some(v) = moving {
+                        *m = *v;
+                    }
+                    if let Some(v) = weapon {
+                        *w = *v;
+                    }
+                    if let Some(v) = alerted {
+                        *a = *v;
+                    }
+                    if let Some(v) = sneaking {
+                        *s = *v;
+                    }
                 }
             }
             Packet::OwnershipGranted { id } => {
@@ -150,18 +240,31 @@ impl ClientRegistry {
             Packet::OwnershipReleased { id } => {
                 self.owned_actors.remove(id);
             }
-            Packet::UpdateActorValue { id, index, value, .. } => {
+            Packet::UpdateActorValue {
+                id, index, value, ..
+            } => {
                 if let Some(ClientObject::Actor { health, .. }) = self.objects.get_mut(id) {
-                    if *index == 0x14 { *health = *value; }
+                    if *index == 0x14 {
+                        *health = *value;
+                    }
                 }
             }
             Packet::UpdateActorDead { id, dead, .. } => {
-                if let Some(ClientObject::Actor { dead: d, .. }) = self.objects.get_mut(id) { *d = *dead; }
+                if let Some(ClientObject::Actor { dead: d, .. }) = self.objects.get_mut(id) {
+                    *d = *dead;
+                }
             }
             Packet::PlayerNew { id, ref_id, .. } => {
-                self.objects.insert(*id, ClientObject::Player {
-                    ref_id: *ref_id, name: format!("Player_{id}"), pos: [0.0; 3], angle: [0.0; 3], health: 100.0,
-                });
+                self.objects.insert(
+                    *id,
+                    ClientObject::Player {
+                        ref_id: *ref_id,
+                        name: format!("Player_{id}"),
+                        pos: [0.0; 3],
+                        angle: [0.0; 3],
+                        health: 100.0,
+                    },
+                );
             }
             _ => {}
         }
@@ -179,7 +282,9 @@ impl ClientRegistry {
         self.objects.iter()
     }
 
-    pub fn object_count(&self) -> usize { self.objects.len() }
+    pub fn object_count(&self) -> usize {
+        self.objects.len()
+    }
 
     /// Game ref id for a server entity (captured from its New packet), if
     /// known — used to address engine commands for remote entities.
@@ -188,7 +293,11 @@ impl ClientRegistry {
             Some(ClientObject::Object { ref_id, .. })
             | Some(ClientObject::Actor { ref_id, .. })
             | Some(ClientObject::Player { ref_id, .. }) => {
-                if *ref_id != 0 { Some(*ref_id) } else { None }
+                if *ref_id != 0 {
+                    Some(*ref_id)
+                } else {
+                    None
+                }
             }
             _ => None,
         }
@@ -213,19 +322,20 @@ impl ClientRegistry {
     }
 
     fn update_pos(&mut self, id: NetworkID, pos: [f32; 3]) {
-        self.interp
-            .entry(id)
-            .or_default()
-            .push_now(pos);
+        self.interp.entry(id).or_default().push_now(pos);
         match self.objects.get_mut(&id) {
-            Some(ClientObject::Object { pos: p, .. }) | Some(ClientObject::Actor { pos: p, .. }) | Some(ClientObject::Player { pos: p, .. }) => *p = pos,
+            Some(ClientObject::Object { pos: p, .. })
+            | Some(ClientObject::Actor { pos: p, .. })
+            | Some(ClientObject::Player { pos: p, .. }) => *p = pos,
             _ => {}
         }
     }
 }
 
 impl Default for ClientRegistry {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[cfg(test)]
@@ -239,11 +349,23 @@ mod tests {
         let id = NetworkID::new(7);
         // ObjectNew at [0,0,0], then UpdatePos to [100,0,0]
         reg.apply_packet(&Packet::ObjectNew {
-            id, ref_id: 0x100, base_id: 0x200, name: "x".into(),
-            game_pos: [0.0, 0.0, 0.0], net_pos: [0.0, 0.0, 0.0],
-            angle: [0.0; 3], scale: 1.0, cell: 1, enabled: true, lock: 0, owner: 0,
+            id,
+            ref_id: 0x100,
+            base_id: 0x200,
+            name: "x".into(),
+            game_pos: [0.0, 0.0, 0.0],
+            net_pos: [0.0, 0.0, 0.0],
+            angle: [0.0; 3],
+            scale: 1.0,
+            cell: 1,
+            enabled: true,
+            lock: 0,
+            owner: 0,
         });
-        reg.apply_packet(&Packet::UpdatePos { id, pos: [100.0, 0.0, 0.0] });
+        reg.apply_packet(&Packet::UpdatePos {
+            id,
+            pos: [100.0, 0.0, 0.0],
+        });
 
         // Render-behind (INTERP_DELAY=67ms): immediately after the update the
         // render time still lands on the old sample, so the interpolated
@@ -263,9 +385,18 @@ mod tests {
         let mut reg = ClientRegistry::new();
         let id = NetworkID::new(9);
         reg.apply_packet(&Packet::ObjectNew {
-            id, ref_id: 0x100, base_id: 0x200, name: "y".into(),
-            game_pos: [0.0, 0.0, 0.0], net_pos: [0.0, 0.0, 0.0],
-            angle: [0.0; 3], scale: 1.0, cell: 1, enabled: true, lock: 0, owner: 0,
+            id,
+            ref_id: 0x100,
+            base_id: 0x200,
+            name: "y".into(),
+            game_pos: [0.0, 0.0, 0.0],
+            net_pos: [0.0, 0.0, 0.0],
+            angle: [0.0; 3],
+            scale: 1.0,
+            cell: 1,
+            enabled: true,
+            lock: 0,
+            owner: 0,
         });
         assert!(reg.interp.contains_key(&id), "buffer created on spawn");
         reg.apply_packet(&Packet::ObjectRemove { id, silent: true });
@@ -280,10 +411,21 @@ mod tests {
 
         // First sight: Inline { id, value } — client learns the mapping.
         reg.apply_packet(&Packet::ObjectNew {
-            id, ref_id: 0x100, base_id: 0x200,
-            name: CachedString::Inline { id: 3, value: "Vault101Door".into() },
-            game_pos: [0.0, 0.0, 0.0], net_pos: [0.0, 0.0, 0.0],
-            angle: [0.0; 3], scale: 1.0, cell: 1, enabled: true, lock: 0, owner: 0,
+            id,
+            ref_id: 0x100,
+            base_id: 0x200,
+            name: CachedString::Inline {
+                id: 3,
+                value: "Vault101Door".into(),
+            },
+            game_pos: [0.0, 0.0, 0.0],
+            net_pos: [0.0, 0.0, 0.0],
+            angle: [0.0; 3],
+            scale: 1.0,
+            cell: 1,
+            enabled: true,
+            lock: 0,
+            owner: 0,
         });
         match reg.objects.get(&id).unwrap() {
             ClientObject::Object { name, .. } => assert_eq!(name, "Vault101Door"),
@@ -291,9 +433,14 @@ mod tests {
         }
 
         // Repeat: Id only — resolves against the learned table.
-        reg.apply_packet(&Packet::UpdateName { id, name: CachedString::Id(3) });
+        reg.apply_packet(&Packet::UpdateName {
+            id,
+            name: CachedString::Id(3),
+        });
         match reg.objects.get(&id).unwrap() {
-            ClientObject::Object { name, .. } => assert_eq!(name, "Vault101Door", "Id resolved via table"),
+            ClientObject::Object { name, .. } => {
+                assert_eq!(name, "Vault101Door", "Id resolved via table")
+            }
             _ => panic!("expected object"),
         }
         assert_eq!(reg.string_table.lookup(3), Some("Vault101Door"));
@@ -304,19 +451,45 @@ mod tests {
         let mut reg = ClientRegistry::new();
         let id = NetworkID::new(12);
         reg.apply_packet(&Packet::ActorNew {
-            id, ref_id: 0x500, base_id: 0x1234, values: Default::default(),
-            base_values: Default::default(), race: 0, age: 0, idle: 0, moving: 0,
-            moving_xy: 0, weapon: 0, female: false, alerted: false, sneaking: false,
-            dead: false, death_limbs: 0, death_cause: 0, scale: 1.0,
+            id,
+            ref_id: 0x500,
+            base_id: 0x1234,
+            values: Default::default(),
+            base_values: Default::default(),
+            race: 0,
+            age: 0,
+            idle: 0,
+            moving: 0,
+            moving_xy: 0,
+            weapon: 0,
+            female: false,
+            alerted: false,
+            sneaking: false,
+            dead: false,
+            death_limbs: 0,
+            death_cause: 0,
+            scale: 1.0,
         });
 
         // Delta touches only weapon + sneaking; moving/alerted must survive.
         reg.apply_packet(&Packet::ActorStateDelta {
-            id, idle: None, moving: None, moving_xy: None,
-            weapon: Some(0x2A), alerted: None, sneaking: Some(true), firing: None,
+            id,
+            idle: None,
+            moving: None,
+            moving_xy: None,
+            weapon: Some(0x2A),
+            alerted: None,
+            sneaking: Some(true),
+            firing: None,
         });
         match reg.objects.get(&id).unwrap() {
-            ClientObject::Actor { weapon, sneaking, moving, alerted, .. } => {
+            ClientObject::Actor {
+                weapon,
+                sneaking,
+                moving,
+                alerted,
+                ..
+            } => {
                 assert_eq!(*weapon, 0x2A);
                 assert!(*sneaking);
                 assert_eq!(*moving, 0, "untouched field kept");
@@ -337,43 +510,54 @@ mod tests {
     }
 }
 
-
-    #[test]
-    fn test_actor_health_syncs_from_actor_value_events() {
-        let mut reg = ClientRegistry::new();
-        let id = NetworkID::new(11);
-        reg.apply_packet(&Packet::ActorNew {
-            id,
-            ref_id: 0x100,
-            base_id: 0x200,
-            values: Default::default(),
-            base_values: Default::default(),
-            race: 0,
-            age: 0,
-            idle: 0,
-            moving: 0,
-            moving_xy: 0,
-            weapon: 0,
-            female: false,
-            alerted: false,
-            sneaking: false,
-            dead: false,
-            death_limbs: 0,
-            death_cause: 0,
-            scale: 1.0,
-        });
-        // object type Actor: health defaults to 100 via the values map.
-        assert!(matches!(reg.objects.get(&id), Some(ClientObject::Actor { health, .. }) if *health == 100.0));
-        // server relays a remote actor-value update (index 0x14 = health).
-        reg.apply_packet(&Packet::UpdateActorValue { id, base: false, index: 0x14, value: 37.5 });
-        match reg.objects.get(&id).unwrap() {
-            ClientObject::Actor { health, .. } => assert_eq!(*health, 37.5),
-            _ => panic!("expected actor"),
-        }
-        // a non-health index must not touch health.
-        reg.apply_packet(&Packet::UpdateActorValue { id, base: false, index: 0x29, value: 10.0 });
-        match reg.objects.get(&id).unwrap() {
-            ClientObject::Actor { health, .. } => assert_eq!(*health, 37.5),
-            _ => panic!("expected actor"),
-        }
+#[test]
+fn test_actor_health_syncs_from_actor_value_events() {
+    let mut reg = ClientRegistry::new();
+    let id = NetworkID::new(11);
+    reg.apply_packet(&Packet::ActorNew {
+        id,
+        ref_id: 0x100,
+        base_id: 0x200,
+        values: Default::default(),
+        base_values: Default::default(),
+        race: 0,
+        age: 0,
+        idle: 0,
+        moving: 0,
+        moving_xy: 0,
+        weapon: 0,
+        female: false,
+        alerted: false,
+        sneaking: false,
+        dead: false,
+        death_limbs: 0,
+        death_cause: 0,
+        scale: 1.0,
+    });
+    // object type Actor: health defaults to 100 via the values map.
+    assert!(
+        matches!(reg.objects.get(&id), Some(ClientObject::Actor { health, .. }) if *health == 100.0)
+    );
+    // server relays a remote actor-value update (index 0x14 = health).
+    reg.apply_packet(&Packet::UpdateActorValue {
+        id,
+        base: false,
+        index: 0x14,
+        value: 37.5,
+    });
+    match reg.objects.get(&id).unwrap() {
+        ClientObject::Actor { health, .. } => assert_eq!(*health, 37.5),
+        _ => panic!("expected actor"),
     }
+    // a non-health index must not touch health.
+    reg.apply_packet(&Packet::UpdateActorValue {
+        id,
+        base: false,
+        index: 0x29,
+        value: 10.0,
+    });
+    match reg.objects.get(&id).unwrap() {
+        ClientObject::Actor { health, .. } => assert_eq!(*health, 37.5),
+        _ => panic!("expected actor"),
+    }
+}

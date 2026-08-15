@@ -1,10 +1,10 @@
 //! Actor handler — state/value/race/death sync.
 
-use ashfall_core::id::NetworkID;
-use ashfall_core::protocol::Packet;
+use crate::session::Session;
 use crate::world::objects::{Actor, Player};
 use crate::world::registry::ObjectRegistry;
-use crate::session::Session;
+use ashfall_core::id::NetworkID;
+use ashfall_core::protocol::Packet;
 use std::sync::Arc;
 
 /// Ownership rule (STR OwnershipTransfer semantics): a session may mutate an
@@ -53,7 +53,27 @@ pub fn handle_actor_new(
     registry.set_owner(*id, player_id);
     registry.map_ref(*ref_id, *id);
 
-    let Packet::ActorNew { id, ref_id, base_id, values, base_values, race, age, idle, moving, moving_xy, weapon, female, alerted, sneaking, dead, death_limbs, death_cause, scale } = packet else {
+    let Packet::ActorNew {
+        id,
+        ref_id,
+        base_id,
+        values,
+        base_values,
+        race,
+        age,
+        idle,
+        moving,
+        moving_xy,
+        weapon,
+        female,
+        alerted,
+        sneaking,
+        dead,
+        death_limbs,
+        death_cause,
+        scale,
+    } = packet
+    else {
         return (None, None);
     };
     let mut actor = Actor::new(*id, *ref_id, *base_id, 0);
@@ -98,7 +118,18 @@ pub fn handle_ownership_claim(
 }
 
 #[allow(clippy::too_many_arguments)] // wire packet fields, relayed as-is
-pub fn handle_actor_state(registry: &Arc<ObjectRegistry>, session: &crate::session::Session, id: NetworkID, idle: u32, moving: u8, moving_xy: u8, weapon: u8, alerted: bool, sneaking: bool, firing: bool) -> Option<Packet> {
+pub fn handle_actor_state(
+    registry: &Arc<ObjectRegistry>,
+    session: &crate::session::Session,
+    id: NetworkID,
+    idle: u32,
+    moving: u8,
+    moving_xy: u8,
+    weapon: u8,
+    alerted: bool,
+    sneaking: bool,
+    firing: bool,
+) -> Option<Packet> {
     if !can_mutate(registry, session, id) {
         return None;
     }
@@ -120,7 +151,16 @@ pub fn handle_actor_state(registry: &Arc<ObjectRegistry>, session: &crate::sessi
             player.actor.sneaking = sneaking;
         }
     }
-    Some(Packet::UpdateActorState { id, idle, moving, moving_xy, weapon, alerted, sneaking, firing })
+    Some(Packet::UpdateActorState {
+        id,
+        idle,
+        moving,
+        moving_xy,
+        weapon,
+        alerted,
+        sneaking,
+        firing,
+    })
 }
 
 /// Handle ActorStateDelta — apply only the present fields, relay the delta.
@@ -150,21 +190,47 @@ pub fn handle_actor_state_delta(
             None
         };
         if let Some(a) = actor {
-            if let Some(v) = idle { a.idle_anim = v; }
-            if let Some(v) = moving { a.moving_anim = v; }
-            if let Some(v) = moving_xy { a.moving_xy = v; }
-            if let Some(v) = weapon { a.weapon_anim = v; }
-            if let Some(v) = alerted { a.alerted = v; }
-            if let Some(v) = sneaking { a.sneaking = v; }
+            if let Some(v) = idle {
+                a.idle_anim = v;
+            }
+            if let Some(v) = moving {
+                a.moving_anim = v;
+            }
+            if let Some(v) = moving_xy {
+                a.moving_xy = v;
+            }
+            if let Some(v) = weapon {
+                a.weapon_anim = v;
+            }
+            if let Some(v) = alerted {
+                a.alerted = v;
+            }
+            if let Some(v) = sneaking {
+                a.sneaking = v;
+            }
         }
     }
     Some(Packet::ActorStateDelta {
-        id, idle, moving, moving_xy, weapon, alerted, sneaking, firing,
+        id,
+        idle,
+        moving,
+        moving_xy,
+        weapon,
+        alerted,
+        sneaking,
+        firing,
     })
 }
 
 /// Handle UpdateActorValue.
-pub fn handle_actor_value(registry: &Arc<ObjectRegistry>, session: &crate::session::Session, id: NetworkID, base: bool, index: u8, value: f32) -> Option<Packet> {
+pub fn handle_actor_value(
+    registry: &Arc<ObjectRegistry>,
+    session: &crate::session::Session,
+    id: NetworkID,
+    base: bool,
+    index: u8,
+    value: f32,
+) -> Option<Packet> {
     if !can_mutate(registry, session, id) {
         return None;
     }
@@ -176,11 +242,23 @@ pub fn handle_actor_value(registry: &Arc<ObjectRegistry>, session: &crate::sessi
             player.actor.set_value(index, value, base);
         }
     }
-    Some(Packet::UpdateActorValue { id, base, index, value })
+    Some(Packet::UpdateActorValue {
+        id,
+        base,
+        index,
+        value,
+    })
 }
 
 /// Handle UpdateActorDead — mark actor as dead.
-pub fn handle_actor_dead(registry: &Arc<ObjectRegistry>, session: &crate::session::Session, id: NetworkID, dead: bool, limbs: u16, cause: i8) -> Option<Packet> {
+pub fn handle_actor_dead(
+    registry: &Arc<ObjectRegistry>,
+    session: &crate::session::Session,
+    id: NetworkID,
+    dead: bool,
+    limbs: u16,
+    cause: i8,
+) -> Option<Packet> {
     if !can_mutate(registry, session, id) {
         return None;
     }
@@ -196,11 +274,21 @@ pub fn handle_actor_dead(registry: &Arc<ObjectRegistry>, session: &crate::sessio
             player.actor.death_cause = cause;
         }
     }
-    Some(Packet::UpdateActorDead { id, dead, limbs, cause })
+    Some(Packet::UpdateActorDead {
+        id,
+        dead,
+        limbs,
+        cause,
+    })
 }
 
 /// Handle UpdateFireWeapon.
-pub fn handle_fire_weapon(_registry: &Arc<ObjectRegistry>, session: &crate::session::Session, id: NetworkID, weapon: u32) -> Option<Packet> {
+pub fn handle_fire_weapon(
+    _registry: &Arc<ObjectRegistry>,
+    session: &crate::session::Session,
+    id: NetworkID,
+    weapon: u32,
+) -> Option<Packet> {
     if !can_mutate(_registry, session, id) {
         return None;
     }
@@ -221,5 +309,11 @@ pub fn handle_spell_cast(
     if !can_mutate(registry, session, id) {
         return None;
     }
-    Some(Packet::SpellCast { id, spell, source, dual, target })
+    Some(Packet::SpellCast {
+        id,
+        spell,
+        source,
+        dual,
+        target,
+    })
 }

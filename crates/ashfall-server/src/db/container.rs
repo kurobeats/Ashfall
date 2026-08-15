@@ -10,21 +10,32 @@ pub struct BaseContainer {
 
 impl Database {
     pub fn get_container(&self, base_id: u32) -> Option<BaseContainer> {
-        let mut stmt = self.conn()
+        let mut stmt = self
+            .conn()
             .prepare("SELECT baseID, name FROM base_containers WHERE baseID = ?1")
             .ok()?;
         stmt.query_row(rusqlite::params![base_id], |row| {
-            Ok(BaseContainer { base_id: row.get(0)?, name: row.get(1)? })
-        }).ok()
+            Ok(BaseContainer {
+                base_id: row.get(0)?,
+                name: row.get(1)?,
+            })
+        })
+        .ok()
     }
 
     pub fn load_all_containers(&self) -> Vec<BaseContainer> {
-        let mut stmt = match self.conn().prepare("SELECT baseID, name FROM base_containers") {
+        let mut stmt = match self
+            .conn()
+            .prepare("SELECT baseID, name FROM base_containers")
+        {
             Ok(s) => s,
             Err(_) => return vec![],
         };
         let rows = stmt.query_map([], |row| {
-            Ok(BaseContainer { base_id: row.get(0)?, name: row.get(1)? })
+            Ok(BaseContainer {
+                base_id: row.get(0)?,
+                name: row.get(1)?,
+            })
         });
         match rows {
             Ok(iter) => iter.filter_map(|r| r.ok()).collect(),

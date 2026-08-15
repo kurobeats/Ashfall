@@ -87,43 +87,55 @@ impl ServerBrowser {
         ui.separator();
 
         // Refresh button
-        let refresh_btn = egui::Button::new(if self.refreshing { "Searching..." } else { "Refresh" });
+        let refresh_btn = egui::Button::new(if self.refreshing {
+            "Searching..."
+        } else {
+            "Refresh"
+        });
         if ui.add_enabled(!self.refreshing, refresh_btn).clicked() {
             self.refresh();
         }
 
         // Server list
-        egui::ScrollArea::vertical().max_height(300.0).show(ui, |ui| {
-            if self.servers.is_empty() {
-                ui.label(if self.refreshing {
-                    "Querying master server..."
-                } else {
-                    "No servers found. Click Refresh to search."
-                });
-            }
+        egui::ScrollArea::vertical()
+            .max_height(300.0)
+            .show(ui, |ui| {
+                if self.servers.is_empty() {
+                    ui.label(if self.refreshing {
+                        "Querying master server..."
+                    } else {
+                        "No servers found. Click Refresh to search."
+                    });
+                }
 
-            let mut to_select: Option<SocketAddr> = None;
-            for server in &self.servers {
-                ui.group(|ui| {
-                    ui.horizontal(|ui| {
-                        ui.vertical(|ui| {
-                            ui.strong(&server.name);
-                            ui.label(format!("{} — {}/{} players", server.map, server.players, server.max_players));
-                            ui.label(format!("{} ({})", server.addr, server.game_type));
-                        });
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if ui.button("Join").clicked() {
-                                to_select = Some(server.addr);
-                            }
+                let mut to_select: Option<SocketAddr> = None;
+                for server in &self.servers {
+                    ui.group(|ui| {
+                        ui.horizontal(|ui| {
+                            ui.vertical(|ui| {
+                                ui.strong(&server.name);
+                                ui.label(format!(
+                                    "{} — {}/{} players",
+                                    server.map, server.players, server.max_players
+                                ));
+                                ui.label(format!("{} ({})", server.addr, server.game_type));
+                            });
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    if ui.button("Join").clicked() {
+                                        to_select = Some(server.addr);
+                                    }
+                                },
+                            );
                         });
                     });
-                });
-            }
+                }
 
-            if let Some(addr) = to_select {
-                self.selected_addr = Some(addr);
-            }
-        });
+                if let Some(addr) = to_select {
+                    self.selected_addr = Some(addr);
+                }
+            });
 
         self
     }
@@ -164,8 +176,14 @@ fn query_master_sync(master_addr: &str) -> Vec<ServerInfo> {
     while start.elapsed() < Duration::from_secs(2) {
         match socket.recv_from(&mut recv_buf) {
             Ok((len, src)) => {
-                if let Some(Packet::MasterAnnounce { name, map, players, max_players, game_type, .. }) =
-                    decode_response(&recv_buf[..len])
+                if let Some(Packet::MasterAnnounce {
+                    name,
+                    map,
+                    players,
+                    max_players,
+                    game_type,
+                    ..
+                }) = decode_response(&recv_buf[..len])
                 {
                     servers.push(ServerInfo {
                         name,

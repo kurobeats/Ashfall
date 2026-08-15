@@ -1,13 +1,13 @@
 //! Object handler — create/update/remove objects, position/angle sync.
 
-use ashfall_core::id::NetworkID;
-use ashfall_core::math::is_valid_angle3;
-use ashfall_core::protocol::Packet;
-use ashfall_core::string_cache::CachedString;
 use crate::anti_cheat::AntiCheat;
 use crate::session::Session;
 use crate::world::objects::{Actor, Container, Object, Player};
 use crate::world::registry::ObjectRegistry;
+use ashfall_core::id::NetworkID;
+use ashfall_core::math::is_valid_angle3;
+use ashfall_core::protocol::Packet;
+use ashfall_core::string_cache::CachedString;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -42,7 +42,9 @@ fn with_entity_mut(
     id: NetworkID,
     f: impl FnOnce(&mut Object),
 ) -> bool {
-    let Some(arc) = registry.get(id) else { return false };
+    let Some(arc) = registry.get(id) else {
+        return false;
+    };
     let mut guard = arc.write();
     if let Some(obj) = guard.as_any_mut().downcast_mut::<Object>() {
         f(obj);
@@ -69,7 +71,10 @@ pub fn handle_update_pos(
     pos: [f32; 3],
 ) -> Option<Packet> {
     if !owned(registry, session, id) {
-        tracing::warn!("Rejected UpdatePos for {id} from {} (not owner)", session.player_name);
+        tracing::warn!(
+            "Rejected UpdatePos for {id} from {} (not owner)",
+            session.player_name
+        );
         return None;
     }
     let prev = read_pos(registry, id)?;
@@ -146,11 +151,16 @@ pub fn handle_update_name(
         return None;
     }
     // Client sends Plain; Id/Inline are meaningless inbound.
-    let CachedString::Plain(name) = name else { return None };
+    let CachedString::Plain(name) = name else {
+        return None;
+    };
     with_entity_mut(registry, id, |obj| {
         obj.name = name.clone();
     });
-    Some(Packet::UpdateName { id, name: name.into() })
+    Some(Packet::UpdateName {
+        id,
+        name: name.into(),
+    })
 }
 
 /// Handle UpdateScale.
@@ -178,15 +188,36 @@ pub fn handle_update_scale(
 // ═══════════════════════════════════════════════════════════════
 
 /// Handle ObjectNew — create object, insert into registry, broadcast.
-pub fn handle_object_new(
-    registry: &Arc<ObjectRegistry>,
-    packet: &Packet,
-) -> Option<Packet> {
+pub fn handle_object_new(registry: &Arc<ObjectRegistry>, packet: &Packet) -> Option<Packet> {
     let (id, ref_id, base_id, name, game_pos, net_pos, angle, scale, cell, enabled, lock, owner) =
         match packet {
-            Packet::ObjectNew { id, ref_id, base_id, name, game_pos, net_pos, angle, scale, cell, enabled, lock, owner } => {
-                (*id, *ref_id, *base_id, name.clone(), *game_pos, *net_pos, *angle, *scale, *cell, *enabled, *lock, *owner)
-            }
+            Packet::ObjectNew {
+                id,
+                ref_id,
+                base_id,
+                name,
+                game_pos,
+                net_pos,
+                angle,
+                scale,
+                cell,
+                enabled,
+                lock,
+                owner,
+            } => (
+                *id,
+                *ref_id,
+                *base_id,
+                name.clone(),
+                *game_pos,
+                *net_pos,
+                *angle,
+                *scale,
+                *cell,
+                *enabled,
+                *lock,
+                *owner,
+            ),
             _ => return None,
         };
 
@@ -217,12 +248,13 @@ pub fn handle_object_new(
 }
 
 /// Handle ContainerNew — create container, insert into registry, broadcast.
-pub fn handle_container_new(
-    registry: &Arc<ObjectRegistry>,
-    packet: &Packet,
-) -> Option<Packet> {
+pub fn handle_container_new(registry: &Arc<ObjectRegistry>, packet: &Packet) -> Option<Packet> {
     let (id, ref_id, base_id) = match packet {
-        Packet::ContainerNew { id, ref_id, base_id } => (*id, *ref_id, *base_id),
+        Packet::ContainerNew {
+            id,
+            ref_id,
+            base_id,
+        } => (*id, *ref_id, *base_id),
         _ => return None,
     };
 

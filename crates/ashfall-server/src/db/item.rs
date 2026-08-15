@@ -12,7 +12,8 @@ pub struct BaseItem {
 
 impl Database {
     pub fn get_item(&self, base_id: u32) -> Option<BaseItem> {
-        let mut stmt = self.conn()
+        let mut stmt = self
+            .conn()
             .prepare("SELECT baseID, name, weight, value FROM base_items WHERE baseID = ?1")
             .ok()?;
         stmt.query_row(rusqlite::params![base_id], |row| {
@@ -22,11 +23,15 @@ impl Database {
                 weight: row.get(2)?,
                 value: row.get::<_, i32>(3)? as u32,
             })
-        }).ok()
+        })
+        .ok()
     }
 
     pub fn load_all_items(&self) -> Vec<BaseItem> {
-        let mut stmt = match self.conn().prepare("SELECT baseID, name, weight, value FROM base_items") {
+        let mut stmt = match self
+            .conn()
+            .prepare("SELECT baseID, name, weight, value FROM base_items")
+        {
             Ok(s) => s,
             Err(_) => return vec![],
         };

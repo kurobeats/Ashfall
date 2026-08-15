@@ -23,8 +23,8 @@ pub mod opcode;
 pub mod vaultmp;
 pub mod vtable;
 
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{LazyLock, Mutex};
 
 static HOOKS_INSTALLED: AtomicBool = AtomicBool::new(false);
@@ -414,7 +414,9 @@ pub fn set_dialogue_flag(flag_id: u32, value: bool) {
 /// Get reputation with a faction (FNV only).
 pub fn get_reputation(_faction: u32) -> i32 {
     // Guard: only valid for FNV
-    if !is_fnv() { return 0; }
+    if !is_fnv() {
+        return 0;
+    }
     // TODO: PlayerCharacter::GetReputation()
     0
 }
@@ -427,7 +429,9 @@ pub fn set_reputation(_faction: u32, _value: i32) {
 /// Get hardcore stat values (FNV only).
 /// Returns (hunger, thirst, sleep).
 pub fn get_hardcore_stats() -> (f32, f32, f32) {
-    if !is_fnv() { return (0.0, 0.0, 0.0); }
+    if !is_fnv() {
+        return (0.0, 0.0, 0.0);
+    }
     // TODO: PlayerCharacter::GetHardcoreStats()
     (0.0, 0.0, 0.0)
 }
@@ -561,20 +565,30 @@ pub fn encode_event_frame(event_type: u32, event_data: *const std::ffi::c_void) 
         let bytes = |ptr: *const u8, len: usize| std::slice::from_raw_parts(ptr, len);
         match event_type {
             EVENT_ON_HIT => bytes(event_data as *const u8, std::mem::size_of::<TESHitEvent>()),
-            EVENT_ON_ACTIVATE => {
-                bytes(event_data as *const u8, std::mem::size_of::<TESActivateEvent>())
-            }
-            EVENT_ON_EQUIP => bytes(event_data as *const u8, std::mem::size_of::<TESEquipEvent>()),
-            EVENT_ON_CELL_CHANGE => {
-                bytes(event_data as *const u8, std::mem::size_of::<TESCellChangeEvent>())
-            }
-            EVENT_ON_DEATH => bytes(event_data as *const u8, std::mem::size_of::<TESDeathEvent>()),
-            EVENT_ON_LOAD_GAME => {
-                bytes(event_data as *const u8, std::mem::size_of::<TESLoadGameEvent>())
-            }
-            EVENT_ON_MAGIC_EFFECT => {
-                bytes(event_data as *const u8, std::mem::size_of::<TESMagicEffectApplyEvent>())
-            }
+            EVENT_ON_ACTIVATE => bytes(
+                event_data as *const u8,
+                std::mem::size_of::<TESActivateEvent>(),
+            ),
+            EVENT_ON_EQUIP => bytes(
+                event_data as *const u8,
+                std::mem::size_of::<TESEquipEvent>(),
+            ),
+            EVENT_ON_CELL_CHANGE => bytes(
+                event_data as *const u8,
+                std::mem::size_of::<TESCellChangeEvent>(),
+            ),
+            EVENT_ON_DEATH => bytes(
+                event_data as *const u8,
+                std::mem::size_of::<TESDeathEvent>(),
+            ),
+            EVENT_ON_LOAD_GAME => bytes(
+                event_data as *const u8,
+                std::mem::size_of::<TESLoadGameEvent>(),
+            ),
+            EVENT_ON_MAGIC_EFFECT => bytes(
+                event_data as *const u8,
+                std::mem::size_of::<TESMagicEffectApplyEvent>(),
+            ),
             _ => return None,
         }
     };
@@ -593,7 +607,10 @@ pub fn hook_console_command(command: &str) -> bool {
 
 /// Register a console command handler.
 pub fn register_console_command(command: &str) {
-    CONSOLE_COMMANDS.lock().unwrap().insert(command.to_string(), true);
+    CONSOLE_COMMANDS
+        .lock()
+        .unwrap()
+        .insert(command.to_string(), true);
 }
 
 /// Unregister a console command.
@@ -802,7 +819,10 @@ pub fn probe_saves() -> Vec<u8> {
     let mut personal = [0u8; 264];
     let hr = unsafe { SHGetFolderPathA(0, CSIDL_PERSONAL as i32, 0, 0, personal.as_mut_ptr()) };
     let personal_str = if hr == 0 {
-        let len = personal.iter().position(|&b| b == 0).unwrap_or(personal.len());
+        let len = personal
+            .iter()
+            .position(|&b| b == 0)
+            .unwrap_or(personal.len());
         String::from_utf8_lossy(&personal[..len]).into_owned()
     } else {
         format!("SHGetFolderPath hr={hr:#x}")

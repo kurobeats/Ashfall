@@ -43,13 +43,22 @@ fn test_master_announce_encode_decode() {
     let decoded = decode_packet(&data).expect("decode");
 
     match decoded {
-        Packet::MasterAnnounce { name, players, max_players, game_type, .. } => {
+        Packet::MasterAnnounce {
+            name,
+            players,
+            max_players,
+            game_type,
+            ..
+        } => {
             assert_eq!(name, "Test Server");
             assert_eq!(players, 2);
             assert_eq!(max_players, 4);
             assert_eq!(game_type, "fo3");
         }
-        other => panic!("Expected MasterAnnounce, got {:?}", std::mem::discriminant(&other)),
+        other => panic!(
+            "Expected MasterAnnounce, got {:?}",
+            std::mem::discriminant(&other)
+        ),
     }
 }
 
@@ -66,12 +75,20 @@ fn test_master_update_encode_decode() {
     let decoded = decode_packet(&data).expect("decode");
 
     match decoded {
-        Packet::MasterUpdate { name, players, max_players, .. } => {
+        Packet::MasterUpdate {
+            name,
+            players,
+            max_players,
+            ..
+        } => {
             assert_eq!(name, "Server");
             assert_eq!(players, 1);
             assert_eq!(max_players, 4);
         }
-        other => panic!("Expected MasterUpdate, got {:?}", std::mem::discriminant(&other)),
+        other => panic!(
+            "Expected MasterUpdate, got {:?}",
+            std::mem::discriminant(&other)
+        ),
     }
 }
 
@@ -99,14 +116,24 @@ fn test_master_announce_fnv() {
     let decoded = decode_packet(&data).expect("decode");
 
     match decoded {
-        Packet::MasterAnnounce { name, game_type, mod_files, players, max_players, .. } => {
+        Packet::MasterAnnounce {
+            name,
+            game_type,
+            mod_files,
+            players,
+            max_players,
+            ..
+        } => {
             assert_eq!(name, "Mojave");
             assert_eq!(game_type, "fnv");
             assert_eq!(players, 3);
             assert_eq!(max_players, 8);
             assert_eq!(mod_files.len(), 1);
         }
-        other => panic!("Expected MasterAnnounce, got {:?}", std::mem::discriminant(&other)),
+        other => panic!(
+            "Expected MasterAnnounce, got {:?}",
+            std::mem::discriminant(&other)
+        ),
     }
 }
 
@@ -127,7 +154,10 @@ fn test_master_deregister() {
         Packet::MasterUpdate { max_players, .. } => {
             assert_eq!(max_players, 0);
         }
-        other => panic!("Expected MasterUpdate, got {:?}", std::mem::discriminant(&other)),
+        other => panic!(
+            "Expected MasterUpdate, got {:?}",
+            std::mem::discriminant(&other)
+        ),
     }
 }
 

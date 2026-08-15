@@ -55,7 +55,11 @@ fn test_player_pos_update_validated_and_stored() {
     let sess = session(1, Some(player_id));
     let pkt = object::handle_update_pos(&registry, &sess, player_id, [1.0, 0.0, 0.0]);
     assert!(pkt.is_some(), "own player position update accepted");
-    assert_eq!(pos_of(&registry, player_id), [1.0, 0.0, 0.0], "authoritative position stored");
+    assert_eq!(
+        pos_of(&registry, player_id),
+        [1.0, 0.0, 0.0],
+        "authoritative position stored"
+    );
 }
 
 #[test]
@@ -102,7 +106,11 @@ fn test_non_owner_pos_update_rejected() {
     let attacker = session(99, Some(NetworkID::new(2)));
     let pkt = object::handle_update_pos(&registry, &attacker, victim, [100.0, 0.0, 0.0]);
     assert!(pkt.is_none(), "non-owner position update rejected");
-    assert_eq!(pos_of(&registry, victim), [0.0, 0.0, 0.0], "victim position untouched");
+    assert_eq!(
+        pos_of(&registry, victim),
+        [0.0, 0.0, 0.0],
+        "victim position untouched"
+    );
 }
 
 #[test]
@@ -124,7 +132,8 @@ fn test_non_owner_actor_state_rejected() {
     registry.insert(Player::new(victim, 0x14, 0x07, 5));
 
     let attacker = session(99, Some(NetworkID::new(2)));
-    let pkt = actor::handle_actor_state(&registry, &attacker, victim, 0, 1, 2, 3, true, false, false);
+    let pkt =
+        actor::handle_actor_state(&registry, &attacker, victim, 0, 1, 2, 3, true, false, false);
     assert!(pkt.is_none(), "non-owner actor state rejected");
     assert_eq!(pkt, None);
 }
@@ -158,7 +167,11 @@ fn test_player_teleport_rejected() {
     // 20000 units in <1s — a teleport
     let pkt = object::handle_update_pos(&registry, &sess, player_id, [20000.0, 0.0, 0.0]);
     assert!(pkt.is_none(), "teleport rejected");
-    assert_eq!(pos_of(&registry, player_id), [0.0, 0.0, 0.0], "position not updated");
+    assert_eq!(
+        pos_of(&registry, player_id),
+        [0.0, 0.0, 0.0],
+        "position not updated"
+    );
 }
 
 #[test]
@@ -176,8 +189,8 @@ fn test_player_invalid_pos_rejected() {
 // Combat — players can deal and take damage; attacker spoof rejected
 // ═══════════════════════════════════════════════════════════════
 
-use ashfall_server::handlers::combat::handle_actor_hit;
 use ashfall_core::protocol::Packet as Pkt;
+use ashfall_server::handlers::combat::handle_actor_hit;
 
 fn player_at(id: u64, health: f32, pos: [f32; 3]) -> Player {
     let mut p = Player::new(NetworkID::new(id), 0x14, 0x07, 5);
@@ -234,7 +247,9 @@ fn test_pvp_lethal_hit_kills() {
         projectile: 0,
     };
     let packets = handle_actor_hit(&registry, &sess, &hit, true).expect("hit resolves");
-    assert!(packets.iter().any(|p| matches!(p, Pkt::ActorDeathExt { id, .. } if *id == target)));
+    assert!(packets
+        .iter()
+        .any(|p| matches!(p, Pkt::ActorDeathExt { id, .. } if *id == target)));
 
     let arc = registry.get(target).unwrap();
     let guard = arc.read();
@@ -260,7 +275,10 @@ fn test_hit_attacker_spoof_rejected() {
         weapon_id: 0,
         projectile: 0,
     };
-    assert!(handle_actor_hit(&registry, &sess, &hit, true).is_none(), "spoofed attacker rejected");
+    assert!(
+        handle_actor_hit(&registry, &sess, &hit, true).is_none(),
+        "spoofed attacker rejected"
+    );
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -280,9 +298,18 @@ fn test_client_weather_updates_authoritative_state() {
     );
     sess.player_id = Some(NetworkID::new(7));
 
-    let result = dispatcher.dispatch(&mut sess, Pkt::GameWeather { weather: 0x00012345 });
+    let result = dispatcher.dispatch(
+        &mut sess,
+        Pkt::GameWeather {
+            weather: 0x00012345,
+        },
+    );
     assert!(!result.broadcasts.is_empty(), "weather change relayed");
-    assert_eq!(dispatcher.weather.get(), 0x00012345, "authoritative weather updated");
+    assert_eq!(
+        dispatcher.weather.get(),
+        0x00012345,
+        "authoritative weather updated"
+    );
 }
 
 #[test]
@@ -295,9 +322,19 @@ fn test_client_global_updates_authoritative_state() {
     );
     sess.player_id = Some(NetworkID::new(8));
 
-    let result = dispatcher.dispatch(&mut sess, Pkt::GameGlobal { global: 0x100, value: 42 });
+    let result = dispatcher.dispatch(
+        &mut sess,
+        Pkt::GameGlobal {
+            global: 0x100,
+            value: 42,
+        },
+    );
     assert!(!result.broadcasts.is_empty(), "global change relayed");
-    assert_eq!(dispatcher.globals.get(0x100), Some(42), "authoritative global updated");
+    assert_eq!(
+        dispatcher.globals.get(0x100),
+        Some(42),
+        "authoritative global updated"
+    );
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -339,7 +376,11 @@ fn test_foreign_item_count_rejected() {
     assert!(pkt.is_none(), "foreign item count rejected");
     let arc = registry.get(item_id).unwrap();
     let guard = arc.read();
-    assert_eq!(guard.as_any().downcast_ref::<Item>().unwrap().count, 1, "count untouched");
+    assert_eq!(
+        guard.as_any().downcast_ref::<Item>().unwrap().count,
+        1,
+        "count untouched"
+    );
 }
 
 #[test]
@@ -374,7 +415,6 @@ fn test_own_equip_accepted() {
     assert!(guard.as_any().downcast_ref::<Item>().unwrap().equipped);
 }
 
-
 // ═══════════════════════════════════════════════════════════════
 // Lag compensation — combat range checks use the attacker's position
 // ~1 RTT before processing, not its (ahead) current position
@@ -405,7 +445,9 @@ fn test_combat_lag_compensation_uses_old_position() {
     let history = PositionHistory::new();
     // The attacker's position when it fired: 6000 units away (out of range)
     history.record(attacker, [6000.0, 0.0, 0.0]);
-    std::thread::sleep(StdDuration::from_millis(LAG_COMP_REWIND.as_millis() as u64 + 20));
+    std::thread::sleep(StdDuration::from_millis(
+        LAG_COMP_REWIND.as_millis() as u64 + 20,
+    ));
 
     let hit = Pkt::ActorHit {
         target,
@@ -511,7 +553,10 @@ fn test_item_condition_out_of_range_rejected() {
     assert!(item::handle_item_condition(&registry, &sess, item_id, 75.0, 100).is_some());
     let arc = registry.get(item_id).unwrap();
     let guard = arc.read();
-    assert_eq!(guard.as_any().downcast_ref::<Item>().unwrap().condition, 75.0);
+    assert_eq!(
+        guard.as_any().downcast_ref::<Item>().unwrap().condition,
+        75.0
+    );
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -548,10 +593,20 @@ fn test_actor_new_grants_ownership_to_sender() {
     let registry = Arc::new(ObjectRegistry::new());
     let alice = session(1, Some(NetworkID::new(10)));
 
-    let (response, broadcast) = actor::handle_actor_new(&registry, &alice, &actor_new_packet(100, 0x500));
-    assert_eq!(response, Some(Packet::OwnershipGranted { id: NetworkID::new(100) }), "sender gets ownership");
+    let (response, broadcast) =
+        actor::handle_actor_new(&registry, &alice, &actor_new_packet(100, 0x500));
+    assert_eq!(
+        response,
+        Some(Packet::OwnershipGranted {
+            id: NetworkID::new(100)
+        }),
+        "sender gets ownership"
+    );
     assert!(broadcast.is_some(), "others get the ActorNew to render");
-    assert_eq!(registry.owner_of(NetworkID::new(100)), Some(NetworkID::new(10)));
+    assert_eq!(
+        registry.owner_of(NetworkID::new(100)),
+        Some(NetworkID::new(10))
+    );
 
     // Second client reporting the same actor (same ref_id, different id) → rejected.
     let bob = session(2, Some(NetworkID::new(20)));
@@ -571,17 +626,74 @@ fn test_actor_mutation_gated_by_ownership() {
     actor::handle_actor_new(&registry, &alice, &actor_new_packet(100, 0x500));
 
     // Owner (alice) may mutate the NPC.
-    assert!(actor::handle_actor_state(&registry, &alice, NetworkID::new(100), 1, 2, 3, 4, true, false, false).is_some());
+    assert!(actor::handle_actor_state(
+        &registry,
+        &alice,
+        NetworkID::new(100),
+        1,
+        2,
+        3,
+        4,
+        true,
+        false,
+        false
+    )
+    .is_some());
     // Non-owner (bob) may not.
-    assert!(actor::handle_actor_state(&registry, &bob, NetworkID::new(100), 9, 9, 9, 9, true, true, true).is_none());
-    assert!(actor::handle_actor_value(&registry, &alice, NetworkID::new(100), false, 0x14, 50.0).is_some());
-    assert!(actor::handle_actor_value(&registry, &bob, NetworkID::new(100), false, 0x14, 50.0).is_none());
+    assert!(actor::handle_actor_state(
+        &registry,
+        &bob,
+        NetworkID::new(100),
+        9,
+        9,
+        9,
+        9,
+        true,
+        true,
+        true
+    )
+    .is_none());
+    assert!(
+        actor::handle_actor_value(&registry, &alice, NetworkID::new(100), false, 0x14, 50.0)
+            .is_some()
+    );
+    assert!(
+        actor::handle_actor_value(&registry, &bob, NetworkID::new(100), false, 0x14, 50.0)
+            .is_none()
+    );
 
     // Spell casts: owner relays, non-owner rejected (STR NotifySpellCast).
-    assert!(actor::handle_spell_cast(&registry, &alice, NetworkID::new(100), 0x001234, 1, false, NetworkID::new(20)).is_some());
-    assert!(actor::handle_spell_cast(&registry, &bob, NetworkID::new(100), 0x001234, 1, false, NetworkID::new(20)).is_none());
+    assert!(actor::handle_spell_cast(
+        &registry,
+        &alice,
+        NetworkID::new(100),
+        0x001234,
+        1,
+        false,
+        NetworkID::new(20)
+    )
+    .is_some());
+    assert!(actor::handle_spell_cast(
+        &registry,
+        &bob,
+        NetworkID::new(100),
+        0x001234,
+        1,
+        false,
+        NetworkID::new(20)
+    )
+    .is_none());
     // Own player may always cast.
-    assert!(actor::handle_spell_cast(&registry, &bob, NetworkID::new(20), 0x005678, 2, true, NetworkID::new(10)).is_some());
+    assert!(actor::handle_spell_cast(
+        &registry,
+        &bob,
+        NetworkID::new(20),
+        0x005678,
+        2,
+        true,
+        NetworkID::new(10)
+    )
+    .is_some());
 }
 
 #[test]
@@ -592,21 +704,50 @@ fn test_actor_state_delta_applies_present_fields_only() {
 
     // Delta with only `alerted` present.
     let delta = actor::handle_actor_state_delta(
-        &registry, &alice, NetworkID::new(100),
-        None, None, None, None, Some(true), None, None,
+        &registry,
+        &alice,
+        NetworkID::new(100),
+        None,
+        None,
+        None,
+        None,
+        Some(true),
+        None,
+        None,
     );
     assert!(delta.is_some());
-    assert_eq!(delta.unwrap(), Packet::ActorStateDelta {
-        id: NetworkID::new(100), idle: None, moving: None, moving_xy: None, weapon: None,
-        alerted: Some(true), sneaking: None, firing: None,
-    });
+    assert_eq!(
+        delta.unwrap(),
+        Packet::ActorStateDelta {
+            id: NetworkID::new(100),
+            idle: None,
+            moving: None,
+            moving_xy: None,
+            weapon: None,
+            alerted: Some(true),
+            sneaking: None,
+            firing: None,
+        }
+    );
 
     // Non-owner delta rejected.
     let bob = session(2, Some(NetworkID::new(20)));
-    assert!(actor::handle_actor_state_delta(
-        &registry, &bob, NetworkID::new(100),
-        Some(5), None, None, None, None, None, None,
-    ).is_none(), "non-owner delta rejected");
+    assert!(
+        actor::handle_actor_state_delta(
+            &registry,
+            &bob,
+            NetworkID::new(100),
+            Some(5),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .is_none(),
+        "non-owner delta rejected"
+    );
 }
 
 #[test]
@@ -626,8 +767,16 @@ fn test_ownership_claim_and_disconnect_release() {
 
     // Bob can now claim it.
     let grant = actor::handle_ownership_claim(&registry, &bob, NetworkID::new(100));
-    assert_eq!(grant, Some(Packet::OwnershipGranted { id: NetworkID::new(100) }));
-    assert_eq!(registry.owner_of(NetworkID::new(100)), Some(NetworkID::new(20)));
+    assert_eq!(
+        grant,
+        Some(Packet::OwnershipGranted {
+            id: NetworkID::new(100)
+        })
+    );
+    assert_eq!(
+        registry.owner_of(NetworkID::new(100)),
+        Some(NetworkID::new(20))
+    );
 
     // Claiming an unknown actor → rejected.
     assert!(actor::handle_ownership_claim(&registry, &bob, NetworkID::new(999)).is_none());
@@ -641,7 +790,10 @@ fn test_owner_released_when_actor_removed() {
     assert!(registry.owner_of(NetworkID::new(100)).is_some());
 
     registry.remove(NetworkID::new(100));
-    assert!(registry.owner_of(NetworkID::new(100)).is_none(), "remove clears ownership");
+    assert!(
+        registry.owner_of(NetworkID::new(100)).is_none(),
+        "remove clears ownership"
+    );
     assert!(registry.is_deleted(NetworkID::new(100)));
 }
 
@@ -664,22 +816,46 @@ fn test_pvp_disabled_rejects_player_hits() {
     {
         let arc = registry.get(a).unwrap();
         let mut g = arc.write();
-        g.as_any_mut().downcast_mut::<Player>().unwrap().actor.container.object.net_pos = [0.0, 0.0, 0.0];
+        g.as_any_mut()
+            .downcast_mut::<Player>()
+            .unwrap()
+            .actor
+            .container
+            .object
+            .net_pos = [0.0, 0.0, 0.0];
     }
     {
         let arc = registry.get(b).unwrap();
         let mut g = arc.write();
-        g.as_any_mut().downcast_mut::<Player>().unwrap().actor.container.object.net_pos = [10.0, 0.0, 0.0];
+        g.as_any_mut()
+            .downcast_mut::<Player>()
+            .unwrap()
+            .actor
+            .container
+            .object
+            .net_pos = [10.0, 0.0, 0.0];
     }
 
     let sess = session(1, Some(a));
     let hit = Pkt::ActorHit {
-        target: b, attacker: a, limb: 0, base_damage: 50.0, flags: 0, weapon_id: 0, projectile: 0,
+        target: b,
+        attacker: a,
+        limb: 0,
+        base_damage: 50.0,
+        flags: 0,
+        weapon_id: 0,
+        projectile: 0,
     };
     // PvP off → player-on-player hit rejected.
-    assert!(handle_actor_hit(&registry, &sess, &hit, false).is_none(), "pvp off rejects player hit");
+    assert!(
+        handle_actor_hit(&registry, &sess, &hit, false).is_none(),
+        "pvp off rejects player hit"
+    );
     // PvP on → resolves.
-    assert!(handle_actor_hit(&registry, &sess, &hit, true).is_some(), "pvp on resolves player hit");
+    assert!(
+        handle_actor_hit(&registry, &sess, &hit, true).is_some(),
+        "pvp on resolves player hit"
+    );
 }
 
 #[test]
@@ -691,7 +867,11 @@ fn test_actor_registered_in_owners_cell_and_streams_on_context() {
     let mut alice = session(1, Some(NetworkID::new(10)));
     alice.current_cell = 5;
     actor::handle_actor_new(&registry, &alice, &actor_new_packet(100, 0x500));
-    assert_eq!(registry.get_by_cell(5), vec![NetworkID::new(100)], "actor in owner's cell");
+    assert_eq!(
+        registry.get_by_cell(5),
+        vec![NetworkID::new(100)],
+        "actor in owner's cell"
+    );
 
     // Bob moves his context to include cell 5 → he receives the actor.
     let mut bob = session(2, Some(NetworkID::new(20)));
@@ -699,15 +879,19 @@ fn test_actor_registered_in_owners_cell_and_streams_on_context() {
     let cells = [5, 5, 5, 5, 5, 5, 5, 5, 5];
     let pkts = player::handle_update_context(&registry, &mut bob, NetworkID::new(20), cells, false);
     assert!(
-        pkts.iter().any(|p| matches!(p, Packet::ActorNew { id, .. } if *id == NetworkID::new(100))),
+        pkts.iter()
+            .any(|p| matches!(p, Packet::ActorNew { id, .. } if *id == NetworkID::new(100))),
         "entered cell streams the actor"
     );
 
     // Bob leaves cell 5 → the actor is removed.
     let cells2 = [1, 1, 1, 1, 1, 1, 1, 1, 1];
-    let pkts2 = player::handle_update_context(&registry, &mut bob, NetworkID::new(20), cells2, false);
+    let pkts2 =
+        player::handle_update_context(&registry, &mut bob, NetworkID::new(20), cells2, false);
     assert!(
-        pkts2.iter().any(|p| matches!(p, Packet::ObjectRemove { id, .. } if *id == NetworkID::new(100))),
+        pkts2
+            .iter()
+            .any(|p| matches!(p, Packet::ObjectRemove { id, .. } if *id == NetworkID::new(100))),
         "left cell removes the actor"
     );
 }

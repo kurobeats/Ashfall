@@ -1,8 +1,5 @@
 //! Dedicated server main loop — UDP recv + tick + dispatch.
 
-use ashfall_core::id::NetworkID;
-use ashfall_core::protocol::Packet;
-use ashfall_core::types::Reason;
 use crate::config::ServerConfig;
 use crate::db::Database;
 use crate::dispatch::Dispatcher;
@@ -11,6 +8,9 @@ use crate::network::NetworkManager;
 use crate::script::engine::{ScriptEngine, ScriptState};
 use crate::script::state::{GameTime, ScriptEffect};
 use crate::session::Session;
+use ashfall_core::id::NetworkID;
+use ashfall_core::protocol::Packet;
+use ashfall_core::types::Reason;
 use dashmap::DashMap;
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -97,7 +97,10 @@ impl DedicatedServer {
             config.server.connections as u32,
         );
         script_engine.instantiate_all(state)?;
-        tracing::info!("Script engine initialized with {} modules", script_engine.module_count());
+        tracing::info!(
+            "Script engine initialized with {} modules",
+            script_engine.module_count()
+        );
 
         // Snapshot initial world state for tick-level delta sync.
         let last_weather = dispatcher.weather.get();
@@ -219,7 +222,10 @@ impl DedicatedServer {
                     .map(|e| *e.key())
                     .collect();
                 let pkt = Packet::GameTime {
-                    year: now.year, month: now.month, day: now.day, hour: now.hour,
+                    year: now.year,
+                    month: now.month,
+                    day: now.day,
+                    hour: now.hour,
                     time_scale: gt.get_scale(),
                 };
                 for a in &addrs {
@@ -229,7 +235,11 @@ impl DedicatedServer {
         }
 
         // Live player count for scripts
-        let player_count = self.sessions.iter().filter(|e| e.value().is_ingame()).count() as u32;
+        let player_count = self
+            .sessions
+            .iter()
+            .filter(|e| e.value().is_ingame())
+            .count() as u32;
         if let Some(arc) = self.script_engine.player_count.clone() {
             arc.store(player_count, Ordering::Relaxed);
         }
@@ -243,7 +253,11 @@ impl DedicatedServer {
         // Cull stale sessions (>30s inactive)
         self.sessions.retain(|addr, session| {
             if session.is_stale(30) {
-                tracing::info!("Culling stale session {} ({}s inactive)", session.player_name, session.last_recv.elapsed().as_secs());
+                tracing::info!(
+                    "Culling stale session {} ({}s inactive)",
+                    session.player_name,
+                    session.last_recv.elapsed().as_secs()
+                );
                 self.network.remove_session(*addr);
                 false
             } else {
@@ -257,7 +271,9 @@ impl DedicatedServer {
         for effect in effects {
             match effect {
                 ScriptEffect::PrivateChat { player_id, message } => {
-                    let pkt = Packet::GameChat { message: message.into() };
+                    let pkt = Packet::GameChat {
+                        message: message.into(),
+                    };
                     let targets: Vec<SocketAddr> = self
                         .sessions
                         .iter()
@@ -269,7 +285,9 @@ impl DedicatedServer {
                     }
                 }
                 ScriptEffect::BroadcastChat { message } => {
-                    let pkt = Packet::GameChat { message: message.into() };
+                    let pkt = Packet::GameChat {
+                        message: message.into(),
+                    };
                     let addrs: Vec<SocketAddr> = self
                         .sessions
                         .iter()
@@ -288,7 +306,13 @@ impl DedicatedServer {
                         .map(|e| *e.key())
                         .collect();
                     for addr in targets {
-                        self.send(addr, Packet::GameEnd { reason: Reason::Quit as u8 }).await;
+                        self.send(
+                            addr,
+                            Packet::GameEnd {
+                                reason: Reason::Quit as u8,
+                            },
+                        )
+                        .await;
                         self.disconnect(addr).await;
                     }
                 }
@@ -387,7 +411,14 @@ impl DedicatedServer {
             }
 
             // Script hit gate: on_hit may block combat resolution.
-            if let Packet::ActorHit { target, attacker, limb, base_damage, .. } = &packet {
+            if let Packet::ActorHit {
+                target,
+                attacker,
+                limb,
+                base_damage,
+                ..
+            } = &packet
+            {
                 if !self.script_engine.dispatch_hit(
                     target.as_u64(),
                     attacker.as_u64(),
@@ -402,7 +433,13 @@ impl DedicatedServer {
             let cell_before = session.cell_context[4];
             let result = self.dispatcher.dispatch(&mut session, packet);
             let cell_after = session.cell_context[4];
-            (result.responses, result.broadcasts, result.disconnect, cell_before, cell_after)
+            (
+                result.responses,
+                result.broadcasts,
+                result.disconnect,
+                cell_before,
+                cell_after,
+            )
         }; // session guard released here
 
         // Script notifications from the dispatched packets (create/destroy,
@@ -425,14 +462,16 @@ impl DedicatedServer {
                                 .map(|i| i.container.as_u64())
                         })
                         .unwrap_or(0);
-                    self.script_engine.notify_equip(owner, id.as_u64(), *equipped);
+                    self.script_engine
+                        .notify_equip(owner, id.as_u64(), *equipped);
                 }
                 Packet::UpdateItemCount { id, count, .. } => {
                     self.script_engine.notify_item_count(id.as_u64(), *count);
                 }
                 Packet::UpdateActivate { id, actor } => {
                     // id here is the ref being activated; actor is the activator.
-                    self.script_engine.notify_activate(id.as_u64() as u32, actor.as_u64());
+                    self.script_engine
+                        .notify_activate(id.as_u64() as u32, actor.as_u64());
                 }
                 Packet::UpdateWindowClick { id } => {
                     let pid = self
@@ -454,19 +493,23 @@ impl DedicatedServer {
                 }
                 Packet::UpdateWindowText { id, text } => {
                     let pid = self.sessions_player_id(&addr);
-                    self.script_engine.notify_window_text(pid, id.as_u64(), text);
+                    self.script_engine
+                        .notify_window_text(pid, id.as_u64(), text);
                 }
                 Packet::UpdateCheckboxSelected { id, selected } => {
                     let pid = self.sessions_player_id(&addr);
-                    self.script_engine.notify_checkbox(pid, id.as_u64(), *selected);
+                    self.script_engine
+                        .notify_checkbox(pid, id.as_u64(), *selected);
                 }
                 Packet::UpdateRadioButtonSelected { id, previous, .. } => {
                     let pid = self.sessions_player_id(&addr);
-                    self.script_engine.notify_radio(pid, id.as_u64(), previous.as_u64());
+                    self.script_engine
+                        .notify_radio(pid, id.as_u64(), previous.as_u64());
                 }
                 Packet::UpdateListItemSelected { id, selected } => {
                     let pid = self.sessions_player_id(&addr);
-                    self.script_engine.notify_list_item(pid, id.as_u64(), *selected);
+                    self.script_engine
+                        .notify_list_item(pid, id.as_u64(), *selected);
                 }
                 Packet::UpdateFireWeapon { id, weapon } => {
                     self.script_engine.notify_fire_weapon(id.as_u64(), *weapon);
@@ -475,14 +518,27 @@ impl DedicatedServer {
                     self.script_engine.notify_punch(id.as_u64(), *power);
                 }
                 Packet::UpdateItemCondition { id, condition, .. } => {
-                    self.script_engine.notify_item_condition(id.as_u64(), *condition);
+                    self.script_engine
+                        .notify_item_condition(id.as_u64(), *condition);
                 }
-                Packet::UpdateActorState { id, alerted, sneaking, .. } => {
+                Packet::UpdateActorState {
+                    id,
+                    alerted,
+                    sneaking,
+                    ..
+                } => {
                     self.script_engine.notify_actor_alert(id.as_u64(), *alerted);
-                    self.script_engine.notify_actor_sneak(id.as_u64(), *sneaking);
+                    self.script_engine
+                        .notify_actor_sneak(id.as_u64(), *sneaking);
                 }
-                Packet::UpdateActorValue { id, base, index, value } => {
-                    self.script_engine.notify_actor_value(id.as_u64(), *index, *value, *base);
+                Packet::UpdateActorValue {
+                    id,
+                    base,
+                    index,
+                    value,
+                } => {
+                    self.script_engine
+                        .notify_actor_value(id.as_u64(), *index, *value, *base);
                 }
                 Packet::UpdateWindowMode { enabled } => {
                     let pid = self.sessions_player_id(&addr);
@@ -490,11 +546,13 @@ impl DedicatedServer {
                 }
                 Packet::DialogueChoice { flag_id, choice } => {
                     let pid = self.sessions_player_id(&addr);
-                    self.script_engine.notify_dialogue_choice(pid, *flag_id, *choice);
+                    self.script_engine
+                        .notify_dialogue_choice(pid, *flag_id, *choice);
                 }
                 Packet::UpdateLock { id, lock } => {
                     let pid = self.sessions_player_id(&addr);
-                    self.script_engine.notify_lock_change(id.as_u64(), pid, *lock);
+                    self.script_engine
+                        .notify_lock_change(id.as_u64(), pid, *lock);
                 }
                 // Death handled below (needs limbs/cause from the packet).
                 _ => {}
@@ -514,13 +572,16 @@ impl DedicatedServer {
 
         // Script on_actor_death notification for combat-resolved deaths
         for pkt in responses.iter().chain(broadcasts.iter()) {
-            if let Packet::ActorDeathExt { id, killer, limbs, cause, .. } = pkt {
-                self.script_engine.notify_actor_death(
-                    id.as_u64(),
-                    killer.as_u64(),
-                    *limbs,
-                    *cause,
-                );
+            if let Packet::ActorDeathExt {
+                id,
+                killer,
+                limbs,
+                cause,
+                ..
+            } = pkt
+            {
+                self.script_engine
+                    .notify_actor_death(id.as_u64(), killer.as_u64(), *limbs, *cause);
             }
         }
 
@@ -531,7 +592,6 @@ impl DedicatedServer {
 
         // Broadcast to all other clients
         for pkt in broadcasts {
-
             let targets: Vec<SocketAddr> = self
                 .sessions
                 .iter()
@@ -552,9 +612,11 @@ impl DedicatedServer {
     /// Handle a new GameAuth connection.
     async fn handle_auth(&mut self, addr: SocketAddr, packet: Packet) {
         let (name, password, version) = match &packet {
-            Packet::GameAuth { name, password, version } => {
-                (name.clone(), password.clone(), version.clone())
-            }
+            Packet::GameAuth {
+                name,
+                password,
+                version,
+            } => (name.clone(), password.clone(), version.clone()),
             _ => return,
         };
 
@@ -571,14 +633,16 @@ impl DedicatedServer {
         // Script auth callback: any module vote of 0 rejects the connection.
         if !self.script_engine.dispatch_auth(&name, &password) {
             tracing::warn!("Script denied auth for {name} from {addr}");
-            let end = Packet::GameEnd { reason: Reason::Denied as u8 };
+            let end = Packet::GameEnd {
+                reason: Reason::Denied as u8,
+            };
             self.send(addr, end).await;
             return;
         }
 
-        let (session, responses) = self.dispatcher.handle_connection(
-            addr, name.clone(), password, version, session_id,
-        );
+        let (session, responses) =
+            self.dispatcher
+                .handle_connection(addr, name.clone(), password, version, session_id);
 
         let mut session = match session {
             Some(s) => s,
@@ -632,19 +696,31 @@ impl DedicatedServer {
 
         // Server rules + authoritative game clock on join (STR ServerSettings /
         // CalendarService: join-time send, then change broadcasts from the tick).
-        self.send(addr, Packet::ServerSettings {
-            pvp_enabled: self.config.server.pvp_enabled,
-        }).await;
+        self.send(
+            addr,
+            Packet::ServerSettings {
+                pvp_enabled: self.config.server.pvp_enabled,
+            },
+        )
+        .await;
         if let Some(gt) = self.script_engine.game_time.clone() {
             let t = gt.get();
-            self.send(addr, Packet::GameTime {
-                year: t.year, month: t.month, day: t.day, hour: t.hour,
-                time_scale: gt.get_scale(),
-            }).await;
+            self.send(
+                addr,
+                Packet::GameTime {
+                    year: t.year,
+                    month: t.month,
+                    day: t.day,
+                    hour: t.hour,
+                    time_scale: gt.get_scale(),
+                },
+            )
+            .await;
         }
 
         // Broadcast PlayerNew to all existing players
-        let other_addrs: Vec<SocketAddr> = self.sessions
+        let other_addrs: Vec<SocketAddr> = self
+            .sessions
             .iter()
             .filter(|entry| entry.value().is_ingame())
             .map(|entry| *entry.key())
@@ -724,22 +800,42 @@ mod tests {
 
     #[test]
     fn test_advance_hour_rolls_over() {
-        let mut t = GameTime { year: 2277, month: 8, day: 17, hour: 9 };
+        let mut t = GameTime {
+            year: 2277,
+            month: 8,
+            day: 17,
+            hour: 9,
+        };
         advance_hour(&mut t);
         assert_eq!((t.year, t.month, t.day, t.hour), (2277, 8, 17, 10));
 
         // Day rollover
-        let mut t = GameTime { year: 2277, month: 8, day: 17, hour: 23 };
+        let mut t = GameTime {
+            year: 2277,
+            month: 8,
+            day: 17,
+            hour: 23,
+        };
         advance_hour(&mut t);
         assert_eq!((t.year, t.month, t.day, t.hour), (2277, 8, 18, 0));
 
         // Month rollover (30-day months)
-        let mut t = GameTime { year: 2277, month: 8, day: 30, hour: 23 };
+        let mut t = GameTime {
+            year: 2277,
+            month: 8,
+            day: 30,
+            hour: 23,
+        };
         advance_hour(&mut t);
         assert_eq!((t.year, t.month, t.day, t.hour), (2277, 9, 1, 0));
 
         // Year rollover
-        let mut t = GameTime { year: 2277, month: 12, day: 30, hour: 23 };
+        let mut t = GameTime {
+            year: 2277,
+            month: 12,
+            day: 30,
+            hour: 23,
+        };
         advance_hour(&mut t);
         assert_eq!((t.year, t.month, t.day, t.hour), (2278, 1, 1, 0));
     }

@@ -35,7 +35,11 @@ fn fid(id: u32) -> FormID {
 
 #[test]
 fn test_game_auth() {
-    roundtrip(&Packet::GameAuth { name: "VaultDweller".into(), password: "101".into(), version: "0.1a".into() });
+    roundtrip(&Packet::GameAuth {
+        name: "VaultDweller".into(),
+        password: "101".into(),
+        version: "0.1a".into(),
+    });
 }
 
 #[test]
@@ -51,32 +55,47 @@ fn test_game_end() {
 
 #[test]
 fn test_game_mod() {
-    roundtrip(&Packet::GameMod { filename: "vaultmp.esp".into(), crc: 0x1C877592 });
+    roundtrip(&Packet::GameMod {
+        filename: "vaultmp.esp".into(),
+        crc: 0x1C877592,
+    });
 }
 
 #[test]
 fn test_game_message() {
-    roundtrip(&Packet::GameMessage { message: "Hello".into(), emoticon: 1 });
+    roundtrip(&Packet::GameMessage {
+        message: "Hello".into(),
+        emoticon: 1,
+    });
 }
 
 #[test]
 fn test_game_chat() {
-    roundtrip(&Packet::GameChat { message: "Hi everyone!".into() });
+    roundtrip(&Packet::GameChat {
+        message: "Hi everyone!".into(),
+    });
 }
 
 #[test]
 fn test_game_weather() {
-    roundtrip(&Packet::GameWeather { weather: 0x00015E5E }); // Fallout3Clear
+    roundtrip(&Packet::GameWeather {
+        weather: 0x00015E5E,
+    }); // Fallout3Clear
 }
 
 #[test]
 fn test_game_global() {
-    roundtrip(&Packet::GameGlobal { global: 0x123456, value: 42 });
+    roundtrip(&Packet::GameGlobal {
+        global: 0x123456,
+        value: 42,
+    });
 }
 
 #[test]
 fn test_game_base() {
-    roundtrip(&Packet::GameBase { player_base: 0x00000007 });
+    roundtrip(&Packet::GameBase {
+        player_base: 0x00000007,
+    });
 }
 
 #[test]
@@ -92,7 +111,11 @@ fn test_game_deleted() {
 
 #[test]
 fn test_reference_new() {
-    roundtrip(&Packet::ReferenceNew { id: nid(1), ref_id: 0x1234, base_id: 0x5678 });
+    roundtrip(&Packet::ReferenceNew {
+        id: nid(1),
+        ref_id: 0x1234,
+        base_id: 0x5678,
+    });
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -137,34 +160,57 @@ fn test_object_scale_non_default() {
 
 #[test]
 fn test_update_pos() {
-    roundtrip(&Packet::UpdatePos { id: nid(10), pos: [100.0, 200.0, 50.0] });
+    roundtrip(&Packet::UpdatePos {
+        id: nid(10),
+        pos: [100.0, 200.0, 50.0],
+    });
 }
 
 #[test]
 fn test_update_angle() {
-    roundtrip(&Packet::UpdateAngle { id: nid(10), angle: [0.0, 180.0] });
+    roundtrip(&Packet::UpdateAngle {
+        id: nid(10),
+        angle: [0.0, 180.0],
+    });
 }
 
 #[test]
 fn test_update_scale() {
-    roundtrip(&Packet::UpdateScale { id: nid(10), scale: 1.5 });
+    roundtrip(&Packet::UpdateScale {
+        id: nid(10),
+        scale: 1.5,
+    });
 }
 
 #[test]
 fn test_update_name() {
     // UpdateName carries a string-cached name (CachedString::Plain + Id).
-    roundtrip(&Packet::UpdateName { id: nid(10), name: "door\0name".into() });
-    roundtrip(&Packet::UpdateName { id: nid(10), name: ashfall_core::string_cache::CachedString::Id(3) });
+    roundtrip(&Packet::UpdateName {
+        id: nid(10),
+        name: "door\0name".into(),
+    });
+    roundtrip(&Packet::UpdateName {
+        id: nid(10),
+        name: ashfall_core::string_cache::CachedString::Id(3),
+    });
 }
 
 #[test]
 fn test_update_actor_idle() {
-    roundtrip(&Packet::UpdateActorIdle { id: nid(10), idle: 0x2A, name: "idle\0anim".into() });
+    roundtrip(&Packet::UpdateActorIdle {
+        id: nid(10),
+        idle: 0x2A,
+        name: "idle\0anim".into(),
+    });
 }
 
 #[test]
 fn test_update_cell() {
-    roundtrip(&Packet::UpdateCell { id: nid(10), cell: 42, pos: [0.0; 3] });
+    roundtrip(&Packet::UpdateCell {
+        id: nid(10),
+        cell: 42,
+        pos: [0.0; 3],
+    });
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -173,12 +219,20 @@ fn test_update_cell() {
 
 #[test]
 fn test_update_velocity() {
-    roundtrip(&Packet::UpdateVelocity { id: nid(10), vel: [50.0, 0.0, 0.0], on_ground: true });
+    roundtrip(&Packet::UpdateVelocity {
+        id: nid(10),
+        vel: [50.0, 0.0, 0.0],
+        on_ground: true,
+    });
 }
 
 #[test]
 fn test_update_velocity_falling() {
-    roundtrip(&Packet::UpdateVelocity { id: nid(10), vel: [0.0, 0.0, -200.0], on_ground: false });
+    roundtrip(&Packet::UpdateVelocity {
+        id: nid(10),
+        vel: [0.0, 0.0, -200.0],
+        on_ground: false,
+    });
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -203,18 +257,29 @@ fn test_item_new() {
 
 #[test]
 fn test_update_item_count() {
-    roundtrip(&Packet::UpdateItemCount { id: nid(20), count: 5, silent: false });
+    roundtrip(&Packet::UpdateItemCount {
+        id: nid(20),
+        count: 5,
+        silent: false,
+    });
 }
 
 #[test]
 fn test_update_item_condition() {
-    roundtrip(&Packet::UpdateItemCondition { id: nid(20), condition: 0.75, health: 100 });
+    roundtrip(&Packet::UpdateItemCondition {
+        id: nid(20),
+        condition: 0.75,
+        health: 100,
+    });
 }
 
 #[test]
 fn test_update_item_equipped() {
     roundtrip(&Packet::UpdateItemEquipped {
-        id: nid(20), equipped: true, silent: false, stick: false,
+        id: nid(20),
+        equipped: true,
+        silent: false,
+        stick: false,
     });
 }
 
@@ -226,7 +291,7 @@ fn test_update_item_equipped() {
 fn test_actor_new() {
     let mut values = HashMap::new();
     values.insert(0x14, 100.0); // Health
-    values.insert(0x15, 50.0);  // Action points
+    values.insert(0x15, 50.0); // Action points
     let mut base_values = HashMap::new();
     base_values.insert(0x14, 100.0);
     roundtrip(&Packet::ActorNew {
@@ -267,12 +332,20 @@ fn test_update_actor_state() {
 
 #[test]
 fn test_update_actor_value() {
-    roundtrip(&Packet::UpdateActorValue { id: nid(30), base: false, index: 0x14, value: 75.0 });
+    roundtrip(&Packet::UpdateActorValue {
+        id: nid(30),
+        base: false,
+        index: 0x14,
+        value: 75.0,
+    });
 }
 
 #[test]
 fn test_fire_weapon() {
-    roundtrip(&Packet::UpdateFireWeapon { id: nid(30), weapon: 0x1234 });
+    roundtrip(&Packet::UpdateFireWeapon {
+        id: nid(30),
+        weapon: 0x1234,
+    });
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -341,7 +414,10 @@ fn test_projectile_new() {
 
 #[test]
 fn test_projectile_remove() {
-    roundtrip(&Packet::ProjectileRemove { id: nid(50), impact_pos: [150.0, 200.0, 50.0] });
+    roundtrip(&Packet::ProjectileRemove {
+        id: nid(50),
+        impact_pos: [150.0, 200.0, 50.0],
+    });
 }
 
 #[test]
@@ -360,17 +436,28 @@ fn test_explosion_new() {
 
 #[test]
 fn test_actor_combat_target() {
-    roundtrip(&Packet::ActorCombatTarget { id: nid(60), target: nid(40) });
+    roundtrip(&Packet::ActorCombatTarget {
+        id: nid(60),
+        target: nid(40),
+    });
 }
 
 #[test]
 fn test_actor_ai_package() {
-    roundtrip(&Packet::ActorAIPackage { id: nid(60), package_id: AI_PACKAGE_COMBAT, flags: 0x01 });
+    roundtrip(&Packet::ActorAIPackage {
+        id: nid(60),
+        package_id: AI_PACKAGE_COMBAT,
+        flags: 0x01,
+    });
 }
 
 #[test]
 fn test_actor_faction() {
-    roundtrip(&Packet::ActorFaction { id: nid(60), faction_id: 0x1234, rank: -1 });
+    roundtrip(&Packet::ActorFaction {
+        id: nid(60),
+        faction_id: 0x1234,
+        rank: -1,
+    });
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -392,25 +479,41 @@ fn test_player_new() {
 
 #[test]
 fn test_update_control() {
-    roundtrip(&Packet::UpdateControl { id: nid(40), control: 0, key: 0x11 });
+    roundtrip(&Packet::UpdateControl {
+        id: nid(40),
+        control: 0,
+        key: 0x11,
+    });
 }
 
 #[test]
 fn test_update_interior() {
-    roundtrip(&Packet::UpdateInterior { id: nid(40), cell: "Vault101Start".into(), spawn: true });
+    roundtrip(&Packet::UpdateInterior {
+        id: nid(40),
+        cell: "Vault101Start".into(),
+        spawn: true,
+    });
 }
 
 #[test]
 fn test_update_exterior() {
     roundtrip(&Packet::UpdateExterior {
-        id: nid(40), world: 1, x: -5, y: 3, spawn: true,
+        id: nid(40),
+        world: 1,
+        x: -5,
+        y: 3,
+        spawn: true,
     });
 }
 
 #[test]
 fn test_update_context() {
     let cells = [1, 2, 3, 4, 5, 6, 7, 8, 9];
-    roundtrip(&Packet::UpdateContext { id: nid(40), cells, spawn: false });
+    roundtrip(&Packet::UpdateContext {
+        id: nid(40),
+        cells,
+        spawn: false,
+    });
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -419,12 +522,20 @@ fn test_update_context() {
 
 #[test]
 fn test_door_state() {
-    roundtrip(&Packet::DoorState { id: nid(70), open: true, ref_id: 0xABCD });
+    roundtrip(&Packet::DoorState {
+        id: nid(70),
+        open: true,
+        ref_id: 0xABCD,
+    });
 }
 
 #[test]
 fn test_terminal_state() {
-    roundtrip(&Packet::TerminalState { id: nid(71), locked: true, ref_id: 0x1234 });
+    roundtrip(&Packet::TerminalState {
+        id: nid(71),
+        locked: true,
+        ref_id: 0x1234,
+    });
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -433,17 +544,26 @@ fn test_terminal_state() {
 
 #[test]
 fn test_quest_stage() {
-    roundtrip(&Packet::QuestStage { quest_id: 0x1234, stage: 10 });
+    roundtrip(&Packet::QuestStage {
+        quest_id: 0x1234,
+        stage: 10,
+    });
 }
 
 #[test]
 fn test_dialogue_flag() {
-    roundtrip(&Packet::DialogueFlag { flag_id: 0x5678, value: true });
+    roundtrip(&Packet::DialogueFlag {
+        flag_id: 0x5678,
+        value: true,
+    });
 }
 
 #[test]
 fn test_dialogue_choice() {
-    roundtrip(&Packet::DialogueChoice { flag_id: 0x5678, choice: 2 });
+    roundtrip(&Packet::DialogueChoice {
+        flag_id: 0x5678,
+        choice: 2,
+    });
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -466,22 +586,36 @@ fn test_karma_negative() {
 
 #[test]
 fn test_reputation_update() {
-    roundtrip(&Packet::ReputationUpdate { faction: 0x1234, value: 50 });
+    roundtrip(&Packet::ReputationUpdate {
+        faction: 0x1234,
+        value: 50,
+    });
 }
 
 #[test]
 fn test_reputation_vilified() {
-    roundtrip(&Packet::ReputationUpdate { faction: 0x5678, value: -100 });
+    roundtrip(&Packet::ReputationUpdate {
+        faction: 0x5678,
+        value: -100,
+    });
 }
 
 #[test]
 fn test_hardcore_stats() {
-    roundtrip(&Packet::HardcoreStats { hunger: 250.0, thirst: 300.0, sleep: 150.0 });
+    roundtrip(&Packet::HardcoreStats {
+        hunger: 250.0,
+        thirst: 300.0,
+        sleep: 150.0,
+    });
 }
 
 #[test]
 fn test_hardcore_stats_zero() {
-    roundtrip(&Packet::HardcoreStats { hunger: 0.0, thirst: 0.0, sleep: 0.0 });
+    roundtrip(&Packet::HardcoreStats {
+        hunger: 0.0,
+        thirst: 0.0,
+        sleep: 0.0,
+    });
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -492,14 +626,23 @@ fn test_hardcore_stats_zero() {
 fn test_cell_snapshot() {
     let objects = vec![
         FormIDSync::new(fid(0x1234), [100.0, 200.0, 0.0], [0.0; 3], 1.0, 0),
-        FormIDSync::new(fid(0x5678), [150.0, 250.0, 0.0], [0.0; 3], 0.5, CELL_FLAG_INITIALLY_DISABLED),
+        FormIDSync::new(
+            fid(0x5678),
+            [150.0, 250.0, 0.0],
+            [0.0; 3],
+            0.5,
+            CELL_FLAG_INITIALLY_DISABLED,
+        ),
     ];
     roundtrip(&Packet::CellSnapshot { cell: 42, objects });
 }
 
 #[test]
 fn test_cell_snapshot_empty() {
-    roundtrip(&Packet::CellSnapshot { cell: 42, objects: vec![] });
+    roundtrip(&Packet::CellSnapshot {
+        cell: 42,
+        objects: vec![],
+    });
 }
 
 #[test]
@@ -507,7 +650,15 @@ fn test_cell_snapshot_large() {
     // ponytail: batch of 35 objects — max that fits within 1200 bytes
     // Larger cells need multi-packet splitting (deferred to Phase 9).
     let objects: Vec<_> = (0..35)
-        .map(|i| FormIDSync::new(fid(0x1000 + i as u32), [i as f32 * 100.0, 0.0, 0.0], [0.0; 3], 1.0, 0))
+        .map(|i| {
+            FormIDSync::new(
+                fid(0x1000 + i as u32),
+                [i as f32 * 100.0, 0.0, 0.0],
+                [0.0; 3],
+                1.0,
+                0,
+            )
+        })
         .collect();
     roundtrip(&Packet::CellSnapshot { cell: 42, objects });
 }
@@ -551,7 +702,12 @@ fn test_master_announce_fnv() {
 
 #[test]
 fn test_master_update() {
-    roundtrip(&Packet::MasterUpdate { name: "Test".into(), map: "Map".into(), players: 1, max_players: 4 });
+    roundtrip(&Packet::MasterUpdate {
+        name: "Test".into(),
+        map: "Map".into(),
+        players: 1,
+        max_players: 4,
+    });
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -580,33 +736,104 @@ fn test_window_new() {
 fn test_channel_routing() {
     // System channel
     assert_eq!(Channel::from_packet(&Packet::GameStart), Channel::System);
-    assert_eq!(Channel::from_packet(&Packet::QuestStage { quest_id: 1, stage: 1 }), Channel::System);
-    assert_eq!(Channel::from_packet(&Packet::DialogueFlag { flag_id: 1, value: true }), Channel::System);
-    assert_eq!(Channel::from_packet(&Packet::DialogueChoice { flag_id: 1, choice: 1 }), Channel::System);
-    assert_eq!(Channel::from_packet(&Packet::KarmaUpdate { value: 0 }), Channel::System);
-    assert_eq!(Channel::from_packet(&Packet::ReputationUpdate { faction: 1, value: 0 }), Channel::System);
-    assert_eq!(Channel::from_packet(&Packet::HardcoreStats { hunger: 0.0, thirst: 0.0, sleep: 0.0 }), Channel::System);
+    assert_eq!(
+        Channel::from_packet(&Packet::QuestStage {
+            quest_id: 1,
+            stage: 1
+        }),
+        Channel::System
+    );
+    assert_eq!(
+        Channel::from_packet(&Packet::DialogueFlag {
+            flag_id: 1,
+            value: true
+        }),
+        Channel::System
+    );
+    assert_eq!(
+        Channel::from_packet(&Packet::DialogueChoice {
+            flag_id: 1,
+            choice: 1
+        }),
+        Channel::System
+    );
+    assert_eq!(
+        Channel::from_packet(&Packet::KarmaUpdate { value: 0 }),
+        Channel::System
+    );
+    assert_eq!(
+        Channel::from_packet(&Packet::ReputationUpdate {
+            faction: 1,
+            value: 0
+        }),
+        Channel::System
+    );
+    assert_eq!(
+        Channel::from_packet(&Packet::HardcoreStats {
+            hunger: 0.0,
+            thirst: 0.0,
+            sleep: 0.0
+        }),
+        Channel::System
+    );
 
     // Chat channel
-    assert_eq!(Channel::from_packet(&Packet::GameChat { message: "".into() }), Channel::Chat);
+    assert_eq!(
+        Channel::from_packet(&Packet::GameChat { message: "".into() }),
+        Channel::Chat
+    );
 
     // Game channel (all position/combat/ai packets)
-    assert_eq!(Channel::from_packet(&Packet::UpdatePos { id: nid(1), pos: [0.0; 3] }), Channel::Game);
-    assert_eq!(Channel::from_packet(&Packet::ActorHit {
-        target: nid(1), attacker: nid(2), limb: 0, base_damage: 10.0, flags: 0, weapon_id: 0, projectile: 0,
-    }), Channel::Game);
+    assert_eq!(
+        Channel::from_packet(&Packet::UpdatePos {
+            id: nid(1),
+            pos: [0.0; 3]
+        }),
+        Channel::Game
+    );
+    assert_eq!(
+        Channel::from_packet(&Packet::ActorHit {
+            target: nid(1),
+            attacker: nid(2),
+            limb: 0,
+            base_damage: 10.0,
+            flags: 0,
+            weapon_id: 0,
+            projectile: 0,
+        }),
+        Channel::Game
+    );
 }
 
 #[test]
 fn test_unreliable_routing() {
-    assert!(Channel::is_unreliable(&Packet::UpdatePos { id: nid(1), pos: [0.0; 3] }));
-    assert!(Channel::is_unreliable(&Packet::UpdateAngle { id: nid(1), angle: [0.0; 2] }));
-    assert!(Channel::is_unreliable(&Packet::UpdateVelocity { id: nid(1), vel: [0.0; 3], on_ground: true }));
-    assert!(Channel::is_unreliable(&Packet::ProjectileRemove { id: nid(1), impact_pos: [0.0; 3] }));
+    assert!(Channel::is_unreliable(&Packet::UpdatePos {
+        id: nid(1),
+        pos: [0.0; 3]
+    }));
+    assert!(Channel::is_unreliable(&Packet::UpdateAngle {
+        id: nid(1),
+        angle: [0.0; 2]
+    }));
+    assert!(Channel::is_unreliable(&Packet::UpdateVelocity {
+        id: nid(1),
+        vel: [0.0; 3],
+        on_ground: true
+    }));
+    assert!(Channel::is_unreliable(&Packet::ProjectileRemove {
+        id: nid(1),
+        impact_pos: [0.0; 3]
+    }));
 
-    assert!(!Channel::is_unreliable(&Packet::GameChat { message: "".into() }));
+    assert!(!Channel::is_unreliable(&Packet::GameChat {
+        message: "".into()
+    }));
     assert!(!Channel::is_unreliable(&Packet::ActorDamaged {
-        target: nid(1), attacker: nid(2), limb: 0, final_damage: 10.0, flags: 0,
+        target: nid(1),
+        attacker: nid(2),
+        limb: 0,
+        final_damage: 10.0,
+        flags: 0,
     }));
 }
 
@@ -617,13 +844,29 @@ fn test_unreliable_routing() {
 #[test]
 fn test_max_name_size() {
     let name = "A".repeat(constants::MAX_PLAYER_NAME);
-    roundtrip(&Packet::GameAuth { name, password: "".into(), version: constants::DEDICATED_VERSION.into() });
+    roundtrip(&Packet::GameAuth {
+        name,
+        password: "".into(),
+        version: constants::DEDICATED_VERSION.into(),
+    });
 }
 
 #[test]
 fn test_game_time_roundtrip() {
-    roundtrip(&Packet::GameTime { year: 2277, month: 8, day: 17, hour: 9, time_scale: 30.0 });
-    roundtrip(&Packet::GameTime { year: 2281, month: 12, day: 1, hour: 23, time_scale: 0.0 });
+    roundtrip(&Packet::GameTime {
+        year: 2277,
+        month: 8,
+        day: 17,
+        hour: 9,
+        time_scale: 30.0,
+    });
+    roundtrip(&Packet::GameTime {
+        year: 2281,
+        month: 12,
+        day: 1,
+        hour: 23,
+        time_scale: 0.0,
+    });
 }
 
 #[test]
@@ -646,7 +889,10 @@ fn test_spell_cast_roundtrip() {
 #[test]
 fn test_mod_list_roundtrip() {
     roundtrip(&Packet::GameModList {
-        mods: vec![("Fallout3.esm".into(), 0xC092218B), ("example.esp".into(), 0xDEADBEEF)],
+        mods: vec![
+            ("Fallout3.esm".into(), 0xC092218B),
+            ("example.esp".into(), 0xDEADBEEF),
+        ],
     });
     roundtrip(&Packet::GameModList { mods: vec![] });
 }
@@ -654,7 +900,9 @@ fn test_mod_list_roundtrip() {
 #[test]
 fn test_max_chat_length() {
     let message = "B".repeat(constants::MAX_CHAT_LENGTH);
-    roundtrip(&Packet::GameChat { message: message.into() });
+    roundtrip(&Packet::GameChat {
+        message: message.into(),
+    });
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -703,19 +951,30 @@ fn test_string_cache_finalize_repeats_become_ids() {
     use ashfall_core::string_cache::{CachedString, StringTable};
 
     let mut table = StringTable::new();
-    let mut first = Packet::GameChat { message: "hi".into() };
+    let mut first = Packet::GameChat {
+        message: "hi".into(),
+    };
     first.finalize_strings(&mut table);
     // First sight: Inline (id + bytes).
-    let Packet::GameChat { message } = &first else { panic!() };
+    let Packet::GameChat { message } = &first else {
+        panic!()
+    };
     assert!(matches!(message, CachedString::Inline { id: 0, .. }));
 
-    let mut second = Packet::GameChat { message: "hi".into() };
+    let mut second = Packet::GameChat {
+        message: "hi".into(),
+    };
     second.finalize_strings(&mut table);
     // Repeat: id only, smaller on the wire.
-    let Packet::GameChat { message } = &second else { panic!() };
+    let Packet::GameChat { message } = &second else {
+        panic!()
+    };
     assert_eq!(message, &CachedString::Id(0));
 
-    let plain = postcard::to_stdvec(&Packet::GameChat { message: CachedString::Plain("hi".into()) }).unwrap();
+    let plain = postcard::to_stdvec(&Packet::GameChat {
+        message: CachedString::Plain("hi".into()),
+    })
+    .unwrap();
     let id_only = postcard::to_stdvec(&second).unwrap();
     assert!(id_only.len() < plain.len(), "id-only must beat plain bytes");
 
@@ -723,11 +982,15 @@ fn test_string_cache_finalize_repeats_become_ids() {
     let wire = postcard::to_stdvec(&first).unwrap();
     let decoded: Packet = postcard::from_bytes(&wire).unwrap();
     let mut client_table = StringTable::new();
-    let Packet::GameChat { message } = decoded else { panic!() };
+    let Packet::GameChat { message } = decoded else {
+        panic!()
+    };
     assert_eq!(message.resolve(&mut client_table), "hi");
     let wire2 = postcard::to_stdvec(&second).unwrap();
     let decoded2: Packet = postcard::from_bytes(&wire2).unwrap();
-    let Packet::GameChat { message } = decoded2 else { panic!() };
+    let Packet::GameChat { message } = decoded2 else {
+        panic!()
+    };
     assert_eq!(message.resolve(&mut client_table), "hi");
 }
 
@@ -735,7 +998,9 @@ fn test_string_cache_finalize_repeats_become_ids() {
 fn test_finalize_strings_skips_already_cached() {
     use ashfall_core::string_cache::StringTable;
     let mut table = StringTable::new();
-    let mut p = Packet::GameChat { message: "x".into() };
+    let mut p = Packet::GameChat {
+        message: "x".into(),
+    };
     p.finalize_strings(&mut table);
     let snapshot = p.clone();
     p.finalize_strings(&mut table); // second pass: no-op, no re-intern
@@ -775,7 +1040,13 @@ fn test_form_id_null() {
 
 #[test]
 fn test_form_id_sync_roundtrip() {
-    let sync = FormIDSync::new(fid(0x1234), [100.0, 200.0, 0.0], [0.0; 3], 1.0, CELL_FLAG_PERSISTENT);
+    let sync = FormIDSync::new(
+        fid(0x1234),
+        [100.0, 200.0, 0.0],
+        [0.0; 3],
+        1.0,
+        CELL_FLAG_PERSISTENT,
+    );
     let bytes = postcard::to_stdvec(&sync).unwrap();
     let decoded: FormIDSync = postcard::from_bytes(&bytes).unwrap();
     assert_eq!(sync, decoded);

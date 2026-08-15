@@ -68,10 +68,14 @@ impl ServerList {
     pub fn cull_stale(&mut self) {
         let cutoff = Duration::from_secs(120);
         let before = self.servers.len();
-        self.servers.retain(|_, entry| entry.last_seen.elapsed() < cutoff);
+        self.servers
+            .retain(|_, entry| entry.last_seen.elapsed() < cutoff);
         let removed = before - self.servers.len();
         if removed > 0 {
-            tracing::info!("Culled {removed} stale server(s) — {} active", self.servers.len());
+            tracing::info!(
+                "Culled {removed} stale server(s) — {} active",
+                self.servers.len()
+            );
         }
     }
 }

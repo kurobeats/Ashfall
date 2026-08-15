@@ -40,8 +40,14 @@ fn test_pipe_command_roundtrip() {
     assert!(rest.is_empty(), "one complete frame");
     assert_eq!(frames.len(), 1);
     let payload = &frames[0].payload;
-    assert_eq!(u32::from_le_bytes([payload[0], payload[1], payload[2], payload[3]]), key);
-    assert_eq!(u32::from_le_bytes([payload[4], payload[5], payload[6], payload[7]]), func);
+    assert_eq!(
+        u32::from_le_bytes([payload[0], payload[1], payload[2], payload[3]]),
+        key
+    );
+    assert_eq!(
+        u32::from_le_bytes([payload[4], payload[5], payload[6], payload[7]]),
+        func
+    );
     assert_eq!(payload[8], 4); // param_count = 4 bytes for ref_id
     assert_eq!(&payload[9..13], &0x42u32.to_le_bytes());
 
@@ -150,7 +156,8 @@ fn test_report_player_state_emits_event_frame() {
     assert_eq!(frame[2], network::PIPE_OP_EVENT);
     let (frames, _) = ashfall_core::event::split_frames(&frame);
     assert_eq!(frames.len(), 1);
-    let (event_type, data) = ashfall_core::event::decode_event(&frames[0].payload).expect("event header");
+    let (event_type, data) =
+        ashfall_core::event::decode_event(&frames[0].payload).expect("event header");
     assert_eq!(event_type, ashfall_core::event::EVENT_PLAYER_STATE);
     let e = ashfall_core::event::decode_player_state(data).expect("player state");
     assert_eq!(e.ref_id, network::LOCAL_PLAYER_REF);
@@ -165,7 +172,11 @@ fn test_command_queues_duplicate_event() {
         ashfall_bridge::commands::opcodes::OP_REPORT_PLAYER_STATE,
         &[],
     );
-    assert_eq!(result[2], network::PIPE_OP_EVENT, "response is the event frame");
+    assert_eq!(
+        result[2],
+        network::PIPE_OP_EVENT,
+        "response is the event frame"
+    );
 }
 
 #[test]
@@ -186,7 +197,11 @@ fn test_bridge_server_pushes_event_over_tcp() {
     let mut stream = TcpStream::connect(&addr).unwrap();
     // Ask the bridge to report its player state: the response echoes the
     // event frame AND the event is queued for the connection loop to push.
-    let cmd = network::encode_pipe_command(1, ashfall_bridge::commands::opcodes::OP_REPORT_PLAYER_STATE, &[]);
+    let cmd = network::encode_pipe_command(
+        1,
+        ashfall_bridge::commands::opcodes::OP_REPORT_PLAYER_STATE,
+        &[],
+    );
     stream.write_all(&cmd).unwrap();
 
     let mut buf = Vec::new();
@@ -201,9 +216,13 @@ fn test_bridge_server_pushes_event_over_tcp() {
     }
 
     let (frames, _) = ashfall_core::event::split_frames(&buf);
-    let events: Vec<_> = frames.iter().filter(|f| f.opcode == network::PIPE_OP_EVENT).collect();
+    let events: Vec<_> = frames
+        .iter()
+        .filter(|f| f.opcode == network::PIPE_OP_EVENT)
+        .collect();
     assert!(!events.is_empty(), "event frame pushed to the client");
-    let (event_type, data) = ashfall_core::event::decode_event(&events[0].payload).expect("event header");
+    let (event_type, data) =
+        ashfall_core::event::decode_event(&events[0].payload).expect("event header");
     assert_eq!(event_type, ashfall_core::event::EVENT_PLAYER_STATE);
     let e = ashfall_core::event::decode_player_state(data).expect("player state");
     assert_eq!(e.ref_id, network::LOCAL_PLAYER_REF);
@@ -217,7 +236,10 @@ fn test_reporter_throttles_to_10hz() {
     let second = network::report_player_state_due();
     assert!(second.is_none(), "second sample within 100ms throttled");
     std::thread::sleep(std::time::Duration::from_millis(120));
-    assert!(network::report_player_state_due().is_some(), "sample after window due");
+    assert!(
+        network::report_player_state_due().is_some(),
+        "sample after window due"
+    );
 }
 
 #[test]

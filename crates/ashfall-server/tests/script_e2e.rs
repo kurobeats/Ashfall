@@ -62,12 +62,20 @@ fn free_port() -> u16 {
 /// Build a per-test ServerConfig (unique scripts dir + db, random port).
 async fn test_config() -> ServerConfig {
     let seq = TEST_SEQ.fetch_add(1, Ordering::SeqCst);
-    let dir = std::env::temp_dir().join(format!("ashfall_e2e_scripts_{}_{}", std::process::id(), seq));
+    let dir = std::env::temp_dir().join(format!(
+        "ashfall_e2e_scripts_{}_{}",
+        std::process::id(),
+        seq
+    ));
     std::fs::create_dir_all(&dir).expect("create scripts dir");
     let wasm = wat::parse_str(E2E_MODE).expect("valid WAT");
     std::fs::write(dir.join("e2e_mode.wasm"), &wasm).expect("write wasm");
 
-    let db_path = std::env::temp_dir().join(format!("ashfall_e2e_{}_{}.sqlite3", std::process::id(), seq));
+    let db_path = std::env::temp_dir().join(format!(
+        "ashfall_e2e_{}_{}.sqlite3",
+        std::process::id(),
+        seq
+    ));
     ServerConfig {
         server: ServerSection {
             host: "127.0.0.1".into(),
@@ -186,7 +194,11 @@ async fn test_script_auth_gate_on_wire() {
         for _ in 0..8 {
             if let Some(Packet::GameEnd { reason }) = sock.recv_packet().await {
                 saw_end = true;
-                assert_eq!(reason, ashfall_core::types::Reason::Denied as u8, "denied by script");
+                assert_eq!(
+                    reason,
+                    ashfall_core::types::Reason::Denied as u8,
+                    "denied by script"
+                );
                 break;
             }
         }
@@ -210,9 +222,9 @@ async fn test_two_client_chat_relay() {
             .send_reliable(&Packet::GameAuth {
                 name: "alice".into(),
                 password: String::new(),
-            version: ashfall_core::constants::DEDICATED_VERSION.into(),
-        })
-        .await;
+                version: ashfall_core::constants::DEDICATED_VERSION.into(),
+            })
+            .await;
 
         let mut bob = TestClient::connect(port).await;
         bob.send_reliable(&Packet::GameAuth {
@@ -295,7 +307,8 @@ async fn test_script_world_and_spawn_effects_on_wire() {
                     }
                     Packet::GameChat { message } => {
                         use ashfall_core::string_cache::StringTable;
-                        saw_welcome = message.resolve(&mut StringTable::new()) == "Hello from script!";
+                        saw_welcome =
+                            message.resolve(&mut StringTable::new()) == "Hello from script!";
                     }
                     _ => {}
                 }
@@ -303,7 +316,10 @@ async fn test_script_world_and_spawn_effects_on_wire() {
         }
 
         assert!(saw_load, "alice gets GameLoad");
-        assert!(saw_weather, "script-set weather (0x12345) reached the client");
+        assert!(
+            saw_weather,
+            "script-set weather (0x12345) reached the client"
+        );
         assert!(saw_welcome, "on_spawn chat effect delivered to the client");
     };
 

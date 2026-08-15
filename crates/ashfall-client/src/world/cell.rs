@@ -10,7 +10,10 @@ pub struct CellTracker {
 
 impl CellTracker {
     pub fn new() -> Self {
-        CellTracker { current_cell: 0, context: [0; 9] }
+        CellTracker {
+            current_cell: 0,
+            context: [0; 9],
+        }
     }
 
     pub fn update(&mut self, cells: [u32; 9]) {
@@ -20,5 +23,7 @@ impl CellTracker {
 }
 
 impl Default for CellTracker {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }

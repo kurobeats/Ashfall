@@ -76,7 +76,13 @@ pub fn encode_ctrl_ack(ack_seq: u16) -> Vec<u8> {
 
 /// Encode a NACK frame: `[len][CHANNEL_CTRL][CTRL_NACK][count: u8][varint seq...]`.
 pub fn encode_ctrl_nack(missing: &[u16]) -> Vec<u8> {
-    let mut frame = vec![0u8, 0u8, CHANNEL_CTRL, CTRL_NACK, missing.len().min(255) as u8];
+    let mut frame = vec![
+        0u8,
+        0u8,
+        CHANNEL_CTRL,
+        CTRL_NACK,
+        missing.len().min(255) as u8,
+    ];
     for seq in missing.iter().take(255) {
         frame.extend_from_slice(&encode_varint_seq(*seq));
     }
@@ -167,11 +173,14 @@ mod tests {
     #[test]
     fn test_ctrl_nack_empty_and_truncated() {
         let frame = encode_ctrl_nack(&[]);
-        assert_eq!(decode_ctrl_frame(&frame[3..]).unwrap(), CtrlFrame::Nack(vec![]));
+        assert_eq!(
+            decode_ctrl_frame(&frame[3..]).unwrap(),
+            CtrlFrame::Nack(vec![])
+        );
 
         assert!(decode_ctrl_frame(&[]).is_none());
         assert!(decode_ctrl_frame(&[0x99]).is_none()); // unknown subtype
-        // NACK with count but missing body
+                                                       // NACK with count but missing body
         assert!(decode_ctrl_frame(&[CTRL_NACK, 1]).is_none());
     }
 

@@ -34,7 +34,10 @@ fn test_damage_formula_dr() {
 fn test_damage_formula_dr_capped_at_85() {
     // DR = 1.0 (100%) should be capped at 0.85
     let dmg = DamageFormula::calculate(100.0, 1.0, 1.0, 0.0, 1.0);
-    assert!((dmg - 15.0).abs() < 0.01, "capped DR should leave ~15% damage, got {dmg}");
+    assert!(
+        (dmg - 15.0).abs() < 0.01,
+        "capped DR should leave ~15% damage, got {dmg}"
+    );
 }
 
 #[test]
@@ -70,12 +73,12 @@ fn test_damage_formula_full_pipeline() {
 
 #[test]
 fn test_limb_multiplier_indices() {
-    assert_eq!(DamageFormula::limb_multiplier(0), 1.0);  // Torso
-    assert_eq!(DamageFormula::limb_multiplier(1), 2.0);  // Head
-    assert_eq!(DamageFormula::limb_multiplier(2), 0.5);  // Left arm
-    assert_eq!(DamageFormula::limb_multiplier(3), 0.5);  // Right arm
-    assert_eq!(DamageFormula::limb_multiplier(4), 0.5);  // Left leg
-    assert_eq!(DamageFormula::limb_multiplier(5), 0.5);  // Right leg
+    assert_eq!(DamageFormula::limb_multiplier(0), 1.0); // Torso
+    assert_eq!(DamageFormula::limb_multiplier(1), 2.0); // Head
+    assert_eq!(DamageFormula::limb_multiplier(2), 0.5); // Left arm
+    assert_eq!(DamageFormula::limb_multiplier(3), 0.5); // Right arm
+    assert_eq!(DamageFormula::limb_multiplier(4), 0.5); // Left leg
+    assert_eq!(DamageFormula::limb_multiplier(5), 0.5); // Right leg
 }
 
 #[test]

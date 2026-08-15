@@ -3,7 +3,9 @@
 #[test]
 fn test_record_roundtrip() {
     let db = super::Database::open_in_memory().unwrap();
-    db.conn().execute("INSERT INTO records VALUES (1,'A','da',2)", []).unwrap();
+    db.conn()
+        .execute("INSERT INTO records VALUES (1,'A','da',2)", [])
+        .unwrap();
     let records = db.load_all_records();
     assert_eq!(records.len(), 1);
     assert_eq!(records[0].name, "A");
@@ -12,7 +14,9 @@ fn test_record_roundtrip() {
 #[test]
 fn test_weapon_roundtrip() {
     let db = super::Database::open_in_memory().unwrap();
-    db.conn().execute("INSERT INTO weapons VALUES (42,'Laser',25,22,0.05,1)", []).unwrap();
+    db.conn()
+        .execute("INSERT INTO weapons VALUES (42,'Laser',25,22,0.05,1)", [])
+        .unwrap();
     let ws = db.load_all_weapons();
     assert_eq!(ws.len(), 1);
     assert_eq!(ws[0].name, "Laser");
@@ -21,7 +25,9 @@ fn test_weapon_roundtrip() {
 #[test]
 fn test_npc_roundtrip() {
     let db = super::Database::open_in_memory().unwrap();
-    db.conn().execute("INSERT INTO npcs VALUES (300,'Mutant',5,0,200,8)", []).unwrap();
+    db.conn()
+        .execute("INSERT INTO npcs VALUES (300,'Mutant',5,0,200,8)", [])
+        .unwrap();
     let npcs = db.load_all_npcs();
     assert_eq!(npcs.len(), 1);
     assert_eq!(npcs[0].health, 200);
@@ -74,7 +80,9 @@ fn test_hardcore_persistence() {
 #[test]
 fn test_faction_persistence() {
     let db = super::Database::open_in_memory().unwrap();
-    db.conn().execute("INSERT INTO factions VALUES (1,'NCR',0),(2,'Legion',1)", []).unwrap();
+    db.conn()
+        .execute("INSERT INTO factions VALUES (1,'NCR',0),(2,'Legion',1)", [])
+        .unwrap();
     let factions = db.load_all_factions();
     assert_eq!(factions.len(), 2);
 }
@@ -82,10 +90,18 @@ fn test_faction_persistence() {
 #[test]
 fn test_startup_load_integration() {
     let db = super::Database::open_in_memory().unwrap();
-    db.conn().execute("INSERT INTO records VALUES (1,'R','d',1)", []).unwrap();
-    db.conn().execute("INSERT INTO weapons VALUES (100,'10mm',9,0,0,0)", []).unwrap();
-    db.conn().execute("INSERT INTO quest_stages VALUES (0xABCD,42)", []).unwrap();
-    db.conn().execute("INSERT INTO factions VALUES (1,'Test',0)", []).unwrap();
+    db.conn()
+        .execute("INSERT INTO records VALUES (1,'R','d',1)", [])
+        .unwrap();
+    db.conn()
+        .execute("INSERT INTO weapons VALUES (100,'10mm',9,0,0,0)", [])
+        .unwrap();
+    db.conn()
+        .execute("INSERT INTO quest_stages VALUES (0xABCD,42)", [])
+        .unwrap();
+    db.conn()
+        .execute("INSERT INTO factions VALUES (1,'Test',0)", [])
+        .unwrap();
 
     let quests = crate::quest::QuestManager::new();
     let mut factions = crate::ai::factions::FactionMatrix::new();
@@ -109,5 +125,9 @@ fn test_startup_load_quest_stages_start_at_zero() {
     let quests = crate::quest::QuestManager::new();
     let mut factions = crate::ai::factions::FactionMatrix::new();
     db.startup_load(&quests, &mut factions);
-    assert_eq!(quests.get_stage(0x6136D), 0, "quest starts unstarted, not at stage 100");
+    assert_eq!(
+        quests.get_stage(0x6136D),
+        0,
+        "quest starts unstarted, not at stage 100"
+    );
 }

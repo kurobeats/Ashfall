@@ -10,12 +10,17 @@ pub struct Race {
 
 impl Database {
     pub fn get_race(&self, base_id: u32) -> Option<Race> {
-        let mut stmt = self.conn()
+        let mut stmt = self
+            .conn()
             .prepare("SELECT baseID, name FROM races WHERE baseID = ?1")
             .ok()?;
         stmt.query_row(rusqlite::params![base_id], |row| {
-            Ok(Race { base_id: row.get(0)?, name: row.get(1)? })
-        }).ok()
+            Ok(Race {
+                base_id: row.get(0)?,
+                name: row.get(1)?,
+            })
+        })
+        .ok()
     }
 
     pub fn load_all_races(&self) -> Vec<Race> {
@@ -24,7 +29,10 @@ impl Database {
             Err(_) => return vec![],
         };
         let rows = stmt.query_map([], |row| {
-            Ok(Race { base_id: row.get(0)?, name: row.get(1)? })
+            Ok(Race {
+                base_id: row.get(0)?,
+                name: row.get(1)?,
+            })
         });
         match rows {
             Ok(iter) => iter.filter_map(|r| r.ok()).collect(),

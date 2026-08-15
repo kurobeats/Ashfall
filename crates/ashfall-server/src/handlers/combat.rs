@@ -1,11 +1,11 @@
 //! Combat handler — routes ActorHit to combat resolver.
 
-use ashfall_core::id::NetworkID;
-use ashfall_core::protocol::Packet;
 use crate::combat::resolver::CombatResolver;
 use crate::session::Session;
 use crate::world::objects::Player;
 use crate::world::registry::ObjectRegistry;
+use ashfall_core::id::NetworkID;
+use ashfall_core::protocol::Packet;
 use std::sync::Arc;
 
 /// Handle an ActorHit packet. Validates and resolves damage.
@@ -41,15 +41,25 @@ pub fn handle_actor_hit(
 
     // PvP rule: when disabled, a player may not damage another player.
     let is_player = |id: NetworkID| -> bool {
-        registry.get(id).map(|arc| {
-            let guard = arc.read();
-            guard.as_any().downcast_ref::<Player>().is_some()
-        }).unwrap_or(false)
+        registry
+            .get(id)
+            .map(|arc| {
+                let guard = arc.read();
+                guard.as_any().downcast_ref::<Player>().is_some()
+            })
+            .unwrap_or(false)
     };
     if !pvp_enabled {
-        if let Packet::ActorHit { target, attacker, .. } = hit {
+        if let Packet::ActorHit {
+            target, attacker, ..
+        } = hit
+        {
             if is_player(*target) && is_player(*attacker) {
-                tracing::warn!("Combat: hit rejected — PvP disabled ({} -> {})", attacker, target);
+                tracing::warn!(
+                    "Combat: hit rejected — PvP disabled ({} -> {})",
+                    attacker,
+                    target
+                );
                 return None;
             }
         }

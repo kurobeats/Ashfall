@@ -6,80 +6,87 @@
 /// Command opcodes (matching original vaultmp Interface/API opcodes).
 pub mod opcodes {
     // ── Original 17 (Phase 10 initial) ──
-    pub const OP_GET_POS: u32            = 0x0001;
-    pub const OP_SET_POS: u32            = 0x0002;
-    pub const OP_GET_ANGLE: u32          = 0x0003;
-    pub const OP_SET_ANGLE: u32          = 0x0004;
-    pub const OP_GET_CELL: u32           = 0x0005;
-    pub const OP_SET_CELL: u32           = 0x0006;
-    pub const OP_GET_ACTOR_STATE: u32    = 0x0007;
-    pub const OP_GET_ACTOR_VALUE: u32    = 0x0008;
-    pub const OP_SET_ACTOR_VALUE: u32    = 0x0009;
-    pub const OP_GET_CONTROL: u32        = 0x000A;
-    pub const OP_SET_CONTROL: u32        = 0x000B;
-    pub const OP_GET_ACTIVATE: u32       = 0x000C;
-    pub const OP_FIRE_WEAPON: u32        = 0x000D;
-    pub const OP_GET_NAME: u32           = 0x000E;
-    pub const OP_SET_NAME: u32           = 0x000F;
-    pub const OP_GET_ENABLED: u32        = 0x0010;
-    pub const OP_SET_ENABLED: u32        = 0x0011;
-    pub const OP_GET_LOCK: u32           = 0x0012;
-    pub const OP_SET_LOCK: u32           = 0x0013;
-    pub const OP_MOVE_TO: u32            = 0x0014;
-    pub const OP_PLAY_SOUND: u32         = 0x0015;
-    pub const OP_PLACE_AT_ME: u32        = 0x0016;
-    pub const OP_SET_SCALE: u32          = 0x002B;
-    pub const OP_GET_BASE: u32           = 0x0017;
+    pub const OP_GET_POS: u32 = 0x0001;
+    pub const OP_SET_POS: u32 = 0x0002;
+    pub const OP_GET_ANGLE: u32 = 0x0003;
+    pub const OP_SET_ANGLE: u32 = 0x0004;
+    pub const OP_GET_CELL: u32 = 0x0005;
+    pub const OP_SET_CELL: u32 = 0x0006;
+    pub const OP_GET_ACTOR_STATE: u32 = 0x0007;
+    pub const OP_GET_ACTOR_VALUE: u32 = 0x0008;
+    pub const OP_SET_ACTOR_VALUE: u32 = 0x0009;
+    pub const OP_GET_CONTROL: u32 = 0x000A;
+    pub const OP_SET_CONTROL: u32 = 0x000B;
+    pub const OP_GET_ACTIVATE: u32 = 0x000C;
+    pub const OP_FIRE_WEAPON: u32 = 0x000D;
+    pub const OP_GET_NAME: u32 = 0x000E;
+    pub const OP_SET_NAME: u32 = 0x000F;
+    pub const OP_GET_ENABLED: u32 = 0x0010;
+    pub const OP_SET_ENABLED: u32 = 0x0011;
+    pub const OP_GET_LOCK: u32 = 0x0012;
+    pub const OP_SET_LOCK: u32 = 0x0013;
+    pub const OP_MOVE_TO: u32 = 0x0014;
+    pub const OP_PLAY_SOUND: u32 = 0x0015;
+    pub const OP_PLACE_AT_ME: u32 = 0x0016;
+    pub const OP_SET_SCALE: u32 = 0x002B;
+    pub const OP_GET_BASE: u32 = 0x0017;
 
     // ── Tier 1: Position + Actor State Sync ──
     pub const OP_GET_BASE_ACTOR_VALUE: u32 = 0x0018;
-    pub const OP_GET_DEAD: u32             = 0x0019;
-    pub const OP_SET_CURRENT_HEALTH: u32   = 0x001A;
-    pub const OP_IS_MOVING: u32            = 0x001B;
-    pub const OP_GET_PARENT_CELL: u32      = 0x001C;
+    pub const OP_GET_DEAD: u32 = 0x0019;
+    pub const OP_SET_CURRENT_HEALTH: u32 = 0x001A;
+    pub const OP_IS_MOVING: u32 = 0x001B;
+    pub const OP_GET_PARENT_CELL: u32 = 0x001C;
 
     // ── Tier 2: Item / Inventory Sync ──
-    pub const OP_EQUIP_ITEM: u32           = 0x001D;
-    pub const OP_UNEQUIP_ITEM: u32         = 0x001E;
-    pub const OP_ADD_ITEM: u32             = 0x001F;
-    pub const OP_REMOVE_ITEM: u32          = 0x0020;
-    pub const OP_REMOVE_ALL_ITEMS: u32     = 0x0021;
-    pub const OP_GET_REF_COUNT: u32        = 0x0022;
+    pub const OP_EQUIP_ITEM: u32 = 0x001D;
+    pub const OP_UNEQUIP_ITEM: u32 = 0x001E;
+    pub const OP_ADD_ITEM: u32 = 0x001F;
+    pub const OP_REMOVE_ITEM: u32 = 0x0020;
+    pub const OP_REMOVE_ALL_ITEMS: u32 = 0x0021;
+    pub const OP_GET_REF_COUNT: u32 = 0x0022;
 
     // ── Tier 3: Combat + Death ──
-    pub const OP_KILL: u32                 = 0x0023;
-    pub const OP_DAMAGE_ACTOR_VALUE: u32   = 0x0024;
-    pub const OP_RESTORE_ACTOR_VALUE: u32  = 0x0025;
-    pub const OP_FORCE_ACTOR_VALUE: u32    = 0x0026;
+    pub const OP_KILL: u32 = 0x0023;
+    pub const OP_DAMAGE_ACTOR_VALUE: u32 = 0x0024;
+    pub const OP_RESTORE_ACTOR_VALUE: u32 = 0x0025;
+    pub const OP_FORCE_ACTOR_VALUE: u32 = 0x0026;
 
     // ── Tier 4: AI + World ──
-    pub const OP_GET_COMBAT_TARGET: u32    = 0x0027;
-    pub const OP_PLAY_GROUP: u32           = 0x0028;
-    pub const OP_FORCE_WEATHER: u32        = 0x0029;
-    pub const OP_SET_RESTRAINED: u32       = 0x002A;
+    pub const OP_GET_COMBAT_TARGET: u32 = 0x0027;
+    pub const OP_PLAY_GROUP: u32 = 0x0028;
+    pub const OP_FORCE_WEATHER: u32 = 0x0029;
+    pub const OP_SET_RESTRAINED: u32 = 0x002A;
     /// Temporary debug: report what save dir the GAME process resolves.
-    pub const OP_PROBE_SAVES: u32          = 0x00FE;
-    pub const OP_REPORT_PLAYER_STATE: u32  = 0x00F7; // debug: emit a player-state event
-    pub const OP_TRACK_ACTOR: u32          = 0x00F6; // sample this ref at 10 Hz
-    pub const OP_UNTRACK_ACTOR: u32        = 0x00F5; // stop sampling this ref
+    pub const OP_PROBE_SAVES: u32 = 0x00FE;
+    pub const OP_REPORT_PLAYER_STATE: u32 = 0x00F7; // debug: emit a player-state event
+    pub const OP_TRACK_ACTOR: u32 = 0x00F6; // sample this ref at 10 Hz
+    pub const OP_UNTRACK_ACTOR: u32 = 0x00F5; // stop sampling this ref
     /// Temporary debug: dump unpacked image (SteamStub analysis).
-    pub const OP_DUMP_IMAGE: u32           = 0x00FC;
+    pub const OP_DUMP_IMAGE: u32 = 0x00FC;
     /// Temporary debug: read-only form probe (lookup + vtable, no calls).
-    pub const OP_PROBE_FORM: u32           = 0x00FB;
+    pub const OP_PROBE_FORM: u32 = 0x00FB;
     /// Temporary debug: read-only pointer deref (16 dwords at an address).
-    pub const OP_PROBE_PTR: u32            = 0x00FA;
+    pub const OP_PROBE_PTR: u32 = 0x00FA;
     /// Temporary debug: guarded vtable-call test (getter identification).
-    pub const OP_VCALL_TEST: u32            = 0x00F9;
+    pub const OP_VCALL_TEST: u32 = 0x00F9;
     /// Temporary debug: guarded vtable-call test, zero args (vcall_0).
-    pub const OP_VCALL_TEST0: u32           = 0x00F8;
+    pub const OP_VCALL_TEST0: u32 = 0x00F8;
     /// Temporary debug: 16 bytes at each hardcoded engine address.
-    pub const OP_PROBE_CODE: u32           = 0x00FD;
+    pub const OP_PROBE_CODE: u32 = 0x00FD;
 }
 
 /// Read a u32 from little-endian bytes at an offset within a slice.
 fn read_u32(data: &[u8], offset: usize) -> Option<u32> {
-    if data.len() < offset + 4 { return None; }
-    Some(u32::from_le_bytes([data[offset], data[offset+1], data[offset+2], data[offset+3]]))
+    if data.len() < offset + 4 {
+        return None;
+    }
+    Some(u32::from_le_bytes([
+        data[offset],
+        data[offset + 1],
+        data[offset + 2],
+        data[offset + 3],
+    ]))
 }
 
 /// Execute a command by opcode. Returns raw result bytes for pipe protocol.
@@ -88,7 +95,10 @@ pub fn execute(func: u32, params: &[u8]) -> Vec<u8> {
     match func {
         // ── Position ──
         OP_GET_POS => {
-            let ref_id = match read_u32(params, 0) { Some(v) => v, None => return vec![] };
+            let ref_id = match read_u32(params, 0) {
+                Some(v) => v,
+                None => return vec![],
+            };
             let pos = crate::hooks::get_pos(ref_id);
             let mut out = Vec::with_capacity(12);
             out.extend_from_slice(&pos[0].to_le_bytes());
@@ -97,7 +107,9 @@ pub fn execute(func: u32, params: &[u8]) -> Vec<u8> {
             out
         }
         OP_SET_POS => {
-            if params.len() < 16 { return vec![]; }
+            if params.len() < 16 {
+                return vec![];
+            }
             let ref_id = u32::from_le_bytes([params[0], params[1], params[2], params[3]]);
             let x = f32::from_le_bytes([params[4], params[5], params[6], params[7]]);
             let y = f32::from_le_bytes([params[8], params[9], params[10], params[11]]);
@@ -108,7 +120,10 @@ pub fn execute(func: u32, params: &[u8]) -> Vec<u8> {
 
         // ── Angle ──
         OP_GET_ANGLE => {
-            let ref_id = match read_u32(params, 0) { Some(v) => v, None => return vec![] };
+            let ref_id = match read_u32(params, 0) {
+                Some(v) => v,
+                None => return vec![],
+            };
             let angle = crate::hooks::get_angle(ref_id);
             let mut out = Vec::with_capacity(12);
             out.extend_from_slice(&angle[0].to_le_bytes());
@@ -117,7 +132,9 @@ pub fn execute(func: u32, params: &[u8]) -> Vec<u8> {
             out
         }
         OP_SET_ANGLE => {
-            if params.len() < 16 { return vec![]; }
+            if params.len() < 16 {
+                return vec![];
+            }
             let ref_id = u32::from_le_bytes([params[0], params[1], params[2], params[3]]);
             let x = f32::from_le_bytes([params[4], params[5], params[6], params[7]]);
             let y = f32::from_le_bytes([params[8], params[9], params[10], params[11]]);
@@ -128,12 +145,17 @@ pub fn execute(func: u32, params: &[u8]) -> Vec<u8> {
 
         // ── Cell ──
         OP_GET_CELL => {
-            let ref_id = match read_u32(params, 0) { Some(v) => v, None => return vec![] };
+            let ref_id = match read_u32(params, 0) {
+                Some(v) => v,
+                None => return vec![],
+            };
             let cell = crate::hooks::get_cell(ref_id);
             cell.to_le_bytes().to_vec()
         }
         OP_SET_CELL => {
-            if params.len() < 8 { return vec![]; }
+            if params.len() < 8 {
+                return vec![];
+            }
             let ref_id = u32::from_le_bytes([params[0], params[1], params[2], params[3]]);
             let cell = u32::from_le_bytes([params[4], params[5], params[6], params[7]]);
             crate::hooks::set_parent_cell(ref_id, cell);
@@ -142,8 +164,12 @@ pub fn execute(func: u32, params: &[u8]) -> Vec<u8> {
 
         // ── Actor State ──
         OP_GET_ACTOR_STATE => {
-            let ref_id = match read_u32(params, 0) { Some(v) => v, None => return vec![] };
-            let (idle, moving, weapon, flags, alerted, sneaking) = crate::hooks::get_actor_state(ref_id);
+            let ref_id = match read_u32(params, 0) {
+                Some(v) => v,
+                None => return vec![],
+            };
+            let (idle, moving, weapon, flags, alerted, sneaking) =
+                crate::hooks::get_actor_state(ref_id);
             let mut out = Vec::with_capacity(11);
             out.extend_from_slice(&idle.to_le_bytes());
             out.push(moving);
@@ -156,14 +182,18 @@ pub fn execute(func: u32, params: &[u8]) -> Vec<u8> {
 
         // ── Actor Value ──
         OP_GET_ACTOR_VALUE => {
-            if params.len() < 5 { return vec![]; }
+            if params.len() < 5 {
+                return vec![];
+            }
             let ref_id = u32::from_le_bytes([params[0], params[1], params[2], params[3]]);
             let index = params[4];
             let value = crate::hooks::get_actor_value(ref_id, index);
             value.to_le_bytes().to_vec()
         }
         OP_SET_ACTOR_VALUE => {
-            if params.len() < 9 { return vec![]; }
+            if params.len() < 9 {
+                return vec![];
+            }
             let ref_id = u32::from_le_bytes([params[0], params[1], params[2], params[3]]);
             let index = params[4];
             let value = f32::from_le_bytes([params[5], params[6], params[7], params[8]]);
@@ -173,14 +203,18 @@ pub fn execute(func: u32, params: &[u8]) -> Vec<u8> {
 
         // ── Controls ──
         OP_GET_CONTROL => {
-            if params.len() < 5 { return vec![]; }
+            if params.len() < 5 {
+                return vec![];
+            }
             let ref_id = u32::from_le_bytes([params[0], params[1], params[2], params[3]]);
             let control = params[4];
             let key = crate::hooks::get_control(ref_id, control);
             vec![key]
         }
         OP_SET_CONTROL => {
-            if params.len() < 6 { return vec![]; }
+            if params.len() < 6 {
+                return vec![];
+            }
             let ref_id = u32::from_le_bytes([params[0], params[1], params[2], params[3]]);
             let control = params[4];
             let enabled = params[5] != 0;
@@ -190,29 +224,41 @@ pub fn execute(func: u32, params: &[u8]) -> Vec<u8> {
 
         // ── Activate ──
         OP_GET_ACTIVATE => {
-            let ref_id = match read_u32(params, 0) { Some(v) => v, None => return vec![] };
+            let ref_id = match read_u32(params, 0) {
+                Some(v) => v,
+                None => return vec![],
+            };
             let target = crate::hooks::get_activate(ref_id);
             target.to_le_bytes().to_vec()
         }
 
         // ── Fire Weapon ──
         OP_FIRE_WEAPON => {
-            if params.len() < 8 { return vec![]; }
+            if params.len() < 8 {
+                return vec![];
+            }
             let ref_id = u32::from_le_bytes([params[0], params[1], params[2], params[3]]);
             let weapon = u32::from_le_bytes([params[4], params[5], params[6], params[7]]);
             // Apply a remote fire: call the engine's weapon-fire routine on
             // the shooter (wired 2026-08-14 — fire_weapon hook implemented).
-            crate::hooks::fire_weapon(ref_id, weapon).to_le_bytes().to_vec()
+            crate::hooks::fire_weapon(ref_id, weapon)
+                .to_le_bytes()
+                .to_vec()
         }
 
         // ── Name ──
         OP_GET_NAME => {
-            let ref_id = match read_u32(params, 0) { Some(v) => v, None => return vec![] };
+            let ref_id = match read_u32(params, 0) {
+                Some(v) => v,
+                None => return vec![],
+            };
             let name = crate::hooks::get_name(ref_id);
             name.into_bytes()
         }
         OP_SET_NAME => {
-            if params.len() < 5 { return vec![]; }
+            if params.len() < 5 {
+                return vec![];
+            }
             let ref_id = u32::from_le_bytes([params[0], params[1], params[2], params[3]]);
             // params[4..] = UTF-8 name bytes
             // ponytail: no set_name hook yet; stub success
@@ -222,12 +268,17 @@ pub fn execute(func: u32, params: &[u8]) -> Vec<u8> {
 
         // ── Enabled ──
         OP_GET_ENABLED => {
-            let ref_id = match read_u32(params, 0) { Some(v) => v, None => return vec![] };
+            let ref_id = match read_u32(params, 0) {
+                Some(v) => v,
+                None => return vec![],
+            };
             let enabled = crate::hooks::get_enabled(ref_id);
             vec![if enabled { 1 } else { 0 }]
         }
         OP_SET_ENABLED => {
-            if params.len() < 5 { return vec![]; }
+            if params.len() < 5 {
+                return vec![];
+            }
             let ref_id = u32::from_le_bytes([params[0], params[1], params[2], params[3]]);
             let enabled = params[4] != 0;
             crate::hooks::set_enabled(ref_id, enabled);
@@ -236,12 +287,17 @@ pub fn execute(func: u32, params: &[u8]) -> Vec<u8> {
 
         // ── Lock ──
         OP_GET_LOCK => {
-            let ref_id = match read_u32(params, 0) { Some(v) => v, None => return vec![] };
+            let ref_id = match read_u32(params, 0) {
+                Some(v) => v,
+                None => return vec![],
+            };
             let lock = crate::hooks::get_lock(ref_id);
             lock.to_le_bytes().to_vec()
         }
         OP_SET_LOCK => {
-            if params.len() < 8 { return vec![]; }
+            if params.len() < 8 {
+                return vec![];
+            }
             let ref_id = u32::from_le_bytes([params[0], params[1], params[2], params[3]]);
             let lock = u32::from_le_bytes([params[4], params[5], params[6], params[7]]);
             // Lock state = byte +0xA bit 0 (verified getter reads it).
@@ -251,7 +307,9 @@ pub fn execute(func: u32, params: &[u8]) -> Vec<u8> {
 
         // ── Move To ──
         OP_MOVE_TO => {
-            if params.len() < 20 { return vec![]; }
+            if params.len() < 20 {
+                return vec![];
+            }
             let ref_id = u32::from_le_bytes([params[0], params[1], params[2], params[3]]);
             let cell = u32::from_le_bytes([params[4], params[5], params[6], params[7]]);
             let x = f32::from_le_bytes([params[8], params[9], params[10], params[11]]);
@@ -266,7 +324,9 @@ pub fn execute(func: u32, params: &[u8]) -> Vec<u8> {
 
         // ── Scale ──
         OP_SET_SCALE => {
-            if params.len() < 8 { return vec![]; }
+            if params.len() < 8 {
+                return vec![];
+            }
             let ref_id = u32::from_le_bytes([params[0], params[1], params[2], params[3]]);
             let scale = f32::from_le_bytes([params[4], params[5], params[6], params[7]]);
             // Remote scale change: raw field write (Steam-safe).
@@ -276,7 +336,9 @@ pub fn execute(func: u32, params: &[u8]) -> Vec<u8> {
 
         // ── Play Sound ──
         OP_PLAY_SOUND => {
-            if params.len() < 8 { return vec![]; }
+            if params.len() < 8 {
+                return vec![];
+            }
             let ref_id = u32::from_le_bytes([params[0], params[1], params[2], params[3]]);
             let sound = u32::from_le_bytes([params[4], params[5], params[6], params[7]]);
             // ponytail: no play_sound hook yet; stub success
@@ -286,7 +348,9 @@ pub fn execute(func: u32, params: &[u8]) -> Vec<u8> {
 
         // ── Place At Me ──
         OP_PLACE_AT_ME => {
-            if params.len() < 16 { return vec![]; }
+            if params.len() < 16 {
+                return vec![];
+            }
             let actor_id = u32::from_le_bytes([params[0], params[1], params[2], params[3]]);
             let base_id = u32::from_le_bytes([params[4], params[5], params[6], params[7]]);
             let count = u32::from_le_bytes([params[8], params[9], params[10], params[11]]);
@@ -298,7 +362,10 @@ pub fn execute(func: u32, params: &[u8]) -> Vec<u8> {
 
         // ── Base ──
         OP_GET_BASE => {
-            let ref_id = match read_u32(params, 0) { Some(v) => v, None => return vec![] };
+            let ref_id = match read_u32(params, 0) {
+                Some(v) => v,
+                None => return vec![],
+            };
             let base = crate::hooks::get_base(ref_id);
             base.to_le_bytes().to_vec()
         }
@@ -306,33 +373,45 @@ pub fn execute(func: u32, params: &[u8]) -> Vec<u8> {
         // ═══════════════════════════════════════════════════════
         // Tier 1: Position + Actor State Sync
         // ═══════════════════════════════════════════════════════
-
         OP_GET_BASE_ACTOR_VALUE => {
-            if params.len() < 5 { return vec![]; }
+            if params.len() < 5 {
+                return vec![];
+            }
             let ref_id = u32::from_le_bytes([params[0], params[1], params[2], params[3]]);
             let index = params[4];
             let value = crate::hooks::get_actor_base_value(ref_id, index);
             value.to_le_bytes().to_vec()
         }
         OP_GET_DEAD => {
-            let ref_id = match read_u32(params, 0) { Some(v) => v, None => return vec![] };
+            let ref_id = match read_u32(params, 0) {
+                Some(v) => v,
+                None => return vec![],
+            };
             let dead = crate::hooks::is_dead(ref_id);
             vec![if dead { 1 } else { 0 }]
         }
         OP_SET_CURRENT_HEALTH => {
-            if params.len() < 8 { return vec![]; }
+            if params.len() < 8 {
+                return vec![];
+            }
             let ref_id = u32::from_le_bytes([params[0], params[1], params[2], params[3]]);
             let value = f32::from_le_bytes([params[4], params[5], params[6], params[7]]);
             crate::hooks::set_actor_value(ref_id, 0x14, value); // AV_HEALTH = 0x14
             vec![1]
         }
         OP_IS_MOVING => {
-            let ref_id = match read_u32(params, 0) { Some(v) => v, None => return vec![] };
+            let ref_id = match read_u32(params, 0) {
+                Some(v) => v,
+                None => return vec![],
+            };
             let (_, moving, _, _, _, _) = crate::hooks::get_actor_state(ref_id);
             vec![if moving != 0 { 1 } else { 0 }]
         }
         OP_GET_PARENT_CELL => {
-            let ref_id = match read_u32(params, 0) { Some(v) => v, None => return vec![] };
+            let ref_id = match read_u32(params, 0) {
+                Some(v) => v,
+                None => return vec![],
+            };
             let cell = crate::hooks::get_parent_cell(ref_id);
             cell.to_le_bytes().to_vec()
         }
@@ -340,9 +419,10 @@ pub fn execute(func: u32, params: &[u8]) -> Vec<u8> {
         // ═══════════════════════════════════════════════════════
         // Tier 2: Item / Inventory Sync
         // ═══════════════════════════════════════════════════════
-
         OP_EQUIP_ITEM => {
-            if params.len() < 13 { return vec![]; }
+            if params.len() < 13 {
+                return vec![];
+            }
             let ref_id = u32::from_le_bytes([params[0], params[1], params[2], params[3]]);
             let item_id = u32::from_le_bytes([params[4], params[5], params[6], params[7]]);
             let equip_slot = u32::from_le_bytes([params[8], params[9], params[10], params[11]]);
@@ -351,7 +431,9 @@ pub fn execute(func: u32, params: &[u8]) -> Vec<u8> {
             vec![1]
         }
         OP_UNEQUIP_ITEM => {
-            if params.len() < 13 { return vec![]; }
+            if params.len() < 13 {
+                return vec![];
+            }
             let ref_id = u32::from_le_bytes([params[0], params[1], params[2], params[3]]);
             let item_id = u32::from_le_bytes([params[4], params[5], params[6], params[7]]);
             let equip_slot = u32::from_le_bytes([params[8], params[9], params[10], params[11]]);
@@ -360,7 +442,9 @@ pub fn execute(func: u32, params: &[u8]) -> Vec<u8> {
             vec![1]
         }
         OP_ADD_ITEM => {
-            if params.len() < 13 { return vec![]; }
+            if params.len() < 13 {
+                return vec![];
+            }
             let ref_id = u32::from_le_bytes([params[0], params[1], params[2], params[3]]);
             let item_id = u32::from_le_bytes([params[4], params[5], params[6], params[7]]);
             let count = u32::from_le_bytes([params[8], params[9], params[10], params[11]]);
@@ -369,7 +453,9 @@ pub fn execute(func: u32, params: &[u8]) -> Vec<u8> {
             vec![1]
         }
         OP_REMOVE_ITEM => {
-            if params.len() < 13 { return vec![]; }
+            if params.len() < 13 {
+                return vec![];
+            }
             let ref_id = u32::from_le_bytes([params[0], params[1], params[2], params[3]]);
             let item_id = u32::from_le_bytes([params[4], params[5], params[6], params[7]]);
             let count = u32::from_le_bytes([params[8], params[9], params[10], params[11]]);
@@ -378,14 +464,19 @@ pub fn execute(func: u32, params: &[u8]) -> Vec<u8> {
             vec![1]
         }
         OP_REMOVE_ALL_ITEMS => {
-            if params.len() < 8 { return vec![]; }
+            if params.len() < 8 {
+                return vec![];
+            }
             let ref_id = u32::from_le_bytes([params[0], params[1], params[2], params[3]]);
             let transfer_to = u32::from_le_bytes([params[4], params[5], params[6], params[7]]);
             crate::hooks::remove_all_items(ref_id, transfer_to);
             vec![1]
         }
         OP_GET_REF_COUNT => {
-            let ref_id = match read_u32(params, 0) { Some(v) => v, None => return vec![] };
+            let ref_id = match read_u32(params, 0) {
+                Some(v) => v,
+                None => return vec![],
+            };
             let count = crate::hooks::get_ref_count(ref_id);
             count.to_le_bytes().to_vec()
         }
@@ -393,9 +484,10 @@ pub fn execute(func: u32, params: &[u8]) -> Vec<u8> {
         // ═══════════════════════════════════════════════════════
         // Tier 3: Combat + Death
         // ═══════════════════════════════════════════════════════
-
         OP_KILL => {
-            if params.len() < 10 { return vec![]; }
+            if params.len() < 10 {
+                return vec![];
+            }
             let ref_id = u32::from_le_bytes([params[0], params[1], params[2], params[3]]);
             let killer_id = u32::from_le_bytes([params[4], params[5], params[6], params[7]]);
             let limb = params[8] as i8;
@@ -404,7 +496,9 @@ pub fn execute(func: u32, params: &[u8]) -> Vec<u8> {
             vec![1]
         }
         OP_DAMAGE_ACTOR_VALUE => {
-            if params.len() < 9 { return vec![]; }
+            if params.len() < 9 {
+                return vec![];
+            }
             let ref_id = u32::from_le_bytes([params[0], params[1], params[2], params[3]]);
             let index = params[4];
             let damage = f32::from_le_bytes([params[5], params[6], params[7], params[8]]);
@@ -412,7 +506,9 @@ pub fn execute(func: u32, params: &[u8]) -> Vec<u8> {
             vec![1]
         }
         OP_RESTORE_ACTOR_VALUE => {
-            if params.len() < 9 { return vec![]; }
+            if params.len() < 9 {
+                return vec![];
+            }
             let ref_id = u32::from_le_bytes([params[0], params[1], params[2], params[3]]);
             let index = params[4];
             let amount = f32::from_le_bytes([params[5], params[6], params[7], params[8]]);
@@ -420,7 +516,9 @@ pub fn execute(func: u32, params: &[u8]) -> Vec<u8> {
             vec![1]
         }
         OP_FORCE_ACTOR_VALUE => {
-            if params.len() < 9 { return vec![]; }
+            if params.len() < 9 {
+                return vec![];
+            }
             let ref_id = u32::from_le_bytes([params[0], params[1], params[2], params[3]]);
             let index = params[4];
             let value = f32::from_le_bytes([params[5], params[6], params[7], params[8]]);
@@ -431,14 +529,18 @@ pub fn execute(func: u32, params: &[u8]) -> Vec<u8> {
         // ═══════════════════════════════════════════════════════
         // Tier 4: AI + World
         // ═══════════════════════════════════════════════════════
-
         OP_GET_COMBAT_TARGET => {
-            let ref_id = match read_u32(params, 0) { Some(v) => v, None => return vec![] };
+            let ref_id = match read_u32(params, 0) {
+                Some(v) => v,
+                None => return vec![],
+            };
             let target = crate::hooks::get_combat_target(ref_id);
             target.to_le_bytes().to_vec()
         }
         OP_PLAY_GROUP => {
-            if params.len() < 12 { return vec![]; }
+            if params.len() < 12 {
+                return vec![];
+            }
             let ref_id = u32::from_le_bytes([params[0], params[1], params[2], params[3]]);
             let group_id = u32::from_le_bytes([params[4], params[5], params[6], params[7]]);
             let flags = u32::from_le_bytes([params[8], params[9], params[10], params[11]]);
@@ -446,13 +548,17 @@ pub fn execute(func: u32, params: &[u8]) -> Vec<u8> {
             vec![1]
         }
         OP_FORCE_WEATHER => {
-            if params.len() < 4 { return vec![]; }
+            if params.len() < 4 {
+                return vec![];
+            }
             let weather_id = u32::from_le_bytes([params[0], params[1], params[2], params[3]]);
             crate::hooks::force_weather(weather_id);
             vec![1]
         }
         OP_SET_RESTRAINED => {
-            if params.len() < 5 { return vec![]; }
+            if params.len() < 5 {
+                return vec![];
+            }
             let ref_id = u32::from_le_bytes([params[0], params[1], params[2], params[3]]);
             let restrained = params[4];
             crate::hooks::set_restrained(ref_id, restrained);
@@ -460,34 +566,36 @@ pub fn execute(func: u32, params: &[u8]) -> Vec<u8> {
         }
 
         // ── Debug ──
-        OP_PROBE_SAVES => {
-            crate::hooks::probe_saves()
-        }
-        OP_REPORT_PLAYER_STATE => {
-            crate::network::report_player_state()
-        }
+        OP_PROBE_SAVES => crate::hooks::probe_saves(),
+        OP_REPORT_PLAYER_STATE => crate::network::report_player_state(),
         OP_TRACK_ACTOR => {
-            let Some(ref_id) = read_u32(params, 0) else { return vec![] };
+            let Some(ref_id) = read_u32(params, 0) else {
+                return vec![];
+            };
             crate::network::track_actor(ref_id);
             vec![1]
         }
         OP_UNTRACK_ACTOR => {
-            let Some(ref_id) = read_u32(params, 0) else { return vec![] };
+            let Some(ref_id) = read_u32(params, 0) else {
+                return vec![];
+            };
             crate::network::untrack_actor(ref_id);
             vec![1]
         }
-        OP_DUMP_IMAGE => {
-            crate::hooks::dump_image()
-        }
+        OP_DUMP_IMAGE => crate::hooks::dump_image(),
         // Read-only form probe: [obj:4][vtable:4][vtable dwords x16][pos x12]
         // then [obj fields x64 dwords] — no vtable CALLS, isolates lookup/
         // object vs vtable-call crashes.
         // Read-only pointer deref: 16 dwords at [addr:4] — for locating
         // the baseForm field (deref candidate heap pointers, check +0x0C).
         OP_PROBE_PTR => {
-            let Some(addr) = read_u32(params, 0) else { return vec![] };
+            let Some(addr) = read_u32(params, 0) else {
+                return vec![];
+            };
             unsafe fn rd_u32(addr: usize) -> u32 {
-                if addr == 0 { return 0; }
+                if addr == 0 {
+                    return 0;
+                }
                 (addr as *const u32).read()
             }
             let mut out = Vec::with_capacity(64);
@@ -499,9 +607,13 @@ pub fn execute(func: u32, params: &[u8]) -> Vec<u8> {
         // Guarded vtable-call test (0 args): [ref_id:4][index:4] — calls
         // vtable[index](this) via thiscall, returns the 4-byte result.
         OP_VCALL_TEST0 => {
-            let (Some(ref_id), Some(index)) = (read_u32(params, 0), read_u32(params, 4)) else { return vec![] };
+            let (Some(ref_id), Some(index)) = (read_u32(params, 0), read_u32(params, 4)) else {
+                return vec![];
+            };
             let obj = unsafe { crate::hooks::vtable::lookup_form_by_id(ref_id) };
-            if obj.is_null() { return vec![]; }
+            if obj.is_null() {
+                return vec![];
+            }
             let r: u32 = unsafe { crate::hooks::vtable::vcall_0::<u32>(obj, index as usize) };
             r.to_le_bytes().to_vec()
         }
@@ -509,16 +621,29 @@ pub fn execute(func: u32, params: &[u8]) -> Vec<u8> {
         // vtable[index](this, arg1) via thiscall and returns the 4-byte
         // result. Used to identify getters live (crash = wrong index).
         OP_VCALL_TEST => {
-            let (Some(ref_id), Some(index), Some(arg)) = (read_u32(params, 0), read_u32(params, 4), read_u32(params, 8)) else { return vec![] };
+            let (Some(ref_id), Some(index), Some(arg)) = (
+                read_u32(params, 0),
+                read_u32(params, 4),
+                read_u32(params, 8),
+            ) else {
+                return vec![];
+            };
             let obj = unsafe { crate::hooks::vtable::lookup_form_by_id(ref_id) };
-            if obj.is_null() { return vec![]; }
-            let r: u32 = unsafe { crate::hooks::vtable::vcall_1::<u32, u32>(obj, index as usize, arg) };
+            if obj.is_null() {
+                return vec![];
+            }
+            let r: u32 =
+                unsafe { crate::hooks::vtable::vcall_1::<u32, u32>(obj, index as usize, arg) };
             r.to_le_bytes().to_vec()
         }
         OP_PROBE_FORM => {
-            let Some(ref_id) = read_u32(params, 0) else { return vec![] };
+            let Some(ref_id) = read_u32(params, 0) else {
+                return vec![];
+            };
             unsafe fn rd_u32(addr: usize) -> u32 {
-                if addr == 0 { return 0; }
+                if addr == 0 {
+                    return 0;
+                }
                 (addr as *const u32).read()
             }
             let obj = unsafe { crate::hooks::vtable::lookup_form_by_id(ref_id) } as usize;
@@ -589,29 +714,49 @@ mod tests {
         // 2026-08-14: OP_SET_SCALE collided with OP_PLAY_SOUND at 0x15).
         use opcodes::*;
         let all: &[(u32, &str)] = &[
-            (OP_GET_POS, "GET_POS"), (OP_SET_POS, "SET_POS"),
-            (OP_GET_ANGLE, "GET_ANGLE"), (OP_SET_ANGLE, "SET_ANGLE"),
-            (OP_GET_CELL, "GET_CELL"), (OP_SET_CELL, "SET_CELL"),
-            (OP_GET_ACTOR_STATE, "ACTOR_STATE"), (OP_GET_ACTOR_VALUE, "ACTOR_VALUE"),
-            (OP_SET_ACTOR_VALUE, "SET_ACTOR_VALUE"), (OP_GET_CONTROL, "GET_CONTROL"),
-            (OP_SET_CONTROL, "SET_CONTROL"), (OP_GET_ACTIVATE, "GET_ACTIVATE"),
-            (OP_FIRE_WEAPON, "FIRE_WEAPON"), (OP_GET_NAME, "GET_NAME"),
-            (OP_SET_NAME, "SET_NAME"), (OP_GET_ENABLED, "GET_ENABLED"),
-            (OP_SET_ENABLED, "SET_ENABLED"), (OP_GET_LOCK, "GET_LOCK"),
-            (OP_SET_LOCK, "SET_LOCK"), (OP_MOVE_TO, "MOVE_TO"),
-            (OP_PLAY_SOUND, "PLAY_SOUND"), (OP_PLACE_AT_ME, "PLACE_AT_ME"),
-            (OP_SET_SCALE, "SET_SCALE"), (OP_GET_BASE, "GET_BASE"),
+            (OP_GET_POS, "GET_POS"),
+            (OP_SET_POS, "SET_POS"),
+            (OP_GET_ANGLE, "GET_ANGLE"),
+            (OP_SET_ANGLE, "SET_ANGLE"),
+            (OP_GET_CELL, "GET_CELL"),
+            (OP_SET_CELL, "SET_CELL"),
+            (OP_GET_ACTOR_STATE, "ACTOR_STATE"),
+            (OP_GET_ACTOR_VALUE, "ACTOR_VALUE"),
+            (OP_SET_ACTOR_VALUE, "SET_ACTOR_VALUE"),
+            (OP_GET_CONTROL, "GET_CONTROL"),
+            (OP_SET_CONTROL, "SET_CONTROL"),
+            (OP_GET_ACTIVATE, "GET_ACTIVATE"),
+            (OP_FIRE_WEAPON, "FIRE_WEAPON"),
+            (OP_GET_NAME, "GET_NAME"),
+            (OP_SET_NAME, "SET_NAME"),
+            (OP_GET_ENABLED, "GET_ENABLED"),
+            (OP_SET_ENABLED, "SET_ENABLED"),
+            (OP_GET_LOCK, "GET_LOCK"),
+            (OP_SET_LOCK, "SET_LOCK"),
+            (OP_MOVE_TO, "MOVE_TO"),
+            (OP_PLAY_SOUND, "PLAY_SOUND"),
+            (OP_PLACE_AT_ME, "PLACE_AT_ME"),
+            (OP_SET_SCALE, "SET_SCALE"),
+            (OP_GET_BASE, "GET_BASE"),
             (OP_GET_BASE_ACTOR_VALUE, "GET_BASE_ACTOR_VALUE"),
-            (OP_GET_DEAD, "GET_DEAD"), (OP_SET_CURRENT_HEALTH, "SET_CURRENT_HEALTH"),
-            (OP_IS_MOVING, "IS_MOVING"), (OP_GET_PARENT_CELL, "GET_PARENT_CELL"),
-            (OP_EQUIP_ITEM, "EQUIP_ITEM"), (OP_UNEQUIP_ITEM, "UNEQUIP_ITEM"),
-            (OP_ADD_ITEM, "ADD_ITEM"), (OP_REMOVE_ITEM, "REMOVE_ITEM"),
-            (OP_REMOVE_ALL_ITEMS, "REMOVE_ALL_ITEMS"), (OP_GET_REF_COUNT, "GET_REF_COUNT"),
-            (OP_KILL, "KILL"), (OP_DAMAGE_ACTOR_VALUE, "DAMAGE_ACTOR_VALUE"),
+            (OP_GET_DEAD, "GET_DEAD"),
+            (OP_SET_CURRENT_HEALTH, "SET_CURRENT_HEALTH"),
+            (OP_IS_MOVING, "IS_MOVING"),
+            (OP_GET_PARENT_CELL, "GET_PARENT_CELL"),
+            (OP_EQUIP_ITEM, "EQUIP_ITEM"),
+            (OP_UNEQUIP_ITEM, "UNEQUIP_ITEM"),
+            (OP_ADD_ITEM, "ADD_ITEM"),
+            (OP_REMOVE_ITEM, "REMOVE_ITEM"),
+            (OP_REMOVE_ALL_ITEMS, "REMOVE_ALL_ITEMS"),
+            (OP_GET_REF_COUNT, "GET_REF_COUNT"),
+            (OP_KILL, "KILL"),
+            (OP_DAMAGE_ACTOR_VALUE, "DAMAGE_ACTOR_VALUE"),
             (OP_RESTORE_ACTOR_VALUE, "RESTORE_ACTOR_VALUE"),
             (OP_FORCE_ACTOR_VALUE, "FORCE_ACTOR_VALUE"),
-            (OP_GET_COMBAT_TARGET, "GET_COMBAT_TARGET"), (OP_PLAY_GROUP, "PLAY_GROUP"),
-            (OP_FORCE_WEATHER, "FORCE_WEATHER"), (OP_SET_RESTRAINED, "SET_RESTRAINED"),
+            (OP_GET_COMBAT_TARGET, "GET_COMBAT_TARGET"),
+            (OP_PLAY_GROUP, "PLAY_GROUP"),
+            (OP_FORCE_WEATHER, "FORCE_WEATHER"),
+            (OP_SET_RESTRAINED, "SET_RESTRAINED"),
         ];
         let mut seen = std::collections::HashSet::new();
         for (v, name) in all {
@@ -653,10 +798,15 @@ mod tests {
             (opcodes::OP_PLACE_AT_ME, &params),
         ];
         // OP_MOVE_TO needs 20 bytes (ref + cell + xyz); test separately.
-        let move_params = [0x42u8, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0x80, 0x3F, 0, 0, 0x80, 0x3F, 0, 0, 0x80, 0x3F];
+        let move_params = [
+            0x42u8, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0x80, 0x3F, 0, 0, 0x80, 0x3F, 0, 0, 0x80, 0x3F,
+        ];
         let mv = execute(opcodes::OP_MOVE_TO, &move_params);
         assert_eq!(mv, vec![1], "OP_MOVE_TO should succeed with 20-byte params");
-        assert!(execute(opcodes::OP_MOVE_TO, &params).is_empty(), "short MOVE_TO rejected");
+        assert!(
+            execute(opcodes::OP_MOVE_TO, &params).is_empty(),
+            "short MOVE_TO rejected"
+        );
         // OP_FIRE_WEAPON now calls the engine fire routine — a no-op
         // returning 0 on non-x86 test hosts (no engine there). Assert it
         // returns a byte either way (never empty/crash).
@@ -665,7 +815,10 @@ mod tests {
         for (opcode, p) in setters {
             let result = execute(opcode, p);
             assert!(!result.is_empty(), "opcode {opcode:#06X} returned empty");
-            assert_eq!(result[0], 1, "opcode {opcode:#06X} should return success byte 1");
+            assert_eq!(
+                result[0], 1,
+                "opcode {opcode:#06X} should return success byte 1"
+            );
         }
     }
 
@@ -722,7 +875,7 @@ mod tests {
         let mut params = [0u8; 13];
         params[0] = 0x42; // refID
         params[4] = 0x01; // itemID
-        params[12] = 0;    // prevent_removal
+        params[12] = 0; // prevent_removal
         let r1 = execute(opcodes::OP_EQUIP_ITEM, &params);
         assert_eq!(r1[0], 1);
         let r2 = execute(opcodes::OP_UNEQUIP_ITEM, &params);
@@ -735,7 +888,7 @@ mod tests {
         params[0] = 0x42; // refID
         params[4] = 0x01; // itemID
         params[8] = 0x03; // count = 3
-        params[12] = 1;   // silent
+        params[12] = 1; // silent
         let r1 = execute(opcodes::OP_ADD_ITEM, &params);
         assert_eq!(r1[0], 1);
         let r2 = execute(opcodes::OP_REMOVE_ITEM, &params);
@@ -767,8 +920,8 @@ mod tests {
         let mut params = [0u8; 10];
         params[0] = 0x42; // refID
         params[4] = 0xFF; // killerID
-        params[8] = 1;    // limb = 1 (head)
-        params[9] = 2;    // cause = 2 (gun)
+        params[8] = 1; // limb = 1 (head)
+        params[9] = 2; // cause = 2 (gun)
         let result = execute(opcodes::OP_KILL, &params);
         assert_eq!(result[0], 1);
     }
@@ -828,7 +981,7 @@ mod tests {
     fn test_tier4_set_restrained() {
         let mut params = [0u8; 5];
         params[0] = 0x42; // refID
-        params[4] = 1;    // restrained = true
+        params[4] = 1; // restrained = true
         let result = execute(opcodes::OP_SET_RESTRAINED, &params);
         assert_eq!(result[0], 1);
     }
@@ -863,6 +1016,9 @@ mod tests {
         assert_eq!(read_u32(&[], 0), None);
         assert_eq!(read_u32(&[0x01, 0x02, 0x03], 0), None);
         assert_eq!(read_u32(&[0x01, 0x02, 0x03, 0x04], 0), Some(0x0403_0201));
-        assert_eq!(read_u32(&[0xFF, 0x01, 0x02, 0x03, 0x04], 1), Some(0x0403_0201));
+        assert_eq!(
+            read_u32(&[0xFF, 0x01, 0x02, 0x03, 0x04], 1),
+            Some(0x0403_0201)
+        );
     }
 }

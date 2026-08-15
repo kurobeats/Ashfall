@@ -53,21 +53,22 @@ impl PluginInfo {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct NVSEInterface {
-    pub nvse_version: u32,       // 0x00
-    pub runtime_version: u32,    // 0x04
-    pub editor_version: u32,     // 0x08
-    pub is_editor: u32,          // 0x0C
-    pub register_command: unsafe extern "C" fn(*mut c_void) -> bool,       // 0x10
-    pub set_opcode_base: unsafe extern "C" fn(u32),                        // 0x14
-    pub query_interface: unsafe extern "C" fn(u32) -> *mut c_void,         // 0x18
-    pub get_plugin_handle: unsafe extern "C" fn() -> u32,                  // 0x1C
+    pub nvse_version: u32,                                           // 0x00
+    pub runtime_version: u32,                                        // 0x04
+    pub editor_version: u32,                                         // 0x08
+    pub is_editor: u32,                                              // 0x0C
+    pub register_command: unsafe extern "C" fn(*mut c_void) -> bool, // 0x10
+    pub set_opcode_base: unsafe extern "C" fn(u32),                  // 0x14
+    pub query_interface: unsafe extern "C" fn(u32) -> *mut c_void,   // 0x18
+    pub get_plugin_handle: unsafe extern "C" fn() -> u32,            // 0x1C
     pub register_typed_command: unsafe extern "C" fn(*mut c_void, u32) -> bool, // 0x20
-    pub get_runtime_directory: unsafe extern "C" fn() -> *const c_char,    // 0x24
-    pub is_nogore: u32,          // 0x28
+    pub get_runtime_directory: unsafe extern "C" fn() -> *const c_char, // 0x24
+    pub is_nogore: u32,                                              // 0x28
 }
 
 /// Snapshot of the engine interface passed at load time, if any.
-static ENGINE_INTERFACE: LazyLock<Mutex<Option<NVSEInterface>>> = LazyLock::new(|| Mutex::new(None));
+static ENGINE_INTERFACE: LazyLock<Mutex<Option<NVSEInterface>>> =
+    LazyLock::new(|| Mutex::new(None));
 
 /// Return the engine interface captured during `NVSEPlugin_Load`, if any.
 pub fn nvse_interface() -> Option<NVSEInterface> {
@@ -91,13 +92,19 @@ unsafe fn plugin_query(nvse: *const NVSEInterface, info: *mut PluginInfo) -> boo
 
 /// Called by NVSE to query plugin info.
 #[no_mangle]
-pub unsafe extern "C" fn NVSEPlugin_Query(nvse: *const NVSEInterface, info: *mut PluginInfo) -> bool {
+pub unsafe extern "C" fn NVSEPlugin_Query(
+    nvse: *const NVSEInterface,
+    info: *mut PluginInfo,
+) -> bool {
     plugin_query(nvse, info)
 }
 
 /// Called by FOSE/xFOSE to query plugin info (FO3 — the same interface).
 #[no_mangle]
-pub unsafe extern "C" fn FOSEPlugin_Query(nvse: *const NVSEInterface, info: *mut PluginInfo) -> bool {
+pub unsafe extern "C" fn FOSEPlugin_Query(
+    nvse: *const NVSEInterface,
+    info: *mut PluginInfo,
+) -> bool {
     plugin_query(nvse, info)
 }
 

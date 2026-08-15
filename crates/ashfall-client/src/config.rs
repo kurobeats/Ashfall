@@ -24,13 +24,27 @@ pub struct ClientConfig {
     pub mods: Vec<String>,
 }
 
-fn default_name() -> String { "Wanderer".into() }
-fn default_master() -> String { "127.0.0.1:1660".into() }
-fn default_server() -> String { "127.0.0.1".into() }
-fn default_server_port() -> u16 { 1770 }
-fn default_init_time() -> u32 { 9000 }
-fn default_ipc_mode() -> String { "stub".into() }
-fn default_ipc_port() -> u16 { 1771 }
+fn default_name() -> String {
+    "Wanderer".into()
+}
+fn default_master() -> String {
+    "127.0.0.1:1660".into()
+}
+fn default_server() -> String {
+    "127.0.0.1".into()
+}
+fn default_server_port() -> u16 {
+    1770
+}
+fn default_init_time() -> u32 {
+    9000
+}
+fn default_ipc_mode() -> String {
+    "stub".into()
+}
+fn default_ipc_port() -> u16 {
+    1771
+}
 
 impl Default for ClientConfig {
     fn default() -> Self {

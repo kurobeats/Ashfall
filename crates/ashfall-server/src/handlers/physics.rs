@@ -1,11 +1,11 @@
 //! Physics handler — validate and relay velocity updates.
 
-use ashfall_core::id::NetworkID;
-use ashfall_core::protocol::Packet;
 use crate::anti_cheat::AntiCheat;
 use crate::session::Session;
 use crate::world::objects::{Actor, Object, Player};
 use crate::world::registry::ObjectRegistry;
+use ashfall_core::id::NetworkID;
+use ashfall_core::protocol::Packet;
 use std::sync::Arc;
 
 /// Handle UpdateVelocity — validate and relay.
@@ -26,7 +26,10 @@ pub fn handle_update_velocity(
         return None;
     }
     if !AntiCheat::validate_velocity(vel) {
-        tracing::warn!("AntiCheat: velocity rejected from {} ({vel:?})", session.player_name);
+        tracing::warn!(
+            "AntiCheat: velocity rejected from {} ({vel:?})",
+            session.player_name
+        );
         return None;
     }
 

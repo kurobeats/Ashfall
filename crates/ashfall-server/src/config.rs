@@ -58,15 +58,33 @@ pub struct GameSection {
 
 // ── defaults ──
 
-fn default_host() -> String { "0.0.0.0".into() }
-fn default_port() -> u16 { 1770 }
-fn default_connections() -> usize { 4 }
-fn default_announce() -> String { "127.0.0.1".into() }
-fn default_game_type() -> String { "fo3".into() }
-fn default_scripts_path() -> PathBuf { PathBuf::from("./scripts") }
-fn default_db_path() -> PathBuf { PathBuf::from("./data/fallout3/fallout3.sqlite3") }
-fn default_tick_rate() -> u32 { 30 }
-fn default_time_scale() -> f32 { 30.0 }
+fn default_host() -> String {
+    "0.0.0.0".into()
+}
+fn default_port() -> u16 {
+    1770
+}
+fn default_connections() -> usize {
+    4
+}
+fn default_announce() -> String {
+    "127.0.0.1".into()
+}
+fn default_game_type() -> String {
+    "fo3".into()
+}
+fn default_scripts_path() -> PathBuf {
+    PathBuf::from("./scripts")
+}
+fn default_db_path() -> PathBuf {
+    PathBuf::from("./data/fallout3/fallout3.sqlite3")
+}
+fn default_tick_rate() -> u32 {
+    30
+}
+fn default_time_scale() -> f32 {
+    30.0
+}
 
 impl Default for ServerConfig {
     fn default() -> Self {
@@ -81,8 +99,12 @@ impl Default for ServerConfig {
                 master_port: 1660,
                 game_type: default_game_type(),
             },
-            scripts: ScriptSection { path: default_scripts_path() },
-            database: DatabaseSection { path: default_db_path() },
+            scripts: ScriptSection {
+                path: default_scripts_path(),
+            },
+            database: DatabaseSection {
+                path: default_db_path(),
+            },
             game: GameSection {
                 tick_rate: default_tick_rate(),
                 time_scale: default_time_scale(),
@@ -139,7 +161,10 @@ impl ServerConfig {
                     "announce" => config.server.announce = value.to_string(),
                     "master_port" => config.server.master_port = value.parse().unwrap_or(1660),
                     "game_type" => config.server.game_type = value.to_string(),
-                    "pvp_enabled" => config.server.pvp_enabled = value.eq_ignore_ascii_case("true") || value == "1",
+                    "pvp_enabled" => {
+                        config.server.pvp_enabled =
+                            value.eq_ignore_ascii_case("true") || value == "1"
+                    }
                     "mod" => config.server.mods.push(value.to_string()),
                     "scripts_path" => config.scripts.path = PathBuf::from(value),
                     "db_path" => config.database.path = PathBuf::from(value),

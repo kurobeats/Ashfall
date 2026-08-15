@@ -96,7 +96,13 @@ impl ReliableChannel {
     }
 
     fn enqueue(&mut self, channel: Channel, seq: u16, data: Vec<u8>) {
-        let entry = SendEntry { seq, channel, sent_at: Instant::now(), data, retransmits: 0 };
+        let entry = SendEntry {
+            seq,
+            channel,
+            sent_at: Instant::now(),
+            data,
+            retransmits: 0,
+        };
         self.send_queues[channel as usize].push_back(entry);
     }
 
@@ -120,8 +126,8 @@ impl ReliableChannel {
         // Drain System first (weight 4), then Game (2), then Chat (1)
         for queue in &mut self.send_queues {
             for entry in queue.iter_mut() {
-                let timeout =
-                    base_rto.saturating_mul(2u32.saturating_pow(entry.retransmits.min(MAX_BACKOFF)));
+                let timeout = base_rto
+                    .saturating_mul(2u32.saturating_pow(entry.retransmits.min(MAX_BACKOFF)));
                 if now.duration_since(entry.sent_at) >= timeout {
                     entry.sent_at = now;
                     entry.retransmits += 1;
@@ -186,7 +192,8 @@ impl ReliableChannel {
             let gap = seq.wrapping_sub(self.recv_seq);
             for i in 0..gap {
                 let missing = self.recv_seq.wrapping_add(i);
-                if !self.recv_buffer.contains_key(&missing) && !self.pending_nacks.contains(&missing)
+                if !self.recv_buffer.contains_key(&missing)
+                    && !self.pending_nacks.contains(&missing)
                 {
                     self.pending_nacks.push(missing);
                 }
@@ -235,8 +242,7 @@ impl ReliableChannel {
         let rto_ms = new_srtt + 4 * new_rttvar;
         self.srtt = Duration::from_millis(new_srtt.max(0) as u64);
         self.rttvar = Duration::from_millis(new_rttvar.max(0) as u64);
-        self.rto = Duration::from_millis(rto_ms.max(0) as u64)
-            .clamp(RTO_MIN, RTO_MAX);
+        self.rto = Duration::from_millis(rto_ms.max(0) as u64).clamp(RTO_MIN, RTO_MAX);
     }
 }
 
@@ -261,7 +267,12 @@ pub struct RateLimiter {
 impl RateLimiter {
     /// `rate` tokens/sec, `burst` max tokens.
     pub fn new(rate: f64, burst: f64) -> Self {
-        RateLimiter { tokens: burst, last_refill: Instant::now(), max_tokens: burst, rate }
+        RateLimiter {
+            tokens: burst,
+            last_refill: Instant::now(),
+            max_tokens: burst,
+            rate,
+        }
     }
 
     /// Consume one token. Returns false (drop) when the bucket is empty.
@@ -358,7 +369,11 @@ impl NetworkManager {
     }
 
     /// Send a packet unreliably (position/physics updates, loss OK).
-    pub async fn send_unreliable(&mut self, addr: SocketAddr, packet: &Packet) -> anyhow::Result<()> {
+    pub async fn send_unreliable(
+        &mut self,
+        addr: SocketAddr,
+        packet: &Packet,
+    ) -> anyhow::Result<()> {
         let channel = Channel::from_packet(packet);
         let payload = postcard::to_stdvec(packet)?;
 
@@ -437,12 +452,15 @@ impl NetworkManager {
         let packet_data = &payload[consumed..];
         ch.recv(seq, packet_data.to_vec());
         // Deliver in order (reassembled run + this packet, FIFO)
-        ch.take_ready().and_then(|data| postcard::from_bytes(&data).ok())
+        ch.take_ready()
+            .and_then(|data| postcard::from_bytes(&data).ok())
     }
 
     /// Process an ACK/NACK control frame, queueing NACK retransmits.
     fn handle_ctrl_frame(&mut self, addr: SocketAddr, payload: &[u8]) {
-        let Some(frame) = decode_ctrl_frame(payload) else { return };
+        let Some(frame) = decode_ctrl_frame(payload) else {
+            return;
+        };
         let ch = match self.reliable.get_mut(&addr) {
             Some(ch) => ch,
             None => return,
@@ -627,7 +645,11 @@ mod tests {
         }
 
         let resends = ch.retransmit_expired(Instant::now());
-        assert_eq!(parse_frame(&resends[0]).0, sys_seq, "System drains before Chat");
+        assert_eq!(
+            parse_frame(&resends[0]).0,
+            sys_seq,
+            "System drains before Chat"
+        );
         assert_eq!(parse_frame(&resends[1]).0, chat_seq);
     }
 
@@ -720,7 +742,10 @@ mod tests {
     #[test]
     fn test_control_frames_pending() {
         let mut ch = ReliableChannel::new();
-        assert!(ch.take_control_frames().is_empty(), "nothing pending initially");
+        assert!(
+            ch.take_control_frames().is_empty(),
+            "nothing pending initially"
+        );
 
         ch.recv(0, vec![1]);
         let frames = ch.take_control_frames();
@@ -732,7 +757,10 @@ mod tests {
         // Out-of-order triggers NACK
         ch.recv(4, vec![2]);
         let frames = ch.take_control_frames();
-        let nack = frames.iter().find(|f| f[3] == ashfall_core::protocol::transport::CTRL_NACK).expect("nack frame");
+        let nack = frames
+            .iter()
+            .find(|f| f[3] == ashfall_core::protocol::transport::CTRL_NACK)
+            .expect("nack frame");
         let decoded = decode_ctrl_frame(&nack[3..]).unwrap();
         if let CtrlFrame::Nack(missing) = decoded {
             assert!(missing.contains(&1));

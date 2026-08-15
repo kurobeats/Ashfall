@@ -133,7 +133,11 @@ impl WasmInstance {
         let result = f
             .call(
                 &mut self.store,
-                (player_id as i64, Self::STR_SCRATCH as i32, message.len() as i32),
+                (
+                    player_id as i64,
+                    Self::STR_SCRATCH as i32,
+                    message.len() as i32,
+                ),
             )
             .ok()?;
         Some(result as u32)
@@ -406,7 +410,10 @@ impl ScriptEngine {
                 .ok();
             if let Some(f) = f {
                 let r = f
-                    .call(&mut inst.store, (target as i64, attacker as i64, limb as i32, damage))
+                    .call(
+                        &mut inst.store,
+                        (target as i64, attacker as i64, limb as i32, damage),
+                    )
                     .unwrap_or(1);
                 if r == 0 {
                     return false;
@@ -424,7 +431,10 @@ impl ScriptEngine {
                 .get_typed_func::<(i64, i64, i32), ()>(&mut inst.store, "on_equip")
                 .ok();
             if let Some(f) = f {
-                let _ = f.call(&mut inst.store, (actor as i64, item as i64, equipped as i32));
+                let _ = f.call(
+                    &mut inst.store,
+                    (actor as i64, item as i64, equipped as i32),
+                );
             }
         }
     }
@@ -518,7 +528,12 @@ impl ScriptEngine {
             if let Some(func) = func {
                 let _ = func.call(
                     &mut inst.store,
-                    (time.year as i32, time.month as i32, time.day as i32, time.hour as i32),
+                    (
+                        time.year as i32,
+                        time.month as i32,
+                        time.day as i32,
+                        time.hour as i32,
+                    ),
                 );
             }
         };
@@ -614,7 +629,10 @@ impl ScriptEngine {
             }
             let f = inst
                 .instance
-                .get_typed_func::<(i64, i64, i32, i32), ()>(&mut inst.store, "on_window_text_change")
+                .get_typed_func::<(i64, i64, i32, i32), ()>(
+                    &mut inst.store,
+                    "on_window_text_change",
+                )
                 .ok();
             if let Some(f) = f {
                 let _ = f.call(
@@ -709,7 +727,11 @@ impl ScriptEngine {
 
     /// on_actor_value_change / on_actor_base_value_change(actor, index, value)
     pub fn notify_actor_value(&mut self, actor: u64, index: u8, value: f32, base: bool) {
-        let name = if base { "on_actor_base_value_change" } else { "on_actor_value_change" };
+        let name = if base {
+            "on_actor_base_value_change"
+        } else {
+            "on_actor_value_change"
+        };
         for inst in &mut self.instances {
             let f = inst
                 .instance

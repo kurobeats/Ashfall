@@ -52,7 +52,9 @@ impl Database {
     }
 
     #[inline]
-    pub fn conn(&self) -> &Connection { &self.conn }
+    pub fn conn(&self) -> &Connection {
+        &self.conn
+    }
 
     pub fn close(self) -> anyhow::Result<()> {
         self.conn.execute_batch("PRAGMA optimize;")?;
@@ -100,7 +102,9 @@ impl Database {
 
         // Dialogue flags
         let flags = self.load_dialogue_flags();
-        for df in &flags { quests.set_flag(df.flag_id, df.value); }
+        for df in &flags {
+            quests.set_flag(df.flag_id, df.value);
+        }
         tracing::info!("  {} dialogue flags", flags.len());
 
         // Factions
@@ -119,7 +123,11 @@ impl Database {
 
         tracing::info!(
             "Loaded: {} records, {} npcs, {} weapons, {} quests, {} factions",
-            records.len(), npcs.len(), weapons.len(), quest_stages.len(), faction_rows.len()
+            records.len(),
+            npcs.len(),
+            weapons.len(),
+            quest_stages.len(),
+            faction_rows.len()
         );
     }
 }

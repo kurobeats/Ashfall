@@ -30,13 +30,17 @@ impl TimerManager {
     pub fn create_timer(&mut self, interval_ms: u64, callback: String, repeating: bool) -> u32 {
         let id = self.next_id;
         self.next_id += 1;
-        self.timers.insert(id, TimerEntry {
+        self.timers.insert(
             id,
-            interval_ms,
-            callback_name: callback,
-            next_fire: std::time::Instant::now() + std::time::Duration::from_millis(interval_ms),
-            repeating,
-        });
+            TimerEntry {
+                id,
+                interval_ms,
+                callback_name: callback,
+                next_fire: std::time::Instant::now()
+                    + std::time::Duration::from_millis(interval_ms),
+                repeating,
+            },
+        );
         id
     }
 

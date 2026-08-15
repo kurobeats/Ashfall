@@ -29,7 +29,10 @@ impl PositionHistory {
         let now = Instant::now();
         self.by_id.entry(id).or_default().push_back((now, pos));
         if let Some(mut q) = self.by_id.get_mut(&id) {
-            while q.front().is_some_and(|(t, _)| now.duration_since(*t) > HISTORY_WINDOW) {
+            while q
+                .front()
+                .is_some_and(|(t, _)| now.duration_since(*t) > HISTORY_WINDOW)
+            {
                 q.pop_front();
             }
         }
@@ -83,7 +86,9 @@ mod tests {
 
         // The compensated position should be behind the current one
         let current = h.pos_at(id, Instant::now()).expect("current pos");
-        let comp = h.lag_compensated(id, Instant::now()).expect("compensated pos");
+        let comp = h
+            .lag_compensated(id, Instant::now())
+            .expect("compensated pos");
         assert!(
             comp[0] < current[0],
             "lag compensation rewinds position (comp={}, current={})",
@@ -94,7 +99,11 @@ mod tests {
         // pos_at with a past timestamp returns the position from then
         let past = now + Duration::from_millis(60);
         let p = h.pos_at(id, past).expect("past pos");
-        assert!(p[0] <= 20.0, "position at ~60ms is early in the walk, got {}", p[0]);
+        assert!(
+            p[0] <= 20.0,
+            "position at ~60ms is early in the walk, got {}",
+            p[0]
+        );
     }
 
     #[test]

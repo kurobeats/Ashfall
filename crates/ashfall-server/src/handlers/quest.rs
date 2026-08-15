@@ -1,7 +1,7 @@
 //! Quest handler — quest stages, dialogue flags, FO3/FNV globals.
 
-use ashfall_core::protocol::Packet;
 use crate::quest::QuestManager;
+use ashfall_core::protocol::Packet;
 
 /// Handle QuestStage.
 pub fn handle_quest_stage(quests: &QuestManager, quest_id: u32, stage: u16) -> Packet {
@@ -33,5 +33,9 @@ pub fn handle_reputation(faction: u32, value: i32) -> Packet {
 
 /// Handle HardcoreStats (FNV).
 pub fn handle_hardcore_stats(hunger: f32, thirst: f32, sleep: f32) -> Packet {
-    Packet::HardcoreStats { hunger, thirst, sleep }
+    Packet::HardcoreStats {
+        hunger,
+        thirst,
+        sleep,
+    }
 }

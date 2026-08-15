@@ -16,7 +16,8 @@ pub struct Exterior {
 impl Database {
     /// Get an exterior cell by world and coordinates.
     pub fn get_exterior(&self, world_id: u32, x: i32, y: i32) -> Option<Exterior> {
-        let mut stmt = self.conn()
+        let mut stmt = self
+            .conn()
             .prepare("SELECT worldID, x, y FROM exteriors WHERE worldID = ?1 AND x = ?2 AND y = ?3")
             .ok()?;
         stmt.query_row(rusqlite::params![world_id, x, y], |row| {
@@ -25,7 +26,8 @@ impl Database {
                 x: row.get(1)?,
                 y: row.get(2)?,
             })
-        }).ok()
+        })
+        .ok()
     }
 
     /// Insert or replace an exterior cell.
@@ -38,7 +40,8 @@ impl Database {
 
     /// Get all exterior cells in a worldspace.
     pub fn get_exteriors_by_world(&self, world_id: u32) -> Vec<Exterior> {
-        let mut stmt = match self.conn()
+        let mut stmt = match self
+            .conn()
             .prepare("SELECT worldID, x, y FROM exteriors WHERE worldID = ?1")
         {
             Ok(s) => s,
@@ -59,9 +62,7 @@ impl Database {
 
     /// Load all exteriors (for server startup cache).
     pub fn load_all_exteriors(&self) -> Vec<Exterior> {
-        let mut stmt = match self.conn()
-            .prepare("SELECT worldID, x, y FROM exteriors")
-        {
+        let mut stmt = match self.conn().prepare("SELECT worldID, x, y FROM exteriors") {
             Ok(s) => s,
             Err(_) => return vec![],
         };

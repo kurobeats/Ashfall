@@ -116,7 +116,12 @@ pub fn split_frames(buf: &[u8]) -> (Vec<PipeFrame>, &[u8]) {
 pub fn encode_player_state_event(e: &PlayerStateEvent) -> Vec<u8> {
     let mut payload = Vec::with_capacity(4 + std::mem::size_of::<PlayerStateEvent>());
     payload.extend_from_slice(&EVENT_PLAYER_STATE.to_le_bytes());
-    payload.extend_from_slice(unsafe { core::slice::from_raw_parts(e as *const _ as *const u8, std::mem::size_of::<PlayerStateEvent>()) });
+    payload.extend_from_slice(unsafe {
+        core::slice::from_raw_parts(
+            e as *const _ as *const u8,
+            std::mem::size_of::<PlayerStateEvent>(),
+        )
+    });
     encode_frame(PIPE_OP_EVENT, &payload)
 }
 
@@ -124,7 +129,12 @@ pub fn encode_player_state_event(e: &PlayerStateEvent) -> Vec<u8> {
 pub fn encode_npc_spawn_event(e: &NpcSpawnEvent) -> Vec<u8> {
     let mut payload = Vec::with_capacity(4 + std::mem::size_of::<NpcSpawnEvent>());
     payload.extend_from_slice(&EVENT_NPC_SPAWN.to_le_bytes());
-    payload.extend_from_slice(unsafe { core::slice::from_raw_parts(e as *const _ as *const u8, std::mem::size_of::<NpcSpawnEvent>()) });
+    payload.extend_from_slice(unsafe {
+        core::slice::from_raw_parts(
+            e as *const _ as *const u8,
+            std::mem::size_of::<NpcSpawnEvent>(),
+        )
+    });
     encode_frame(PIPE_OP_EVENT, &payload)
 }
 
@@ -132,7 +142,12 @@ pub fn encode_npc_spawn_event(e: &NpcSpawnEvent) -> Vec<u8> {
 pub fn encode_npc_remove_event(e: &NpcRemoveEvent) -> Vec<u8> {
     let mut payload = Vec::with_capacity(4 + std::mem::size_of::<NpcRemoveEvent>());
     payload.extend_from_slice(&EVENT_NPC_REMOVE.to_le_bytes());
-    payload.extend_from_slice(unsafe { core::slice::from_raw_parts(e as *const _ as *const u8, std::mem::size_of::<NpcRemoveEvent>()) });
+    payload.extend_from_slice(unsafe {
+        core::slice::from_raw_parts(
+            e as *const _ as *const u8,
+            std::mem::size_of::<NpcRemoveEvent>(),
+        )
+    });
     encode_frame(PIPE_OP_EVENT, &payload)
 }
 
@@ -141,7 +156,12 @@ pub fn encode_npc_remove_event(e: &NpcRemoveEvent) -> Vec<u8> {
 pub fn encode_npc_state_event(e: &PlayerStateEvent) -> Vec<u8> {
     let mut payload = Vec::with_capacity(4 + std::mem::size_of::<PlayerStateEvent>());
     payload.extend_from_slice(&EVENT_NPC_STATE.to_le_bytes());
-    payload.extend_from_slice(unsafe { core::slice::from_raw_parts(e as *const _ as *const u8, std::mem::size_of::<PlayerStateEvent>()) });
+    payload.extend_from_slice(unsafe {
+        core::slice::from_raw_parts(
+            e as *const _ as *const u8,
+            std::mem::size_of::<PlayerStateEvent>(),
+        )
+    });
     encode_frame(PIPE_OP_EVENT, &payload)
 }
 
@@ -253,7 +273,12 @@ mod tests {
 
     #[test]
     fn test_npc_spawn_roundtrip() {
-        let e = NpcSpawnEvent { ref_id: 0x1234, base_id: 0x5678, pos: [5.0, 6.0, 7.0], cell: 42 };
+        let e = NpcSpawnEvent {
+            ref_id: 0x1234,
+            base_id: 0x5678,
+            pos: [5.0, 6.0, 7.0],
+            cell: 42,
+        };
         let frame = encode_npc_spawn_event(&e);
         let (frames, _) = split_frames(&frame);
         let (event_type, data) = decode_event(&frames[0].payload).unwrap();
@@ -274,9 +299,16 @@ mod tests {
     #[test]
     fn test_npc_state_roundtrip() {
         let e = PlayerStateEvent {
-            ref_id: 0x1234, pos: [1.0, 2.0, 3.0], angle: [0.0, 0.0, 90.0],
-            idle: 0, moving: 2, moving_xy: 1, weapon: 0x2A,
-            alerted: true, sneaking: false, health: 80.0,
+            ref_id: 0x1234,
+            pos: [1.0, 2.0, 3.0],
+            angle: [0.0, 0.0, 90.0],
+            idle: 0,
+            moving: 2,
+            moving_xy: 1,
+            weapon: 0x2A,
+            alerted: true,
+            sneaking: false,
+            health: 80.0,
         };
         let frame = encode_npc_state_event(&e);
         let (frames, _) = split_frames(&frame);

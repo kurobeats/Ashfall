@@ -9,17 +9,17 @@ use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::{LazyLock, Mutex};
 
-use crate::RUNNING;
 use crate::commands;
+use crate::RUNNING;
 
 /// Pipe protocol opcodes (match original vaultmp.hpp).
-pub const PIPE_SYS_WAKEUP: u8    = 0x01;
-pub const PIPE_OP_COMMAND: u8    = 0x02;
-pub const PIPE_OP_RETURN: u8     = 0x03;
+pub const PIPE_SYS_WAKEUP: u8 = 0x01;
+pub const PIPE_OP_COMMAND: u8 = 0x02;
+pub const PIPE_OP_RETURN: u8 = 0x03;
 pub const PIPE_OP_RETURN_BIG: u8 = 0x04; // reserved for large responses
 pub const PIPE_OP_RETURN_RAW: u8 = 0x05; // reserved for raw binary
-pub const PIPE_ERROR_CLOSE: u8   = 0x06;
-pub const PIPE_OP_EVENT: u8      = 0x07; // engine → client event frame
+pub const PIPE_ERROR_CLOSE: u8 = 0x06;
+pub const PIPE_OP_EVENT: u8 = 0x07; // engine → client event frame
 
 /// Outbound event frames waiting for the TCP writer (pushed from hook
 /// callbacks on any thread, drained by the connection loop).
@@ -181,7 +181,12 @@ pub fn decode_pipe_return(data: &[u8]) -> Option<(u8, u32, Vec<u8>)> {
     if frame.opcode != PIPE_OP_RETURN || frame.payload.len() < 4 {
         return None;
     }
-    let key = u32::from_le_bytes([frame.payload[0], frame.payload[1], frame.payload[2], frame.payload[3]]);
+    let key = u32::from_le_bytes([
+        frame.payload[0],
+        frame.payload[1],
+        frame.payload[2],
+        frame.payload[3],
+    ]);
     Some((frame.opcode, key, frame.payload[4..].to_vec()))
 }
 
@@ -286,9 +291,7 @@ fn dispatch(frame: &ashfall_core::event::PipeFrame) -> Vec<u8> {
             let result = commands::execute(func, params);
             encode_pipe_return(key, &result)
         }
-        PIPE_ERROR_CLOSE => {
-            ashfall_core::event::encode_frame(PIPE_ERROR_CLOSE, &[])
-        }
+        PIPE_ERROR_CLOSE => ashfall_core::event::encode_frame(PIPE_ERROR_CLOSE, &[]),
         _ => {
             // Unknown opcode
             ashfall_core::event::encode_frame(PIPE_ERROR_CLOSE, &[])

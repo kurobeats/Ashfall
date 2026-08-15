@@ -139,10 +139,21 @@ pub mod delegated_opcodes {
 pub fn register_defaults() {
     use delegated_opcodes::*;
     for op in [
-        PLACE_AT_ME, ADD_ITEM, REMOVE_ITEM, EQUIP_ITEM, UNEQUIP_ITEM,
-        SET_AV, KILL, SET_RESTRAINED, PLAY_GROUP,
-        LOCK, UNLOCK, SET_OWNERSHIP, ACTIVATE,
-        SET_STAGE, SET_ALERT,
+        PLACE_AT_ME,
+        ADD_ITEM,
+        REMOVE_ITEM,
+        EQUIP_ITEM,
+        UNEQUIP_ITEM,
+        SET_AV,
+        KILL,
+        SET_RESTRAINED,
+        PLAY_GROUP,
+        LOCK,
+        UNLOCK,
+        SET_OWNERSHIP,
+        ACTIVATE,
+        SET_STAGE,
+        SET_ALERT,
     ] {
         register_handler(op, block_all);
     }
@@ -208,7 +219,7 @@ mod tests {
 
     #[test]
     fn test_handler_count() {
-    let _guard = lock_ops();
+        let _guard = lock_ops();
         let before = handler_count();
         register_handler(0xAAAA, test_handler);
         assert_eq!(handler_count(), before + 1);
@@ -218,7 +229,7 @@ mod tests {
 
     #[test]
     fn test_register_defaults() {
-    let _guard = lock_ops();
+        let _guard = lock_ops();
         register_defaults();
         assert!(handler_count() >= 10);
     }

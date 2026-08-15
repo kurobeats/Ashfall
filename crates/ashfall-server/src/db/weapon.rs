@@ -26,13 +26,14 @@ impl Database {
                 crit_chance: row.get(4)?,
                 weapon_type: row.get(5)?,
             })
-        }).ok()
+        })
+        .ok()
     }
 
     pub fn load_all_weapons(&self) -> Vec<Weapon> {
-        let mut stmt = match self.conn()
-            .prepare("SELECT baseID, name, damage, crit_damage, crit_chance, weapon_type FROM weapons")
-        {
+        let mut stmt = match self.conn().prepare(
+            "SELECT baseID, name, damage, crit_damage, crit_chance, weapon_type FROM weapons",
+        ) {
             Ok(s) => s,
             Err(_) => return vec![],
         };

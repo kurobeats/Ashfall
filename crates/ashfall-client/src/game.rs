@@ -1,12 +1,12 @@
 //! Client game orchestrator — state machine + network + registry.
 
-use ashfall_core::id::NetworkID;
-use ashfall_core::protocol::Packet;
 use crate::config::ClientConfig;
 use crate::dispatch;
 use crate::network::ClientNetwork;
 use crate::ui::widgets::GuiState;
 use crate::world::registry::ClientRegistry;
+use ashfall_core::id::NetworkID;
+use ashfall_core::protocol::Packet;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::time::Instant;
@@ -90,8 +90,12 @@ impl Game {
         // Engine bridge (config ipc_mode: stub / tcp / unix). Stub mode is
         // the default and always succeeds — the real game hooks in later.
         let mode = match self.config.ipc_mode.as_str() {
-            "unix" => crate::ipc::IpcMode::Native { path: "/tmp/ashfall-ipc.sock".into() },
-            "tcp" => crate::ipc::IpcMode::Proton { port: self.config.ipc_port },
+            "unix" => crate::ipc::IpcMode::Native {
+                path: "/tmp/ashfall-ipc.sock".into(),
+            },
+            "tcp" => crate::ipc::IpcMode::Proton {
+                port: self.config.ipc_port,
+            },
             _ => crate::ipc::IpcMode::Stub,
         };
         self.ipc = Some(crate::ipc::IpcClient::connect(mode).await?);
@@ -123,7 +127,10 @@ impl Game {
     }
 
     pub async fn poll(&mut self) -> anyhow::Result<Vec<Packet>> {
-        let network = self.network.as_mut().ok_or_else(|| anyhow::anyhow!("Not connected"))?;
+        let network = self
+            .network
+            .as_mut()
+            .ok_or_else(|| anyhow::anyhow!("Not connected"))?;
         network.poll().await
     }
 
@@ -131,11 +138,10 @@ impl Game {
         self.registry.apply_packet(&packet);
         // Remote entities → engine commands (applied on flush_commands).
         if let Some(local) = self.local_player_id {
-            let cmds = crate::sync::packets_to_commands(
-                std::slice::from_ref(&packet),
-                local,
-                |id| self.registry.ref_of(id),
-            );
+            let cmds =
+                crate::sync::packets_to_commands(std::slice::from_ref(&packet), local, |id| {
+                    self.registry.ref_of(id)
+                });
             self.pending_commands.extend(cmds);
         }
         // Ownership changes → tell the bridge to (un)track the NPC so its
@@ -144,12 +150,18 @@ impl Game {
         match &packet {
             Packet::OwnershipGranted { id } => {
                 if let Some(ref_id) = crate::sync::ref_of_entity(*id) {
-                    self.pending_commands.push((crate::ipc::OP_TRACK_ACTOR, vec![crate::ipc::Param::U32(ref_id)]));
+                    self.pending_commands.push((
+                        crate::ipc::OP_TRACK_ACTOR,
+                        vec![crate::ipc::Param::U32(ref_id)],
+                    ));
                 }
             }
             Packet::OwnershipReleased { id } => {
                 if let Some(ref_id) = crate::sync::ref_of_entity(*id) {
-                    self.pending_commands.push((crate::ipc::OP_UNTRACK_ACTOR, vec![crate::ipc::Param::U32(ref_id)]));
+                    self.pending_commands.push((
+                        crate::ipc::OP_UNTRACK_ACTOR,
+                        vec![crate::ipc::Param::U32(ref_id)],
+                    ));
                 }
             }
             _ => {}
@@ -160,13 +172,17 @@ impl Game {
     /// Drain engine events: bridge → packets → server (the coop loop's
     /// client side). No-op when no bridge is connected.
     pub async fn poll_bridge(&mut self) -> anyhow::Result<()> {
-        let Some(ipc) = self.ipc.as_mut() else { return Ok(()) };
+        let Some(ipc) = self.ipc.as_mut() else {
+            return Ok(());
+        };
         let frames = ipc.poll_events();
         tracing::info!("poll_bridge: {} event frames", frames.len());
         if frames.is_empty() {
             return Ok(());
         }
-        let Some(local) = self.local_player_id else { return Ok(()) };
+        let Some(local) = self.local_player_id else {
+            return Ok(());
+        };
         let packets = crate::sync::events_to_packets(&frames, local);
         tracing::info!("poll_bridge: {} packets to send", packets.len());
         for pkt in packets {
@@ -193,13 +209,20 @@ impl Game {
     }
 
     pub async fn send_reliable(&mut self, packet: Packet) -> anyhow::Result<()> {
-        let network = self.network.as_mut().ok_or_else(|| anyhow::anyhow!("Not connected"))?;
+        let network = self
+            .network
+            .as_mut()
+            .ok_or_else(|| anyhow::anyhow!("Not connected"))?;
         network.send(&packet).await
     }
 
     pub async fn send_chat(&mut self, message: String) -> anyhow::Result<()> {
-        self.chat_messages.push((self.config.name.clone(), message.clone()));
-        self.send_reliable(Packet::GameChat { message: message.into() }).await
+        self.chat_messages
+            .push((self.config.name.clone(), message.clone()));
+        self.send_reliable(Packet::GameChat {
+            message: message.into(),
+        })
+        .await
     }
 
     /// Request simulation ownership of an actor (STR OwnershipTransfer). The
@@ -230,13 +253,19 @@ impl Game {
         dual: bool,
         target: ashfall_core::id::NetworkID,
     ) -> anyhow::Result<()> {
-        self.send_reliable(Packet::SpellCast { id, spell, source, dual, target }).await
+        self.send_reliable(Packet::SpellCast {
+            id,
+            spell,
+            source,
+            dual,
+            target,
+        })
+        .await
     }
 
     /// Send any server-GUI widget clicks queued by the renderer.
     pub async fn flush_gui_clicks(&mut self) -> anyhow::Result<()> {
-        let clicks: Vec<ashfall_core::id::NetworkID> =
-            std::mem::take(&mut self.gui.pending_clicks);
+        let clicks: Vec<ashfall_core::id::NetworkID> = std::mem::take(&mut self.gui.pending_clicks);
         for id in clicks {
             self.send_reliable(Packet::UpdateWindowClick { id }).await?;
         }

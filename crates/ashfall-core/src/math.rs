@@ -37,17 +37,13 @@ pub fn is_valid_angle(_axis: u8, a: f32) -> bool {
 /// Check if a 3D position is valid.
 #[inline]
 pub fn is_valid_pos(pos: [f32; 3]) -> bool {
-    is_valid_coordinate(pos[0])
-        && is_valid_coordinate(pos[1])
-        && is_valid_coordinate(pos[2])
+    is_valid_coordinate(pos[0]) && is_valid_coordinate(pos[1]) && is_valid_coordinate(pos[2])
 }
 
 /// Check if a 3D angle is valid.
 #[inline]
 pub fn is_valid_angle3(angle: [f32; 3]) -> bool {
-    is_valid_angle(0, angle[0])
-        && is_valid_angle(1, angle[1])
-        && is_valid_angle(2, angle[2])
+    is_valid_angle(0, angle[0]) && is_valid_angle(1, angle[1]) && is_valid_angle(2, angle[2])
 }
 
 /// Distance between two 3D points.

@@ -17,7 +17,8 @@ pub struct Record {
 impl Database {
     /// Get a single record by base ID.
     pub fn get_record(&self, base_id: u32) -> Option<Record> {
-        let mut stmt = self.conn()
+        let mut stmt = self
+            .conn()
             .prepare("SELECT baseID, name, description, type FROM records WHERE baseID = ?1")
             .ok()?;
         stmt.query_row([base_id], |row| {
@@ -27,12 +28,14 @@ impl Database {
                 description: row.get(2)?,
                 kind: row.get(3)?,
             })
-        }).ok()
+        })
+        .ok()
     }
 
     /// Get all records of a given type (kind filter).
     pub fn get_records_by_type(&self, kind: u32) -> Vec<Record> {
-        let mut stmt = match self.conn()
+        let mut stmt = match self
+            .conn()
             .prepare("SELECT baseID, name, description, type FROM records WHERE type = ?1")
         {
             Ok(s) => s,
@@ -62,7 +65,8 @@ impl Database {
 
     /// Load all records (for server startup cache).
     pub fn load_all_records(&self) -> Vec<Record> {
-        let mut stmt = match self.conn()
+        let mut stmt = match self
+            .conn()
             .prepare("SELECT baseID, name, description, type FROM records")
         {
             Ok(s) => s,

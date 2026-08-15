@@ -23,16 +23,30 @@ pub struct Reference {
 
 impl Reference {
     pub fn new(id: NetworkID, ref_id: u32, base_id: u32) -> Self {
-        Reference { id, ref_id, base_id }
+        Reference {
+            id,
+            ref_id,
+            base_id,
+        }
     }
 }
 
 impl GameObject for Reference {
-    fn id(&self) -> NetworkID { self.id }
-    fn kind(&self) -> ObjectKind { ObjectKind::Reference }
-    fn kind_mask(&self) -> u32 { ObjectKind::Reference as u32 }
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+    fn id(&self) -> NetworkID {
+        self.id
+    }
+    fn kind(&self) -> ObjectKind {
+        ObjectKind::Reference
+    }
+    fn kind_mask(&self) -> u32 {
+        ObjectKind::Reference as u32
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -93,11 +107,21 @@ impl Object {
 }
 
 impl GameObject for Object {
-    fn id(&self) -> NetworkID { self.ref_data.id }
-    fn kind(&self) -> ObjectKind { ObjectKind::Object }
-    fn kind_mask(&self) -> u32 { ObjectKind::Object as u32 }
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+    fn id(&self) -> NetworkID {
+        self.ref_data.id
+    }
+    fn kind(&self) -> ObjectKind {
+        ObjectKind::Object
+    }
+    fn kind_mask(&self) -> u32 {
+        ObjectKind::Object as u32
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -147,13 +171,21 @@ impl Item {
 }
 
 impl GameObject for Item {
-    fn id(&self) -> NetworkID { self.ref_data.id }
-    fn kind(&self) -> ObjectKind { ObjectKind::Item }
+    fn id(&self) -> NetworkID {
+        self.ref_data.id
+    }
+    fn kind(&self) -> ObjectKind {
+        ObjectKind::Item
+    }
     fn kind_mask(&self) -> u32 {
         ObjectKind::Object as u32 | ObjectKind::Item as u32
     }
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -187,22 +219,34 @@ impl Container {
 }
 
 impl GameObject for Container {
-    fn id(&self) -> NetworkID { self.object.id() }
-    fn kind(&self) -> ObjectKind { ObjectKind::Container }
+    fn id(&self) -> NetworkID {
+        self.object.id()
+    }
+    fn kind(&self) -> ObjectKind {
+        ObjectKind::Container
+    }
     fn kind_mask(&self) -> u32 {
         ObjectKind::Object as u32 | ObjectKind::ItemList as u32 | ObjectKind::Container as u32
     }
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 
 impl std::ops::Deref for Container {
     type Target = Object;
-    fn deref(&self) -> &Object { &self.object }
+    fn deref(&self) -> &Object {
+        &self.object
+    }
 }
 
 impl std::ops::DerefMut for Container {
-    fn deref_mut(&mut self) -> &mut Object { &mut self.object }
+    fn deref_mut(&mut self) -> &mut Object {
+        &mut self.object
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -296,25 +340,37 @@ impl Actor {
 }
 
 impl GameObject for Actor {
-    fn id(&self) -> NetworkID { self.container.id() }
-    fn kind(&self) -> ObjectKind { ObjectKind::Actor }
+    fn id(&self) -> NetworkID {
+        self.container.id()
+    }
+    fn kind(&self) -> ObjectKind {
+        ObjectKind::Actor
+    }
     fn kind_mask(&self) -> u32 {
         ObjectKind::Object as u32
             | ObjectKind::ItemList as u32
             | ObjectKind::Container as u32
             | ObjectKind::Actor as u32
     }
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 
 impl std::ops::Deref for Actor {
     type Target = Container;
-    fn deref(&self) -> &Container { &self.container }
+    fn deref(&self) -> &Container {
+        &self.container
+    }
 }
 
 impl std::ops::DerefMut for Actor {
-    fn deref_mut(&mut self) -> &mut Container { &mut self.container }
+    fn deref_mut(&mut self) -> &mut Container {
+        &mut self.container
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -353,8 +409,12 @@ impl Player {
 }
 
 impl GameObject for Player {
-    fn id(&self) -> NetworkID { self.actor.id() }
-    fn kind(&self) -> ObjectKind { ObjectKind::Player }
+    fn id(&self) -> NetworkID {
+        self.actor.id()
+    }
+    fn kind(&self) -> ObjectKind {
+        ObjectKind::Player
+    }
     fn kind_mask(&self) -> u32 {
         ObjectKind::Object as u32
             | ObjectKind::ItemList as u32
@@ -362,15 +422,23 @@ impl GameObject for Player {
             | ObjectKind::Actor as u32
             | ObjectKind::Player as u32
     }
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 
 impl std::ops::Deref for Player {
     type Target = Actor;
-    fn deref(&self) -> &Actor { &self.actor }
+    fn deref(&self) -> &Actor {
+        &self.actor
+    }
 }
 
 impl std::ops::DerefMut for Player {
-    fn deref_mut(&mut self) -> &mut Actor { &mut self.actor }
+    fn deref_mut(&mut self) -> &mut Actor {
+        &mut self.actor
+    }
 }

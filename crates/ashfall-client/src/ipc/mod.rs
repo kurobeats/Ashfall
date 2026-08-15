@@ -18,7 +18,11 @@
 mod commands;
 mod transport;
 
-pub use commands::{CommandResult, Param, OP_FIRE_WEAPON, OP_GET_ACTIVATE, OP_KILL, OP_PLAY_SOUND, OP_SET_ANGLE, OP_SET_ACTOR_VALUE, OP_SET_LOCK, OP_SET_POS, OP_SET_SCALE, OP_TRACK_ACTOR, OP_UNTRACK_ACTOR};
+pub use commands::{
+    CommandResult, Param, OP_FIRE_WEAPON, OP_GET_ACTIVATE, OP_KILL, OP_PLAY_SOUND,
+    OP_SET_ACTOR_VALUE, OP_SET_ANGLE, OP_SET_LOCK, OP_SET_POS, OP_SET_SCALE, OP_TRACK_ACTOR,
+    OP_UNTRACK_ACTOR,
+};
 pub use transport::{IpcMode, IpcTransport};
 
 use std::collections::VecDeque;
@@ -124,9 +128,10 @@ impl IpcClient {
 
     /// Find the RETURN payload for a key, if received.
     fn take_return(&mut self, key: u32) -> Option<Vec<u8>> {
-        let pos = self.returns.iter().position(|p| {
-            p.len() >= 4 && u32::from_le_bytes([p[0], p[1], p[2], p[3]]) == key
-        })?;
+        let pos = self
+            .returns
+            .iter()
+            .position(|p| p.len() >= 4 && u32::from_le_bytes([p[0], p[1], p[2], p[3]]) == key)?;
         let payload = self.returns.remove(pos).unwrap();
         Some(payload[4..].to_vec())
     }
@@ -134,7 +139,9 @@ impl IpcClient {
     // ── Convenience methods ──
 
     pub async fn get_pos(&mut self, ref_id: u32) -> anyhow::Result<[f32; 3]> {
-        let result = self.execute(commands::OP_GET_POS, &[Param::U32(ref_id)]).await;
+        let result = self
+            .execute(commands::OP_GET_POS, &[Param::U32(ref_id)])
+            .await;
         match result {
             CommandResult::Floats(v) if v.len() >= 3 => Ok([v[0], v[1], v[2]]),
             CommandResult::Error(e) => Err(anyhow::anyhow!("get_pos: {e}")),
@@ -143,7 +150,9 @@ impl IpcClient {
     }
 
     pub async fn get_angle(&mut self, ref_id: u32) -> anyhow::Result<[f32; 3]> {
-        let result = self.execute(commands::OP_GET_ANGLE, &[Param::U32(ref_id)]).await;
+        let result = self
+            .execute(commands::OP_GET_ANGLE, &[Param::U32(ref_id)])
+            .await;
         match result {
             CommandResult::Floats(v) if v.len() >= 3 => Ok([v[0], v[1], v[2]]),
             CommandResult::Error(e) => Err(anyhow::anyhow!("get_angle: {e}")),
@@ -155,11 +164,18 @@ impl IpcClient {
         &mut self,
         ref_id: u32,
     ) -> anyhow::Result<(u32, u8, u8, u8, bool, bool)> {
-        let result = self.execute(commands::OP_GET_ACTOR_STATE, &[Param::U32(ref_id)]).await;
+        let result = self
+            .execute(commands::OP_GET_ACTOR_STATE, &[Param::U32(ref_id)])
+            .await;
         match result {
-            CommandResult::ActorState { idle, moving, weapon, flags, alerted, sneaking } => {
-                Ok((idle, moving, weapon, flags, alerted, sneaking))
-            }
+            CommandResult::ActorState {
+                idle,
+                moving,
+                weapon,
+                flags,
+                alerted,
+                sneaking,
+            } => Ok((idle, moving, weapon, flags, alerted, sneaking)),
             CommandResult::Error(e) => Err(anyhow::anyhow!("get_actor_state: {e}")),
             _ => Err(anyhow::anyhow!("get_actor_state: unexpected result")),
         }
@@ -189,14 +205,25 @@ mod tests {
             // RESPONSE: [len][RETURN][key][12 zero bytes] (GET_POS result)
             let resp = ashfall_core::event::encode_frame(
                 PIPE_OP_RETURN,
-                &key.to_le_bytes().iter().chain([0u8; 12].iter()).copied().collect::<Vec<_>>(),
+                &key.to_le_bytes()
+                    .iter()
+                    .chain([0u8; 12].iter())
+                    .copied()
+                    .collect::<Vec<_>>(),
             );
             // EVENT: player-state frame
             let ev = ashfall_core::event::encode_player_state_event(
                 &ashfall_core::event::PlayerStateEvent {
-                    ref_id: 0x14, pos: [1.0, 2.0, 3.0], angle: [0.0; 3],
-                    idle: 0, moving: 1, moving_xy: 0, weapon: 0,
-                    alerted: false, sneaking: false, health: 100.0,
+                    ref_id: 0x14,
+                    pos: [1.0, 2.0, 3.0],
+                    angle: [0.0; 3],
+                    idle: 0,
+                    moving: 1,
+                    moving_xy: 0,
+                    weapon: 0,
+                    alerted: false,
+                    sneaking: false,
+                    health: 100.0,
                 },
             );
             let mut out = resp;
@@ -213,7 +240,10 @@ mod tests {
 
         let result = ipc.execute(commands::OP_GET_POS, &[Param::U32(0x14)]).await;
         // 12 zero bytes → Floats [0,0,0]
-        assert!(matches!(&result, CommandResult::Floats(v) if v.len() == 3), "got {result:?}");
+        assert!(
+            matches!(&result, CommandResult::Floats(v) if v.len() == 3),
+            "got {result:?}"
+        );
 
         // The interleaved event must be buffered, not lost.
         let events = ipc.poll_events();
@@ -228,7 +258,10 @@ mod tests {
     async fn test_stub_execute_fails_fast() {
         let mut ipc = IpcClient::connect(IpcMode::Stub).await.unwrap();
         let result = ipc.execute(commands::OP_GET_POS, &[Param::U32(0x14)]).await;
-        assert!(matches!(result, CommandResult::Error(_)), "stub errors fast, no hang");
+        assert!(
+            matches!(result, CommandResult::Error(_)),
+            "stub errors fast, no hang"
+        );
         assert!(ipc.poll_events().is_empty());
     }
 }

@@ -26,7 +26,6 @@ fn tcp_port() -> u16 {
     s.local_addr().unwrap().port()
 }
 
-
 fn test_config(port: u16, name: &str, ipc_port: u16) -> ClientConfig {
     ClientConfig {
         name: name.into(),
@@ -44,7 +43,9 @@ fn test_config(port: u16, name: &str, ipc_port: u16) -> ClientConfig {
 /// synchronously (before the spawn) so connects never race the bind.
 fn spawn_mock_bridge(port: u16, captured: Arc<Mutex<Vec<u32>>>) {
     tokio::spawn(async move {
-        let listener = tokio::net::TcpListener::bind(("127.0.0.1", port)).await.unwrap();
+        let listener = tokio::net::TcpListener::bind(("127.0.0.1", port))
+            .await
+            .unwrap();
         let (mut stream, _) = listener.accept().await.unwrap();
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
@@ -78,14 +79,25 @@ fn spawn_mock_bridge(port: u16, captured: Arc<Mutex<Vec<u32>>>) {
             for f in frames {
                 // Command frame payload: [key:4][opcode:4][count:1][params]
                 if f.payload.len() >= 9 {
-                    let key = u32::from_le_bytes([f.payload[0], f.payload[1], f.payload[2], f.payload[3]]);
-                    let opcode = u32::from_le_bytes([f.payload[4], f.payload[5], f.payload[6], f.payload[7]]);
+                    let key = u32::from_le_bytes([
+                        f.payload[0],
+                        f.payload[1],
+                        f.payload[2],
+                        f.payload[3],
+                    ]);
+                    let opcode = u32::from_le_bytes([
+                        f.payload[4],
+                        f.payload[5],
+                        f.payload[6],
+                        f.payload[7],
+                    ]);
                     captured.lock().unwrap().push(opcode);
                     // Canned response: [RETURN][key][12 zero bytes] → Floats.
                     let mut resp = Vec::with_capacity(4 + 12);
                     resp.extend_from_slice(&key.to_le_bytes());
                     resp.extend_from_slice(&[0u8; 12]);
-                    let frame = ashfall_core::event::encode_frame(crate::ipc::PIPE_OP_RETURN, &resp);
+                    let frame =
+                        ashfall_core::event::encode_frame(crate::ipc::PIPE_OP_RETURN, &resp);
                     let _ = stream.write_all(&frame).await;
                 }
             }
@@ -114,16 +126,25 @@ where
 }
 
 /// The whole client-side sequence (server runs concurrently via select!).
-async fn run_clients(server_port: u16, bridge_a_port: u16, bridge_b_port: u16, captured_b: Arc<Mutex<Vec<u32>>>) {
+async fn run_clients(
+    server_port: u16,
+    bridge_a_port: u16,
+    bridge_b_port: u16,
+    captured_b: Arc<Mutex<Vec<u32>>>,
+) {
     // Client A connects + authenticates; gets its player id.
     let mut a = Game::new(test_config(server_port, "alice", bridge_a_port));
-    a.connect(SocketAddr::from(([127, 0, 0, 1], server_port))).await.unwrap();
+    a.connect(SocketAddr::from(([127, 0, 0, 1], server_port)))
+        .await
+        .unwrap();
     a.authenticate().await.unwrap();
     drive_until(&mut a, |g| g.local_player_id.is_some()).await;
 
     // Client B connects + authenticates (so it exists before A broadcasts).
     let mut b = Game::new(test_config(server_port, "bob", bridge_b_port));
-    b.connect(SocketAddr::from(([127, 0, 0, 1], server_port))).await.unwrap();
+    b.connect(SocketAddr::from(([127, 0, 0, 1], server_port)))
+        .await
+        .unwrap();
     b.authenticate().await.unwrap();
 
     // A's bridge event → server packets (UpdatePos/Angle/State/Value) →
@@ -158,9 +179,17 @@ async fn run_clients(server_port: u16, bridge_a_port: u16, bridge_b_port: u16, c
 
 async fn boot_server(port: u16) -> ashfall_server::dedicated::DedicatedServer {
     let seq = SEQ.fetch_add(1, Ordering::SeqCst);
-    let dir = std::env::temp_dir().join(format!("ashfall_loop_scripts_{}_{}", std::process::id(), seq));
+    let dir = std::env::temp_dir().join(format!(
+        "ashfall_loop_scripts_{}_{}",
+        std::process::id(),
+        seq
+    ));
     std::fs::create_dir_all(&dir).unwrap();
-    let db = std::env::temp_dir().join(format!("ashfall_loop_db_{}_{}.sqlite3", std::process::id(), seq));
+    let db = std::env::temp_dir().join(format!(
+        "ashfall_loop_db_{}_{}.sqlite3",
+        std::process::id(),
+        seq
+    ));
     let config = ashfall_server::config::ServerConfig {
         server: ashfall_server::config::ServerSection {
             host: "127.0.0.1".into(),
@@ -176,14 +205,18 @@ async fn boot_server(port: u16) -> ashfall_server::dedicated::DedicatedServer {
         database: ashfall_server::config::DatabaseSection { path: db },
         ..Default::default()
     };
-    let server = ashfall_server::dedicated::DedicatedServer::new(config).await.unwrap();
+    let server = ashfall_server::dedicated::DedicatedServer::new(config)
+        .await
+        .unwrap();
     tokio::time::sleep(Duration::from_millis(200)).await;
     server
 }
 
 #[tokio::test]
 async fn test_full_coop_loop_bridge_to_bridge() {
-    let _ = tracing_subscriber::fmt().with_max_level(tracing::Level::INFO).try_init();
+    let _ = tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::INFO)
+        .try_init();
     let server_port = free_port();
     let server = boot_server(server_port).await;
 

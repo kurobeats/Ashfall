@@ -46,7 +46,10 @@ impl ObjectRegistry {
         let id = obj.id();
         let kind = obj.kind();
         self.objects.insert(id, Arc::new(RwLock::new(obj)));
-        self.type_counts.entry(kind).and_modify(|c| *c += 1).or_insert(1);
+        self.type_counts
+            .entry(kind)
+            .and_modify(|c| *c += 1)
+            .or_insert(1);
         id
     }
 
@@ -75,7 +78,9 @@ impl ObjectRegistry {
         if let Some((_, arc)) = self.objects.remove(&id) {
             let guard = arc.read();
             let kind = guard.kind();
-            self.type_counts.entry(kind).and_modify(|c| *c = c.saturating_sub(1));
+            self.type_counts
+                .entry(kind)
+                .and_modify(|c| *c = c.saturating_sub(1));
             self.deleted.insert(id, ());
             self.owners.remove(&id);
 

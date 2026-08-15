@@ -29,11 +29,7 @@ fn init() {
 
 #[cfg(target_os = "windows")]
 #[no_mangle]
-pub extern "system" fn DllMain(
-    _hinst: *mut c_void,
-    reason: u32,
-    _reserved: *mut c_void,
-) -> i32 {
+pub extern "system" fn DllMain(_hinst: *mut c_void, reason: u32, _reserved: *mut c_void) -> i32 {
     const DLL_PROCESS_ATTACH: u32 = 1;
     if reason == DLL_PROCESS_ATTACH {
         init();

@@ -17,7 +17,8 @@ pub struct RefData {
 impl Database {
     /// Get a single reference by refID.
     pub fn get_reference(&self, ref_id: u32) -> Option<RefData> {
-        let mut stmt = self.conn()
+        let mut stmt = self
+            .conn()
             .prepare("SELECT refID, baseID, cellID, objectID FROM refs WHERE refID = ?1")
             .ok()?;
         stmt.query_row([ref_id], |row| {
@@ -27,12 +28,14 @@ impl Database {
                 cell_id: row.get(2)?,
                 object_id: row.get(3)?,
             })
-        }).ok()
+        })
+        .ok()
     }
 
     /// Get all references in a specific cell.
     pub fn get_references_by_cell(&self, cell_id: u32) -> Vec<RefData> {
-        let mut stmt = match self.conn()
+        let mut stmt = match self
+            .conn()
             .prepare("SELECT refID, baseID, cellID, objectID FROM refs WHERE cellID = ?1")
         {
             Ok(s) => s,
@@ -62,7 +65,8 @@ impl Database {
 
     /// Load all references (for server startup cache).
     pub fn load_all_references(&self) -> Vec<RefData> {
-        let mut stmt = match self.conn()
+        let mut stmt = match self
+            .conn()
             .prepare("SELECT refID, baseID, cellID, objectID FROM refs")
         {
             Ok(s) => s,

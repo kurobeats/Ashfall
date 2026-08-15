@@ -7,14 +7,14 @@
 //! - Server packets → engine commands: remote entities are applied to the
 //!   local game via OP_SET_POS/OP_SET_ANGLE.
 
+use crate::ipc::Param;
 use ashfall_core::event::{
-    decode_event, decode_npc_remove, decode_npc_spawn, decode_player_state, PipeFrame,
-    EVENT_NPC_REMOVE, EVENT_NPC_SPAWN, EVENT_NPC_STATE, EVENT_PLAYER_STATE,
-    decode_ref_event, EVENT_ACTIVATE, EVENT_FIRE, PIPE_OP_EVENT,
+    decode_event, decode_npc_remove, decode_npc_spawn, decode_player_state, decode_ref_event,
+    PipeFrame, EVENT_ACTIVATE, EVENT_FIRE, EVENT_NPC_REMOVE, EVENT_NPC_SPAWN, EVENT_NPC_STATE,
+    EVENT_PLAYER_STATE, PIPE_OP_EVENT,
 };
 use ashfall_core::id::NetworkID;
 use ashfall_core::protocol::Packet;
-use crate::ipc::Param;
 
 /// Client-side entity id space for game refs: the high bit marks ref-derived
 /// ids so they never collide with server-assigned ids (which start at 1).
@@ -40,12 +40,20 @@ pub fn events_to_packets(frames: &[PipeFrame], local_id: NetworkID) -> Vec<Packe
         if frame.opcode != PIPE_OP_EVENT {
             continue;
         }
-        let Some((event_type, data)) = decode_event(&frame.payload) else { continue };
+        let Some((event_type, data)) = decode_event(&frame.payload) else {
+            continue;
+        };
         match event_type {
             EVENT_PLAYER_STATE => {
                 if let Some(e) = decode_player_state(data) {
-                    out.push(Packet::UpdatePos { id: local_id, pos: e.pos });
-                    out.push(Packet::UpdateAngle { id: local_id, angle: [e.angle[0], e.angle[2]] });
+                    out.push(Packet::UpdatePos {
+                        id: local_id,
+                        pos: e.pos,
+                    });
+                    out.push(Packet::UpdateAngle {
+                        id: local_id,
+                        angle: [e.angle[0], e.angle[2]],
+                    });
                     out.push(Packet::ActorStateDelta {
                         id: local_id,
                         idle: Some(e.idle),
@@ -98,7 +106,10 @@ pub fn events_to_packets(frames: &[PipeFrame], local_id: NetworkID) -> Vec<Packe
                 if let Some(e) = decode_player_state(data) {
                     let id = entity_id(e.ref_id);
                     out.push(Packet::UpdatePos { id, pos: e.pos });
-                    out.push(Packet::UpdateAngle { id, angle: [e.angle[0], e.angle[2]] });
+                    out.push(Packet::UpdateAngle {
+                        id,
+                        angle: [e.angle[0], e.angle[2]],
+                    });
                     out.push(Packet::ActorStateDelta {
                         id,
                         idle: Some(e.idle),
@@ -121,7 +132,10 @@ pub fn events_to_packets(frames: &[PipeFrame], local_id: NetworkID) -> Vec<Packe
                 if let Some(e) = decode_npc_remove(data) {
                     // Despawned / left view: tell the server to stop
                     // replicating it (STR ActorRemovedEvent → removal).
-                    out.push(Packet::ObjectRemove { id: entity_id(e.ref_id), silent: false });
+                    out.push(Packet::ObjectRemove {
+                        id: entity_id(e.ref_id),
+                        silent: false,
+                    });
                 }
             }
             EVENT_ACTIVATE => {
@@ -163,22 +177,40 @@ pub fn packets_to_commands(
     for pkt in packets {
         match pkt {
             Packet::UpdatePos { id, pos } if *id != local_id => {
-                let Some(ref_id) = resolve_ref(*id) else { continue };
+                let Some(ref_id) = resolve_ref(*id) else {
+                    continue;
+                };
                 out.push((
                     crate::ipc::OP_SET_POS,
-                    vec![Param::U32(ref_id), Param::F32(pos[0]), Param::F32(pos[1]), Param::F32(pos[2])],
+                    vec![
+                        Param::U32(ref_id),
+                        Param::F32(pos[0]),
+                        Param::F32(pos[1]),
+                        Param::F32(pos[2]),
+                    ],
                 ));
             }
             Packet::UpdateAngle { id, angle } if *id != local_id => {
-                let Some(ref_id) = resolve_ref(*id) else { continue };
+                let Some(ref_id) = resolve_ref(*id) else {
+                    continue;
+                };
                 out.push((
                     crate::ipc::OP_SET_ANGLE,
-                    vec![Param::U32(ref_id), Param::F32(angle[0]), Param::F32(0.0), Param::F32(angle[1])],
+                    vec![
+                        Param::U32(ref_id),
+                        Param::F32(angle[0]),
+                        Param::F32(0.0),
+                        Param::F32(angle[1]),
+                    ],
                 ));
             }
             // Actor value (health/AP/DR...) applied to the local copy.
-            Packet::UpdateActorValue { id, index, value, .. } if *id != local_id => {
-                let Some(ref_id) = resolve_ref(*id) else { continue };
+            Packet::UpdateActorValue {
+                id, index, value, ..
+            } if *id != local_id => {
+                let Some(ref_id) = resolve_ref(*id) else {
+                    continue;
+                };
                 out.push((
                     crate::ipc::OP_SET_ACTOR_VALUE,
                     vec![Param::U32(ref_id), Param::U8(*index), Param::F32(*value)],
@@ -186,27 +218,35 @@ pub fn packets_to_commands(
             }
             // Death applied to the local copy (respawn stays server-driven).
             Packet::UpdateActorDead { id, dead: true, .. } if *id != local_id => {
-                let Some(ref_id) = resolve_ref(*id) else { continue };
+                let Some(ref_id) = resolve_ref(*id) else {
+                    continue;
+                };
                 out.push((
                     crate::ipc::OP_KILL,
-                    vec![Param::U32(ref_id), Param::U32(0), Param::U8(0), Param::U8(0)],
+                    vec![
+                        Param::U32(ref_id),
+                        Param::U32(0),
+                        Param::U8(0),
+                        Param::U8(0),
+                    ],
                 ));
             }
             // Remote player activated an object — apply it locally so the
             // world stays shared (opening doors/containers propagates).
             Packet::UpdateActivate { id, .. } => {
-                let Some(ref_id) = resolve_ref(*id) else { continue };
-                out.push((
-                    crate::ipc::OP_GET_ACTIVATE,
-                    vec![Param::U32(ref_id)],
-                ));
+                let Some(ref_id) = resolve_ref(*id) else {
+                    continue;
+                };
+                out.push((crate::ipc::OP_GET_ACTIVATE, vec![Param::U32(ref_id)]));
             }
             // Remote player fired — apply locally so shots propagate.
             // The weapon id is the firing actor's weapon ref (bridge reads
             // it from the engine); we only need the shooter, which the
             // server relays as the packet id.
             Packet::UpdateFireWeapon { id, weapon } if *id != local_id => {
-                let Some(shooter) = resolve_ref(*id) else { continue };
+                let Some(shooter) = resolve_ref(*id) else {
+                    continue;
+                };
                 out.push((
                     crate::ipc::OP_FIRE_WEAPON,
                     vec![Param::U32(shooter), Param::U32(*weapon)],
@@ -215,7 +255,9 @@ pub fn packets_to_commands(
             // Remote lock-state change (server broadcasts from the script
             // host) — apply the lock byte locally.
             Packet::UpdateLock { id, lock } => {
-                let Some(ref_id) = resolve_ref(*id) else { continue };
+                let Some(ref_id) = resolve_ref(*id) else {
+                    continue;
+                };
                 out.push((
                     crate::ipc::OP_SET_LOCK,
                     vec![Param::U32(ref_id), Param::U32(*lock)],
@@ -223,7 +265,9 @@ pub fn packets_to_commands(
             }
             // Remote scale change — apply the scale field locally.
             Packet::UpdateScale { id, scale } => {
-                let Some(ref_id) = resolve_ref(*id) else { continue };
+                let Some(ref_id) = resolve_ref(*id) else {
+                    continue;
+                };
                 out.push((
                     crate::ipc::OP_SET_SCALE,
                     vec![Param::U32(ref_id), Param::F32(*scale)],
@@ -232,7 +276,9 @@ pub fn packets_to_commands(
             // Remote sound (server relays it) — forward to the bridge to
             // play locally (bridge OP_PLAY_SOUND; engine call pending).
             Packet::UpdateSound { id, sound } => {
-                let Some(ref_id) = resolve_ref(*id) else { continue };
+                let Some(ref_id) = resolve_ref(*id) else {
+                    continue;
+                };
                 out.push((
                     crate::ipc::OP_PLAY_SOUND,
                     vec![Param::U32(ref_id), Param::U32(*sound)],
@@ -281,9 +327,16 @@ mod tests {
     fn test_npc_state_event_to_packets() {
         let local = NetworkID::new(1);
         let e = PlayerStateEvent {
-            ref_id: 0x1234, pos: [1.0, 2.0, 3.0], angle: [0.0, 0.0, 45.0],
-            idle: 0, moving: 1, moving_xy: 0, weapon: 0x2A,
-            alerted: true, sneaking: false, health: 55.0,
+            ref_id: 0x1234,
+            pos: [1.0, 2.0, 3.0],
+            angle: [0.0, 0.0, 45.0],
+            idle: 0,
+            moving: 1,
+            moving_xy: 0,
+            weapon: 0x2A,
+            alerted: true,
+            sneaking: false,
+            health: 55.0,
         };
         let frame = encode_npc_state_event(&e);
         let (frames, _) = ashfall_core::event::split_frames(&frame);
@@ -297,7 +350,9 @@ mod tests {
         // Must NOT target the local player id.
         assert!(packets.iter().all(|p| {
             match p {
-                Packet::UpdatePos { id, .. } | Packet::UpdateAngle { id, .. } | Packet::UpdateActorValue { id, .. } => *id != local,
+                Packet::UpdatePos { id, .. }
+                | Packet::UpdateAngle { id, .. }
+                | Packet::UpdateActorValue { id, .. } => *id != local,
                 Packet::ActorStateDelta { id, .. } => *id != local,
                 _ => true,
             }
@@ -309,10 +364,25 @@ mod tests {
         let local = NetworkID::new(1);
         let remote = NetworkID::new(9);
         let packets = vec![
-            Packet::UpdateActorValue { id: remote, base: false, index: 0x14, value: 40.0 },
-            Packet::UpdateActorDead { id: remote, dead: true, limbs: 0, cause: 1 },
+            Packet::UpdateActorValue {
+                id: remote,
+                base: false,
+                index: 0x14,
+                value: 40.0,
+            },
+            Packet::UpdateActorDead {
+                id: remote,
+                dead: true,
+                limbs: 0,
+                cause: 1,
+            },
             // Local player's own value must NOT become a command.
-            Packet::UpdateActorValue { id: local, base: false, index: 0x14, value: 100.0 },
+            Packet::UpdateActorValue {
+                id: local,
+                base: false,
+                index: 0x14,
+                value: 100.0,
+            },
         ];
         let resolve = |id: NetworkID| if id == remote { Some(0x50) } else { None };
         let cmds = packets_to_commands(&packets, local, resolve);
@@ -332,14 +402,29 @@ mod tests {
         let remote = NetworkID::new(9);
         let packets = vec![
             // Remote player activated an object (id = the ref, actor = remote).
-            Packet::UpdateActivate { id: entity_id(0x60), actor: remote },
+            Packet::UpdateActivate {
+                id: entity_id(0x60),
+                actor: remote,
+            },
             // Remote player fired (id = shooter, weapon = weapon ref).
-            Packet::UpdateFireWeapon { id: remote, weapon: 0x77 },
+            Packet::UpdateFireWeapon {
+                id: remote,
+                weapon: 0x77,
+            },
             // Own activation must NOT become a command.
-            Packet::UpdateActivate { id: entity_id(0x61), actor: local },
+            Packet::UpdateActivate {
+                id: entity_id(0x61),
+                actor: local,
+            },
         ];
         let resolve = |id: NetworkID| {
-            if id == remote { Some(0x50) } else if id == entity_id(0x60) { Some(0x60) } else { None }
+            if id == remote {
+                Some(0x50)
+            } else if id == entity_id(0x60) {
+                Some(0x60)
+            } else {
+                None
+            }
         };
         let cmds = packets_to_commands(&packets, local, resolve);
         // remote activate + remote fire; own activate skipped.
@@ -349,7 +434,10 @@ mod tests {
         assert!(matches!(p0[0], Param::U32(0x60)));
         let (op1, p1) = &cmds[1];
         assert_eq!(*op1, crate::ipc::OP_FIRE_WEAPON);
-        assert!(matches!(p1[0], Param::U32(0x50)), "shooter is the remote actor");
+        assert!(
+            matches!(p1[0], Param::U32(0x50)),
+            "shooter is the remote actor"
+        );
         assert!(matches!(p1[1], Param::U32(0x77)), "weapon ref");
     }
 
@@ -357,9 +445,10 @@ mod tests {
     fn test_remote_lock_to_command() {
         let local = NetworkID::new(1);
         let obj_id = entity_id(0x70);
-        let packets = vec![
-            Packet::UpdateLock { id: obj_id, lock: 1 },
-        ];
+        let packets = vec![Packet::UpdateLock {
+            id: obj_id,
+            lock: 1,
+        }];
         let resolve = |id: NetworkID| if id == obj_id { Some(0x70) } else { None };
         let cmds = packets_to_commands(&packets, local, resolve);
         assert_eq!(cmds.len(), 1);
@@ -373,9 +462,10 @@ mod tests {
     fn test_remote_scale_to_command() {
         let local = NetworkID::new(1);
         let obj_id = entity_id(0x80);
-        let packets = vec![
-            Packet::UpdateScale { id: obj_id, scale: 1.5 },
-        ];
+        let packets = vec![Packet::UpdateScale {
+            id: obj_id,
+            scale: 1.5,
+        }];
         let resolve = |id: NetworkID| if id == obj_id { Some(0x80) } else { None };
         let cmds = packets_to_commands(&packets, local, resolve);
         assert_eq!(cmds.len(), 1);
@@ -389,9 +479,10 @@ mod tests {
     fn test_remote_sound_to_command() {
         let local = NetworkID::new(1);
         let obj_id = entity_id(0x90);
-        let packets = vec![
-            Packet::UpdateSound { id: obj_id, sound: 0x2A },
-        ];
+        let packets = vec![Packet::UpdateSound {
+            id: obj_id,
+            sound: 0x2A,
+        }];
         let resolve = |id: NetworkID| if id == obj_id { Some(0x90) } else { None };
         let cmds = packets_to_commands(&packets, local, resolve);
         assert_eq!(cmds.len(), 1);
@@ -405,16 +496,27 @@ mod tests {
     fn test_entity_id_ref_roundtrip() {
         assert_eq!(entity_id(0x1234).as_u64(), 0x8000_1234);
         assert_eq!(ref_of_entity(entity_id(0x1234)), Some(0x1234));
-        assert_eq!(ref_of_entity(NetworkID::new(7)), None, "server ids have no ref");
+        assert_eq!(
+            ref_of_entity(NetworkID::new(7)),
+            None,
+            "server ids have no ref"
+        );
     }
 
     #[test]
     fn test_player_state_event_to_packets() {
         let local = NetworkID::new(1);
         let e = PlayerStateEvent {
-            ref_id: 0x14, pos: [1.0, 2.0, 3.0], angle: [0.0, 0.0, 90.0],
-            idle: 0, moving: 2, moving_xy: 1, weapon: 0x2A,
-            alerted: true, sneaking: false, health: 77.0,
+            ref_id: 0x14,
+            pos: [1.0, 2.0, 3.0],
+            angle: [0.0, 0.0, 90.0],
+            idle: 0,
+            moving: 2,
+            moving_xy: 1,
+            weapon: 0x2A,
+            alerted: true,
+            sneaking: false,
+            health: 77.0,
         };
         let frame = encode_player_state_event(&e);
         let frames = {
@@ -432,14 +534,21 @@ mod tests {
     #[test]
     fn test_npc_spawn_event_to_packets() {
         let local = NetworkID::new(1);
-        let e = NpcSpawnEvent { ref_id: 0x1234, base_id: 0x5678, pos: [5.0, 6.0, 7.0], cell: 42 };
+        let e = NpcSpawnEvent {
+            ref_id: 0x1234,
+            base_id: 0x5678,
+            pos: [5.0, 6.0, 7.0],
+            cell: 42,
+        };
         let frame = encode_npc_spawn_event(&e);
         let (frames, _) = ashfall_core::event::split_frames(&frame);
         let packets = events_to_packets(&frames, local);
 
         let expected_id = entity_id(0x1234);
         assert!(packets.iter().any(|p| matches!(p, Packet::ActorNew { id, ref_id, base_id, .. } if *id == expected_id && *ref_id == 0x1234 && *base_id == 0x5678)));
-        assert!(packets.iter().any(|p| matches!(p, Packet::OwnershipClaim { id } if *id == expected_id)));
+        assert!(packets
+            .iter()
+            .any(|p| matches!(p, Packet::OwnershipClaim { id } if *id == expected_id)));
         assert!(packets.iter().any(|p| matches!(p, Packet::UpdatePos { id, pos } if *id == expected_id && *pos == [5.0, 6.0, 7.0])));
     }
 
@@ -451,7 +560,9 @@ mod tests {
         let (frames, _) = ashfall_core::event::split_frames(&frame);
         let packets = events_to_packets(&frames, local);
 
-        assert!(packets.iter().any(|p| matches!(p, Packet::ObjectRemove { id, .. } if *id == entity_id(0x1234))));
+        assert!(packets
+            .iter()
+            .any(|p| matches!(p, Packet::ObjectRemove { id, .. } if *id == entity_id(0x1234))));
     }
 
     #[test]
@@ -459,13 +570,26 @@ mod tests {
         let local = NetworkID::new(1);
         let remote = NetworkID::new(9);
         let packets = vec![
-            Packet::UpdatePos { id: remote, pos: [10.0, 20.0, 30.0] },
-            Packet::UpdateAngle { id: remote, angle: [90.0, 45.0] },
+            Packet::UpdatePos {
+                id: remote,
+                pos: [10.0, 20.0, 30.0],
+            },
+            Packet::UpdateAngle {
+                id: remote,
+                angle: [90.0, 45.0],
+            },
             // Local player updates must NOT become commands.
-            Packet::UpdatePos { id: local, pos: [0.0, 0.0, 0.0] },
+            Packet::UpdatePos {
+                id: local,
+                pos: [0.0, 0.0, 0.0],
+            },
         ];
         let resolve = |id: NetworkID| -> Option<u32> {
-            if id == remote { Some(0x50) } else { None }
+            if id == remote {
+                Some(0x50)
+            } else {
+                None
+            }
         };
         let cmds = packets_to_commands(&packets, local, resolve);
         assert_eq!(cmds.len(), 2, "remote packets only");

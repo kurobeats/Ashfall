@@ -34,7 +34,10 @@ impl GlobalState {
     }
 
     pub fn all(&self) -> Vec<(u32, i32)> {
-        self.globals.iter().map(|e| (*e.key(), *e.value())).collect()
+        self.globals
+            .iter()
+            .map(|e| (*e.key(), *e.value()))
+            .collect()
     }
 }
 

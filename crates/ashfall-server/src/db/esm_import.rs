@@ -42,10 +42,10 @@ impl std::str::FromStr for GameId {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_ascii_lowercase().as_str() {
             "fo3" | "fallout3" | "fallout 3" => Ok(GameId::Fallout3),
-            "fnv" | "falloutnv" | "fallout nv" | "newvegas" | "new vegas" => {
-                Ok(GameId::FalloutNV)
-            }
-            other => Err(anyhow::anyhow!("unknown game '{other}' (expected fo3 or fnv)")),
+            "fnv" | "falloutnv" | "fallout nv" | "newvegas" | "new vegas" => Ok(GameId::FalloutNV),
+            other => Err(anyhow::anyhow!(
+                "unknown game '{other}' (expected fo3 or fnv)"
+            )),
         }
     }
 }
@@ -92,7 +92,9 @@ impl<'a> PluginReader<'a> {
     }
 
     fn peek_4cc(&self) -> Option<[u8; 4]> {
-        self.data.get(self.pos..self.pos + 4).map(|s| s.try_into().unwrap())
+        self.data
+            .get(self.pos..self.pos + 4)
+            .map(|s| s.try_into().unwrap())
     }
 
     fn read(&mut self, n: usize) -> Option<&'a [u8]> {
@@ -119,7 +121,10 @@ fn parse_subrecords(body: &[u8]) -> Vec<Subrecord> {
         if pos + 6 + size > body.len() {
             break; // truncated trailing subrecord
         }
-        subs.push(Subrecord { ty, data: body[pos + 6..pos + 6 + size].to_vec() });
+        subs.push(Subrecord {
+            ty,
+            data: body[pos + 6..pos + 6 + size].to_vec(),
+        });
         pos += 6 + size;
     }
     subs
@@ -178,7 +183,12 @@ impl Database {
     }
 
     /// Import with an explicit load-order index — see [`Self::import_plugin_bytes_at`].
-    pub fn import_plugin_at(&self, path: &Path, game: GameId, index: u8) -> anyhow::Result<EsmImportStats> {
+    pub fn import_plugin_at(
+        &self,
+        path: &Path,
+        game: GameId,
+        index: u8,
+    ) -> anyhow::Result<EsmImportStats> {
         let data = std::fs::read(path)
             .map_err(|e| anyhow::anyhow!("failed to read {}: {e}", path.display()))?;
         let stats = self.import_plugin_bytes_at(&data, game, index)?;
@@ -208,7 +218,12 @@ impl Database {
     /// (the later import silently REPLACEs the earlier). Pass `index` (1–5)
     /// to assign distinct indices so DLC records stay distinguishable;
     /// `index = 0` leaves formIDs untouched.
-    pub fn import_plugin_bytes_at(&self, data: &[u8], game: GameId, index: u8) -> anyhow::Result<EsmImportStats> {
+    pub fn import_plugin_bytes_at(
+        &self,
+        data: &[u8],
+        game: GameId,
+        index: u8,
+    ) -> anyhow::Result<EsmImportStats> {
         let mut reader = PluginReader::new(data);
         let mut stats = EsmImportStats::default();
 
@@ -236,7 +251,14 @@ impl Database {
                         reader.pos
                     ));
                 }
-                self.parse_group(&mut reader, game, &mut stats, &mut world_ctx, &mut cell_ctx, index)?;
+                self.parse_group(
+                    &mut reader,
+                    game,
+                    &mut stats,
+                    &mut world_ctx,
+                    &mut cell_ctx,
+                    index,
+                )?;
             }
             Ok(())
         })();
@@ -275,13 +297,19 @@ impl Database {
     ) -> anyhow::Result<()> {
         let start = reader.pos;
         reader.read(4); // "GRUP"
-        let size = reader.read_u32().ok_or_else(|| anyhow::anyhow!("truncated group header"))? as usize;
-        let label = reader.read_u32().ok_or_else(|| anyhow::anyhow!("truncated group header"))?;
+        let size = reader
+            .read_u32()
+            .ok_or_else(|| anyhow::anyhow!("truncated group header"))? as usize;
+        let label = reader
+            .read_u32()
+            .ok_or_else(|| anyhow::anyhow!("truncated group header"))?;
         let group_type = reader.read_u32().unwrap_or(0);
         reader.read(8); // timestamp + unknown
 
         if size < 24 {
-            return Err(anyhow::anyhow!("invalid group size {size} at offset {start}"));
+            return Err(anyhow::anyhow!(
+                "invalid group size {size} at offset {start}"
+            ));
         }
         let end = start + size;
         if end > reader.data.len() {
@@ -325,7 +353,9 @@ impl Database {
             .ok_or_else(|| anyhow::anyhow!("truncated record type"))?
             .try_into()
             .unwrap();
-        let size = reader.read_u32().ok_or_else(|| anyhow::anyhow!("truncated record"))? as usize;
+        let size = reader
+            .read_u32()
+            .ok_or_else(|| anyhow::anyhow!("truncated record"))? as usize;
         let flags = reader.read_u32().unwrap_or(0);
         let form_id = self.remap(index, reader.read_u32().unwrap_or(0));
         reader.read(8); // timestamp(4) + version control(2) + internal(2)
@@ -364,7 +394,9 @@ impl Database {
         };
 
         let subs = parse_subrecords(&body);
-        self.import_record(&rec_type, form_id, &subs, game, stats, world_ctx, cell_ctx, index);
+        self.import_record(
+            &rec_type, form_id, &subs, game, stats, world_ctx, cell_ctx, index,
+        );
         Ok(())
     }
 
@@ -407,7 +439,10 @@ impl Database {
                 stats.npcs += 1;
             }
             b"RACE" => {
-                self.insert_race(&super::race::Race { base_id: form_id, name: full_name(subs) });
+                self.insert_race(&super::race::Race {
+                    base_id: form_id,
+                    name: full_name(subs),
+                });
                 stats.races += 1;
             }
             b"CONT" => {
@@ -457,12 +492,14 @@ impl Database {
                     // Exterior cell: world + grid coords
                     let x = sub(subs, b"XCLC")
                         .and_then(|d| {
-                            d.get(0..4).map(|s| i32::from_le_bytes(s.try_into().unwrap()))
+                            d.get(0..4)
+                                .map(|s| i32::from_le_bytes(s.try_into().unwrap()))
                         })
                         .unwrap_or(0);
                     let y = sub(subs, b"XCLC")
                         .and_then(|d| {
-                            d.get(4..8).map(|s| i32::from_le_bytes(s.try_into().unwrap()))
+                            d.get(4..8)
+                                .map(|s| i32::from_le_bytes(s.try_into().unwrap()))
                         })
                         .unwrap_or(0);
                     self.insert_exterior(&super::exterior::Exterior {
@@ -545,17 +582,33 @@ mod tests {
     }
 
     fn header(num_records: u32) -> Vec<u8> {
-        let hed_data: Vec<u8> = [1.7f32.to_le_bytes(), num_records.to_le_bytes(), 0x2000u32.to_le_bytes()]
-            .concat();
-        record(b"TES4", 0, &[sub(b"HEDR", &hed_data), sub(b"CNAM", b"Fallout3.esm\0")])
+        let hed_data: Vec<u8> = [
+            1.7f32.to_le_bytes(),
+            num_records.to_le_bytes(),
+            0x2000u32.to_le_bytes(),
+        ]
+        .concat();
+        record(
+            b"TES4",
+            0,
+            &[sub(b"HEDR", &hed_data), sub(b"CNAM", b"Fallout3.esm\0")],
+        )
     }
 
     /// Build a small but representative plugin: one record per table.
     fn synthetic_plugin() -> Vec<u8> {
         // WEAP
-        let weap_data: Vec<u8> = [10.0f32.to_le_bytes(), 12u32.to_le_bytes(), 5.0f32.to_le_bytes()]
-            .concat();
-        let weap = record(b"WEAP", 0x00001000, &[sub(b"FULL", b"10mm Pistol\0"), sub(b"DATA", &weap_data)]);
+        let weap_data: Vec<u8> = [
+            10.0f32.to_le_bytes(),
+            12u32.to_le_bytes(),
+            5.0f32.to_le_bytes(),
+        ]
+        .concat();
+        let weap = record(
+            b"WEAP",
+            0x00001000,
+            &[sub(b"FULL", b"10mm Pistol\0"), sub(b"DATA", &weap_data)],
+        );
 
         // NPC_
         let acbs: Vec<u8> = [0x01u32.to_le_bytes()].concat(); // female bit
@@ -565,7 +618,12 @@ mod tests {
         let npc = record(
             b"NPC_",
             0x00001001,
-            &[sub(b"FULL", b"Charon\0"), sub(b"RNAM", &0x1234u32.to_le_bytes()), sub(b"ACBS", &acbs), sub(b"ACDT", &acdt)],
+            &[
+                sub(b"FULL", b"Charon\0"),
+                sub(b"RNAM", &0x1234u32.to_le_bytes()),
+                sub(b"ACBS", &acbs),
+                sub(b"ACDT", &acdt),
+            ],
         );
 
         // RACE
@@ -576,26 +634,45 @@ mod tests {
 
         // MISC item
         let item_data: Vec<u8> = [1.5f32.to_le_bytes(), 500u32.to_le_bytes()].concat();
-        let misc = record(b"MISC", 0x00001004, &[sub(b"FULL", b"Pip-Boy\0"), sub(b"DATA", &item_data)]);
+        let misc = record(
+            b"MISC",
+            0x00001004,
+            &[sub(b"FULL", b"Pip-Boy\0"), sub(b"DATA", &item_data)],
+        );
 
         // TERM
         let term = record(b"TERM", 0x00001005, &[sub(b"FULL", b"RobCo Terminal\0")]);
 
         // FACT
-        let fact = record(b"FACT", 0x00001006, &[sub(b"FULL", b"Brotherhood\0"), sub(b"DATA", &0xFFu32.to_le_bytes())]);
+        let fact = record(
+            b"FACT",
+            0x00001006,
+            &[
+                sub(b"FULL", b"Brotherhood\0"),
+                sub(b"DATA", &0xFFu32.to_le_bytes()),
+            ],
+        );
 
         // QUST with two stages
         let qust = record(
             b"QUST",
             0x00001007,
-            &[sub(b"FULL", b"Tutorial\0"), sub(b"INDX", &10u16.to_le_bytes()), sub(b"INDX", &20u16.to_le_bytes())],
+            &[
+                sub(b"FULL", b"Tutorial\0"),
+                sub(b"INDX", &10u16.to_le_bytes()),
+                sub(b"INDX", &20u16.to_le_bytes()),
+            ],
         );
 
         // Interior CELL
         let interior_cell = record(b"CELL", 0x00001010, &[sub(b"FULL", b"Vault 101\0")]);
 
         // Generic record (e.g. SNDR)
-        let generic = record(b"SNDR", 0x00001008, &[sub(b"FULL", b"Sound Marker\0"), sub(b"DESC", b"desc\0")]);
+        let generic = record(
+            b"SNDR",
+            0x00001008,
+            &[sub(b"FULL", b"Sound Marker\0"), sub(b"DESC", b"desc\0")],
+        );
 
         // Exterior WRLD group (type 1, label = world formID) → CELL with XCLC
         let xclc: Vec<u8> = [(-5i32).to_le_bytes(), 7i32.to_le_bytes()].concat();
@@ -604,7 +681,11 @@ mod tests {
 
         // Cell-children group (type 6, label = cell formID) → REFR
         let refr_data: Vec<u8> = [0x1234u32.to_le_bytes()].concat(); // NAME = baseID
-        let refr = record(b"REFR", 0x00002001, &[sub(b"NAME", &refr_data), sub(b"DATA", &[0u8; 12])]);
+        let refr = record(
+            b"REFR",
+            0x00002001,
+            &[sub(b"NAME", &refr_data), sub(b"DATA", &[0u8; 12])],
+        );
         let cell_children = group(0x00001010u32.to_le_bytes(), 6, &refr);
 
         let mut plugin = header(8);
@@ -635,7 +716,9 @@ mod tests {
     #[test]
     fn test_import_synthetic_plugin() {
         let db = Database::open_in_memory().unwrap();
-        let stats = db.import_plugin_bytes(&synthetic_plugin(), GameId::Fallout3).unwrap();
+        let stats = db
+            .import_plugin_bytes(&synthetic_plugin(), GameId::Fallout3)
+            .unwrap();
 
         assert_eq!(stats.weapons, 1);
         assert_eq!(stats.npcs, 1);
@@ -668,15 +751,22 @@ mod tests {
         assert_eq!(item.value, 500);
 
         let stages = db.load_quest_stages();
-        assert!(stages.iter().any(|s| s.quest_id == 0x00001007 && s.stage == 10));
-        assert!(stages.iter().any(|s| s.quest_id == 0x00001007 && s.stage == 20));
+        assert!(stages
+            .iter()
+            .any(|s| s.quest_id == 0x00001007 && s.stage == 10));
+        assert!(stages
+            .iter()
+            .any(|s| s.quest_id == 0x00001007 && s.stage == 20));
 
         let exterior = db.get_exterior(0x2000, -5, 7).unwrap();
         assert_eq!((exterior.world_id, exterior.x, exterior.y), (0x2000, -5, 7));
 
         let reference = db.get_reference(0x00002001).unwrap();
         assert_eq!(reference.base_id, 0x1234);
-        assert_eq!(reference.cell_id, 0x00001010, "REFR inherits cell-children group label");
+        assert_eq!(
+            reference.cell_id, 0x00001010,
+            "REFR inherits cell-children group label"
+        );
 
         let generic = db.get_record(0x00001008).unwrap();
         assert_eq!(generic.name, "Sound Marker");
@@ -718,12 +808,24 @@ mod tests {
         // A DLC-style plugin: own records carry placeholder index 0x01
         // (single master = base game). With index=3 the records must land at
         // 0x03xxxxxx, including self-references inside subrecords.
-        let weap_data: Vec<u8> = [10.0f32.to_le_bytes(), 12u32.to_le_bytes(), 5.0f32.to_le_bytes()]
-            .concat();
-        let weap = record(b"WEAP", 0x0100_1000, &[sub(b"FULL", b"DLC Gun\0"), sub(b"DATA", &weap_data)]);
+        let weap_data: Vec<u8> = [
+            10.0f32.to_le_bytes(),
+            12u32.to_le_bytes(),
+            5.0f32.to_le_bytes(),
+        ]
+        .concat();
+        let weap = record(
+            b"WEAP",
+            0x0100_1000,
+            &[sub(b"FULL", b"DLC Gun\0"), sub(b"DATA", &weap_data)],
+        );
         let interior_cell = record(b"CELL", 0x0100_1010, &[sub(b"FULL", b"DLC Cell\0")]);
         let refr_data: Vec<u8> = 0x0100_1000u32.to_le_bytes().to_vec(); // NAME → DLC weapon
-        let refr = record(b"REFR", 0x0100_2001, &[sub(b"NAME", &refr_data), sub(b"DATA", &[0u8; 12])]);
+        let refr = record(
+            b"REFR",
+            0x0100_2001,
+            &[sub(b"NAME", &refr_data), sub(b"DATA", &[0u8; 12])],
+        );
         let cell_children = group(0x0100_1010u32.to_le_bytes(), 6, &refr);
 
         let mut plugin = header(2);
@@ -732,19 +834,27 @@ mod tests {
         plugin.extend_from_slice(&cell_children);
 
         let db = Database::open_in_memory().unwrap();
-        let stats = db.import_plugin_bytes_at(&plugin, GameId::Fallout3, 3).unwrap();
+        let stats = db
+            .import_plugin_bytes_at(&plugin, GameId::Fallout3, 3)
+            .unwrap();
         assert_eq!(stats.weapons, 1);
         assert_eq!(stats.references, 1);
 
         // Own record formID remapped 0x01 → 0x03.
         let weapon = db.get_weapon(0x0300_1000).unwrap();
         assert_eq!(weapon.name, "DLC Gun");
-        assert!(db.get_weapon(0x0100_1000).is_none(), "placeholder index must not survive");
+        assert!(
+            db.get_weapon(0x0100_1000).is_none(),
+            "placeholder index must not survive"
+        );
 
         // Group label (cell) + subrecord self-reference both remapped.
         let reference = db.get_reference(0x0300_2001).unwrap();
         assert_eq!(reference.base_id, 0x0300_1000, "NAME subrecord remapped");
-        assert_eq!(reference.cell_id, 0x0300_1010, "cell-children group label remapped");
+        assert_eq!(
+            reference.cell_id, 0x0300_1010,
+            "cell-children group label remapped"
+        );
 
         // index=0 (default) leaves formIDs untouched.
         let db0 = Database::open_in_memory().unwrap();
@@ -755,7 +865,9 @@ mod tests {
     #[test]
     fn test_import_empty_plugin() {
         let db = Database::open_in_memory().unwrap();
-        let stats = db.import_plugin_bytes(&header(0), GameId::FalloutNV).unwrap();
+        let stats = db
+            .import_plugin_bytes(&header(0), GameId::FalloutNV)
+            .unwrap();
         assert_eq!(stats.weapons, 0);
         assert_eq!(stats.npcs, 0);
     }
@@ -801,13 +913,17 @@ mod tests {
         rec.extend_from_slice(&0x0004_0000u32.to_le_bytes()); // compressed flag
         rec.extend_from_slice(&0x100u32.to_le_bytes()); // formID
         rec.extend_from_slice(&[0u8; 8]); // timestamp + vcs + internal
-        rec.extend_from_slice(&[0x78, 0x9C, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-                               0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]); // garbage
+        rec.extend_from_slice(&[
+            0x78, 0x9C, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+            0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+        ]); // garbage
         let mut plugin = header(1);
         plugin.extend_from_slice(&group(*b"WEAP", 0, &rec));
         let stats = db.import_plugin_bytes(&plugin, GameId::Fallout3).unwrap();
         assert_eq!(stats.weapons, 0, "corrupt record not imported");
-        assert_eq!(stats.skipped_compressed, 1, "corrupt record counted as skipped");
+        assert_eq!(
+            stats.skipped_compressed, 1,
+            "corrupt record counted as skipped"
+        );
     }
 }
-

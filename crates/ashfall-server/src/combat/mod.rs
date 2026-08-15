@@ -15,13 +15,7 @@ impl DamageFormula {
     /// `dr` — damage resistance (0.0–0.85).
     /// `dt` — damage threshold (FNV only, 0 for FO3).
     /// `crit_mult` — critical hit multiplier (default 1.0 if not critical).
-    pub fn calculate(
-        base_damage: f32,
-        limb_mult: f32,
-        dr: f32,
-        dt: f32,
-        crit_mult: f32,
-    ) -> f32 {
+    pub fn calculate(base_damage: f32, limb_mult: f32, dr: f32, dt: f32, crit_mult: f32) -> f32 {
         let modified = base_damage * limb_mult * crit_mult;
         let dr_capped = dr.clamp(0.0, 0.85);
         let after_dr = modified * (1.0 - dr_capped);
@@ -32,12 +26,12 @@ impl DamageFormula {
     /// Limb multiplier for body part indices.
     pub fn limb_multiplier(limb: u8) -> f32 {
         match limb {
-            0 => 1.0,  // Torso
-            1 => 2.0,  // Head
-            2 => 0.5,  // Left arm
-            3 => 0.5,  // Right arm
-            4 => 0.5,  // Left leg
-            5 => 0.5,  // Right leg
+            0 => 1.0, // Torso
+            1 => 2.0, // Head
+            2 => 0.5, // Left arm
+            3 => 0.5, // Right arm
+            4 => 0.5, // Left leg
+            5 => 0.5, // Right leg
             _ => 1.0,
         }
     }
@@ -76,7 +70,12 @@ impl CombatState {
         }
     }
 
-    pub fn record_hit(&mut self, attacker: ashfall_core::id::NetworkID, damage: f32, is_outgoing: bool) {
+    pub fn record_hit(
+        &mut self,
+        attacker: ashfall_core::id::NetworkID,
+        damage: f32,
+        is_outgoing: bool,
+    ) {
         self.is_in_combat = true;
         if !is_outgoing {
             self.last_attacker = Some(attacker);

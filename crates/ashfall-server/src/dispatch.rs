@@ -2,7 +2,6 @@
 //!
 //! All server packet processing routes through here.
 
-use ashfall_core::protocol::Packet;
 use crate::ai::factions::FactionMatrix;
 use crate::handlers::{actor, auth, chat, combat, game, gui, item, object, physics, player, quest};
 use crate::quest::QuestManager;
@@ -10,6 +9,7 @@ use crate::session::Session;
 use crate::world::globals::GlobalState;
 use crate::world::registry::ObjectRegistry;
 use crate::world::weather::WeatherState;
+use ashfall_core::protocol::Packet;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -31,7 +31,11 @@ impl Default for DispatchResult {
 
 impl DispatchResult {
     pub fn new() -> Self {
-        DispatchResult { responses: vec![], broadcasts: vec![], disconnect: false }
+        DispatchResult {
+            responses: vec![],
+            broadcasts: vec![],
+            disconnect: false,
+        }
     }
 
     pub fn response(mut self, pkt: Packet) -> Self {
@@ -93,12 +97,12 @@ impl Dispatcher {
     }
 
     /// Dispatch a packet from a session.
-    pub fn dispatch(
-        &self,
-        session: &mut Session,
-        packet: Packet,
-    ) -> DispatchResult {
-        tracing::trace!("Dispatching {:?} from {}", std::mem::discriminant(&packet), session.player_name);
+    pub fn dispatch(&self, session: &mut Session, packet: Packet) -> DispatchResult {
+        tracing::trace!(
+            "Dispatching {:?} from {}",
+            std::mem::discriminant(&packet),
+            session.player_name
+        );
 
         match packet {
             // ═══ System ═══

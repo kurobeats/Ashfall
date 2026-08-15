@@ -39,7 +39,9 @@ impl eframe::App for AppState {
                 if game.state != ClientState::Disconnected {
                     let rt = tokio::runtime::Handle::current();
                     if let Ok(packets) = rt.block_on(game.poll()) {
-                        for pkt in packets { game.handle_packet(pkt); }
+                        for pkt in packets {
+                            game.handle_packet(pkt);
+                        }
                     }
                     // Bridge → server (own-player state) + server → bridge
                     // (remote positions applied to the local game).
@@ -55,7 +57,12 @@ impl eframe::App for AppState {
 
         let (obj_count, state, chat_msgs, _local_id) = {
             let game = self.game.lock().unwrap();
-            (game.registry.object_count(), game.state, game.chat_messages.clone(), game.local_player_id)
+            (
+                game.registry.object_count(),
+                game.state,
+                game.chat_messages.clone(),
+                game.local_player_id,
+            )
         };
 
         self.status = match state {
@@ -75,7 +82,10 @@ impl eframe::App for AppState {
                     ui.label("Server:");
                     ui.add(egui::TextEdit::singleline(&mut self.connect_addr).desired_width(120.0));
                     if ui.button("Connect").clicked() {
-                        let addr: std::net::SocketAddr = self.connect_addr.parse().unwrap_or_else(|_| "127.0.0.1:1770".parse().unwrap());
+                        let addr: std::net::SocketAddr = self
+                            .connect_addr
+                            .parse()
+                            .unwrap_or_else(|_| "127.0.0.1:1770".parse().unwrap());
                         let game = self.game.clone();
                         std::thread::spawn(move || {
                             let rt = tokio::runtime::Runtime::new().unwrap();
@@ -91,27 +101,35 @@ impl eframe::App for AppState {
                         });
                     }
                     if matches!(state, ClientState::InGame | ClientState::Loading)
-                        && ui.button("Disconnect").clicked() {
-                            let mut game = self.game.lock().unwrap();
-                            game.chat_messages.push(("System".into(), "Disconnected".into()));
-                            game.state = ClientState::Disconnected;
-                            game.network = None;
-                        }
+                        && ui.button("Disconnect").clicked()
+                    {
+                        let mut game = self.game.lock().unwrap();
+                        game.chat_messages
+                            .push(("System".into(), "Disconnected".into()));
+                        game.state = ClientState::Disconnected;
+                        game.network = None;
+                    }
                 });
             });
         });
 
-        egui::SidePanel::left("left_panel").resizable(true).default_width(200.0).show(ctx, |ui| {
-            ui.heading("World");
-            ui.label(format!("Objects: {obj_count}"));
-        });
+        egui::SidePanel::left("left_panel")
+            .resizable(true)
+            .default_width(200.0)
+            .show(ctx, |ui| {
+                ui.heading("World");
+                ui.label(format!("Objects: {obj_count}"));
+            });
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            egui::ScrollArea::vertical().auto_shrink([false; 2]).stick_to_bottom(true).show(ui, |ui| {
-                for (sender, msg) in &chat_msgs {
-                    ui.label(format!("{sender}: {msg}"));
-                }
-            });
+            egui::ScrollArea::vertical()
+                .auto_shrink([false; 2])
+                .stick_to_bottom(true)
+                .show(ui, |ui| {
+                    for (sender, msg) in &chat_msgs {
+                        ui.label(format!("{sender}: {msg}"));
+                    }
+                });
             ui.separator();
             ui.horizontal(|ui| {
                 let resp = ui.text_edit_singleline(&mut self.chat_input);
@@ -143,8 +161,14 @@ impl eframe::App for AppState {
 async fn main() -> eframe::Result<()> {
     tracing_subscriber::fmt::init();
     let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default().with_inner_size([1024.0, 768.0]).with_title("Ashfall — Fallout Multiplayer"),
+        viewport: egui::ViewportBuilder::default()
+            .with_inner_size([1024.0, 768.0])
+            .with_title("Ashfall — Fallout Multiplayer"),
         ..Default::default()
     };
-    eframe::run_native("Ashfall Client", options, Box::new(|cc| Ok(Box::new(AppState::new(cc)))))
+    eframe::run_native(
+        "Ashfall Client",
+        options,
+        Box::new(|cc| Ok(Box::new(AppState::new(cc)))),
+    )
 }

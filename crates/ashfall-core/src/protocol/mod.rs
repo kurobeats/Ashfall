@@ -64,24 +64,42 @@ pub enum Packet {
     // ===== System (channel 0) =====
     /// Client → Server: authenticate with name + password + client version.
     /// Version mismatch → server rejects (Reason::Denied) — desync prevention.
-    GameAuth { name: String, password: String, version: String },
+    GameAuth {
+        name: String,
+        password: String,
+        version: String,
+    },
     /// Server → Client: game world state ready to load.
     GameLoad,
     /// Server → Client: start game loop.
     GameStart,
     /// Server ↔ Client: end session with reason.
-    GameEnd { reason: u8 },
+    GameEnd {
+        reason: u8,
+    },
     /// Server ↔ Client: mod file verification (filename, CRC32).
-    GameMod { filename: String, crc: u32 },
+    GameMod {
+        filename: String,
+        crc: u32,
+    },
     /// Client → Server: full load order as (filename, CRC32) pairs —
     /// compared against the server's expected list (STR ModPolicy).
-    GameModList { mods: Vec<(String, u32)> },
+    GameModList {
+        mods: Vec<(String, u32)>,
+    },
     /// Server ↔ Client: UI notification message (string-cached).
-    GameMessage { message: CachedString, emoticon: u8 },
+    GameMessage {
+        message: CachedString,
+        emoticon: u8,
+    },
     /// Server ↔ Client: chat message broadcast (string-cached).
-    GameChat { message: CachedString },
+    GameChat {
+        message: CachedString,
+    },
     /// Server → Client: weather change.
-    GameWeather { weather: u32 },
+    GameWeather {
+        weather: u32,
+    },
     /// Server → Client: authoritative game clock (STR CalendarService).
     /// Sent on join + whenever it changes (time advances server-side).
     GameTime {
@@ -92,16 +110,29 @@ pub enum Packet {
         time_scale: f32,
     },
     /// Server → Client: server rules on join (STR ServerSettings).
-    ServerSettings { pvp_enabled: bool },
+    ServerSettings {
+        pvp_enabled: bool,
+    },
     /// Server → Client: global variable update.
-    GameGlobal { global: u32, value: i32 },
+    GameGlobal {
+        global: u32,
+        value: i32,
+    },
     /// Server → Client: player base race ID.
-    GameBase { player_base: u32 },
+    GameBase {
+        player_base: u32,
+    },
     /// Server → Client: set of deleted static object refs.
-    GameDeleted { deleted: HashMap<u32, Vec<u32>> },
+    GameDeleted {
+        deleted: HashMap<u32, Vec<u32>>,
+    },
 
     // ===== Reference =====
-    ReferenceNew { id: NetworkID, ref_id: u32, base_id: u32 },
+    ReferenceNew {
+        id: NetworkID,
+        ref_id: u32,
+        base_id: u32,
+    },
 
     // ===== Object (channel 1) =====
     ObjectNew {
@@ -118,21 +149,60 @@ pub enum Packet {
         lock: u32,
         owner: u32,
     },
-    VolatileNew { id: NetworkID, base_id: u32, pos: [f32; 3] },
-    ObjectRemove { id: NetworkID, silent: bool },
-    UpdatePos { id: NetworkID, pos: [f32; 3] },
-    UpdateAngle { id: NetworkID, angle: [f32; 2] },
-    UpdateScale { id: NetworkID, scale: f32 },
-    UpdateCell { id: NetworkID, cell: u32, pos: [f32; 3] },
-    UpdateName { id: NetworkID, name: CachedString },
-    UpdateLock { id: NetworkID, lock: u32 },
-    UpdateOwner { id: NetworkID, owner: u32 },
-    UpdateActivate { id: NetworkID, actor: NetworkID },
-    UpdateSound { id: NetworkID, sound: u32 },
+    VolatileNew {
+        id: NetworkID,
+        base_id: u32,
+        pos: [f32; 3],
+    },
+    ObjectRemove {
+        id: NetworkID,
+        silent: bool,
+    },
+    UpdatePos {
+        id: NetworkID,
+        pos: [f32; 3],
+    },
+    UpdateAngle {
+        id: NetworkID,
+        angle: [f32; 2],
+    },
+    UpdateScale {
+        id: NetworkID,
+        scale: f32,
+    },
+    UpdateCell {
+        id: NetworkID,
+        cell: u32,
+        pos: [f32; 3],
+    },
+    UpdateName {
+        id: NetworkID,
+        name: CachedString,
+    },
+    UpdateLock {
+        id: NetworkID,
+        lock: u32,
+    },
+    UpdateOwner {
+        id: NetworkID,
+        owner: u32,
+    },
+    UpdateActivate {
+        id: NetworkID,
+        actor: NetworkID,
+    },
+    UpdateSound {
+        id: NetworkID,
+        sound: u32,
+    },
 
     // ===== Physics (unreliable, broadcast) =====
     /// Server → Clients: object velocity + grounded state.
-    UpdateVelocity { id: NetworkID, vel: [f32; 3], on_ground: bool },
+    UpdateVelocity {
+        id: NetworkID,
+        vel: [f32; 3],
+        on_ground: bool,
+    },
 
     // ===== Item =====
     ItemNew {
@@ -147,13 +217,33 @@ pub enum Packet {
         stick: bool,
         scale: f32,
     },
-    UpdateItemCount { id: NetworkID, count: u32, silent: bool },
-    UpdateItemCondition { id: NetworkID, condition: f32, health: u32 },
-    UpdateItemEquipped { id: NetworkID, equipped: bool, silent: bool, stick: bool },
+    UpdateItemCount {
+        id: NetworkID,
+        count: u32,
+        silent: bool,
+    },
+    UpdateItemCondition {
+        id: NetworkID,
+        condition: f32,
+        health: u32,
+    },
+    UpdateItemEquipped {
+        id: NetworkID,
+        equipped: bool,
+        silent: bool,
+        stick: bool,
+    },
 
     // ===== Container =====
-    ContainerNew { id: NetworkID, ref_id: u32, base_id: u32 },
-    ItemListNew { id: NetworkID, items: Vec<NetworkID> },
+    ContainerNew {
+        id: NetworkID,
+        ref_id: u32,
+        base_id: u32,
+    },
+    ItemListNew {
+        id: NetworkID,
+        items: Vec<NetworkID>,
+    },
 
     // ===== Actor =====
     ActorNew {
@@ -186,11 +276,32 @@ pub enum Packet {
         sneaking: bool,
         firing: bool,
     },
-    UpdateActorRace { id: NetworkID, race: u32, age: i32, delta_age: i32 },
-    UpdateActorSex { id: NetworkID, female: bool },
-    UpdateActorDead { id: NetworkID, dead: bool, limbs: u16, cause: i8 },
-    UpdateActorValue { id: NetworkID, base: bool, index: u8, value: f32 },
-    UpdateFireWeapon { id: NetworkID, weapon: u32 },
+    UpdateActorRace {
+        id: NetworkID,
+        race: u32,
+        age: i32,
+        delta_age: i32,
+    },
+    UpdateActorSex {
+        id: NetworkID,
+        female: bool,
+    },
+    UpdateActorDead {
+        id: NetworkID,
+        dead: bool,
+        limbs: u16,
+        cause: i8,
+    },
+    UpdateActorValue {
+        id: NetworkID,
+        base: bool,
+        index: u8,
+        value: f32,
+    },
+    UpdateFireWeapon {
+        id: NetworkID,
+        weapon: u32,
+    },
     /// Client → Server → Clients: actor cast a spell (STR NotifySpellCast).
     /// Caster may be a player or an owned NPC; the server relays to everyone.
     SpellCast {
@@ -201,15 +312,25 @@ pub enum Packet {
         dual: bool,
         target: NetworkID,
     },
-    UpdateActorIdle { id: NetworkID, idle: u32, name: CachedString },
+    UpdateActorIdle {
+        id: NetworkID,
+        idle: u32,
+        name: CachedString,
+    },
 
     // ===== Ownership (STR OwnershipTransferEvent pattern) =====
     /// Client → Server: request simulation ownership of an actor.
-    OwnershipClaim { id: NetworkID },
+    OwnershipClaim {
+        id: NetworkID,
+    },
     /// Server → Client: you own `id` — simulate it, send its updates.
-    OwnershipGranted { id: NetworkID },
+    OwnershipGranted {
+        id: NetworkID,
+    },
     /// Server → Client: ownership of `id` released (owner left) — may reclaim.
-    OwnershipReleased { id: NetworkID },
+    OwnershipReleased {
+        id: NetworkID,
+    },
 
     // ===== Actor differential state (STR Differential.h pattern) =====
     /// Differential actor-state update: only changed fields present; the
@@ -274,7 +395,10 @@ pub enum Packet {
         owner: NetworkID,
     },
     /// Server → Clients: projectile expired / impacted.
-    ProjectileRemove { id: NetworkID, impact_pos: [f32; 3] },
+    ProjectileRemove {
+        id: NetworkID,
+        impact_pos: [f32; 3],
+    },
     /// Bridge → Server / Server → Clients: explosion event.
     ExplosionNew {
         base_id: u32,
@@ -285,11 +409,22 @@ pub enum Packet {
 
     // ===== NPC AI =====
     /// Server → Clients: NPC combat target changed.
-    ActorCombatTarget { id: NetworkID, target: NetworkID },
+    ActorCombatTarget {
+        id: NetworkID,
+        target: NetworkID,
+    },
     /// Server → Clients: NPC AI package changed.
-    ActorAIPackage { id: NetworkID, package_id: u32, flags: u8 },
+    ActorAIPackage {
+        id: NetworkID,
+        package_id: u32,
+        flags: u8,
+    },
     /// Server → Clients: NPC faction data.
-    ActorFaction { id: NetworkID, faction_id: u32, rank: i8 },
+    ActorFaction {
+        id: NetworkID,
+        faction_id: u32,
+        rank: i8,
+    },
 
     // ===== Player =====
     PlayerNew {
@@ -299,39 +434,89 @@ pub enum Packet {
         controls: HashMap<u8, (u8, bool)>,
         scale: f32,
     },
-    UpdateControl { id: NetworkID, control: u8, key: u8 },
-    UpdateInterior { id: NetworkID, cell: CachedString, spawn: bool },
-    UpdateExterior { id: NetworkID, world: u32, x: i32, y: i32, spawn: bool },
-    UpdateContext { id: NetworkID, cells: [u32; 9], spawn: bool },
-    UpdateConsole { id: NetworkID, enabled: bool },
+    UpdateControl {
+        id: NetworkID,
+        control: u8,
+        key: u8,
+    },
+    UpdateInterior {
+        id: NetworkID,
+        cell: CachedString,
+        spawn: bool,
+    },
+    UpdateExterior {
+        id: NetworkID,
+        world: u32,
+        x: i32,
+        y: i32,
+        spawn: bool,
+    },
+    UpdateContext {
+        id: NetworkID,
+        cells: [u32; 9],
+        spawn: bool,
+    },
+    UpdateConsole {
+        id: NetworkID,
+        enabled: bool,
+    },
 
     // ===== World Objects =====
     /// Server → Clients: door open/close state.
-    DoorState { id: NetworkID, open: bool, ref_id: u32 },
+    DoorState {
+        id: NetworkID,
+        open: bool,
+        ref_id: u32,
+    },
     /// Server → Clients: terminal locked/unlocked state.
-    TerminalState { id: NetworkID, locked: bool, ref_id: u32 },
+    TerminalState {
+        id: NetworkID,
+        locked: bool,
+        ref_id: u32,
+    },
 
     // ===== Quest & Dialogue =====
     /// Server → Client: quest stage update.
-    QuestStage { quest_id: u32, stage: u16 },
+    QuestStage {
+        quest_id: u32,
+        stage: u16,
+    },
     /// Server ↔ Client: dialogue flag value.
-    DialogueFlag { flag_id: u32, value: bool },
+    DialogueFlag {
+        flag_id: u32,
+        value: bool,
+    },
     /// Client → Server: player made a dialogue choice.
-    DialogueChoice { flag_id: u32, choice: u32 },
+    DialogueChoice {
+        flag_id: u32,
+        choice: u32,
+    },
 
     // ===== FO3 Globals =====
     /// Server → Client: karma change broadcast.
-    KarmaUpdate { value: i32 },
+    KarmaUpdate {
+        value: i32,
+    },
 
     // ===== FNV Globals (optional — ignored by FO3) =====
     /// Server → Client: reputation with a faction.
-    ReputationUpdate { faction: u32, value: i32 },
+    ReputationUpdate {
+        faction: u32,
+        value: i32,
+    },
     /// Server → Client: hardcore stat updates.
-    HardcoreStats { hunger: f32, thirst: f32, sleep: f32 },
+    HardcoreStats {
+        hunger: f32,
+        thirst: f32,
+        sleep: f32,
+    },
 
     // ===== Cell Snapshot =====
     /// Server → Client on cell entry: full FormID-based dump.
-    CellSnapshot { cell: u32, objects: Vec<FormIDSync> },
+    CellSnapshot {
+        cell: u32,
+        objects: Vec<FormIDSync>,
+    },
 
     // ===== Window / GUI =====
     WindowNew {
@@ -344,7 +529,9 @@ pub enum Packet {
         visible: bool,
         text: String,
     },
-    WindowRemove { id: NetworkID },
+    WindowRemove {
+        id: NetworkID,
+    },
     ButtonNew {
         id: NetworkID,
         parent: NetworkID,
@@ -411,24 +598,77 @@ pub enum Packet {
         text: String,
         multiselect: bool,
     },
-    ListItemNew { id: NetworkID, container: NetworkID, text: String, selected: bool },
-    ListItemRemove { id: NetworkID },
-    UpdateWindowPos { id: NetworkID, pos: [f32; 4] },
-    UpdateWindowSize { id: NetworkID, size: [f32; 4] },
-    UpdateWindowVisible { id: NetworkID, visible: bool },
-    UpdateWindowLocked { id: NetworkID, locked: bool },
-    UpdateWindowText { id: NetworkID, text: String },
-    UpdateEditMaxLen { id: NetworkID, max_len: u32 },
-    UpdateEditValidation { id: NetworkID, validation: String },
-    UpdateCheckboxSelected { id: NetworkID, selected: bool },
-    UpdateRadioButtonSelected { id: NetworkID, previous: NetworkID, selected: bool },
-    UpdateRadioButtonGroup { id: NetworkID, group: u32 },
-    UpdateListMultiSelect { id: NetworkID, multiselect: bool },
-    UpdateListItemSelected { id: NetworkID, selected: bool },
-    UpdateListItemText { id: NetworkID, text: String },
-    UpdateWindowMode { enabled: bool },
-    UpdateWindowClick { id: NetworkID },
-    UpdateWindowReturn { id: NetworkID },
+    ListItemNew {
+        id: NetworkID,
+        container: NetworkID,
+        text: String,
+        selected: bool,
+    },
+    ListItemRemove {
+        id: NetworkID,
+    },
+    UpdateWindowPos {
+        id: NetworkID,
+        pos: [f32; 4],
+    },
+    UpdateWindowSize {
+        id: NetworkID,
+        size: [f32; 4],
+    },
+    UpdateWindowVisible {
+        id: NetworkID,
+        visible: bool,
+    },
+    UpdateWindowLocked {
+        id: NetworkID,
+        locked: bool,
+    },
+    UpdateWindowText {
+        id: NetworkID,
+        text: String,
+    },
+    UpdateEditMaxLen {
+        id: NetworkID,
+        max_len: u32,
+    },
+    UpdateEditValidation {
+        id: NetworkID,
+        validation: String,
+    },
+    UpdateCheckboxSelected {
+        id: NetworkID,
+        selected: bool,
+    },
+    UpdateRadioButtonSelected {
+        id: NetworkID,
+        previous: NetworkID,
+        selected: bool,
+    },
+    UpdateRadioButtonGroup {
+        id: NetworkID,
+        group: u32,
+    },
+    UpdateListMultiSelect {
+        id: NetworkID,
+        multiselect: bool,
+    },
+    UpdateListItemSelected {
+        id: NetworkID,
+        selected: bool,
+    },
+    UpdateListItemText {
+        id: NetworkID,
+        text: String,
+    },
+    UpdateWindowMode {
+        enabled: bool,
+    },
+    UpdateWindowClick {
+        id: NetworkID,
+    },
+    UpdateWindowReturn {
+        id: NetworkID,
+    },
 
     // ===== Master server =====
     MasterQuery,

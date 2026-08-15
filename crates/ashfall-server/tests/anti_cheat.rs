@@ -1,7 +1,7 @@
 //! Anti-cheat integration tests — verify server rejects malicious input.
 
+use ashfall_core::constants::{MAX_ITEM_STACK, MAX_SPEED, MAX_TELEPORT_DISTANCE};
 use ashfall_server::anti_cheat::AntiCheat;
-use ashfall_core::constants::{MAX_SPEED, MAX_TELEPORT_DISTANCE, MAX_ITEM_STACK};
 use std::time::Duration;
 
 #[test]
@@ -11,7 +11,10 @@ fn test_teleport_rejected() {
         Some([0.0, 0.0, 0.0]),
         Duration::from_millis(100),
     );
-    assert!(!result, "teleport beyond MAX_TELEPORT_DISTANCE should be rejected");
+    assert!(
+        !result,
+        "teleport beyond MAX_TELEPORT_DISTANCE should be rejected"
+    );
 }
 
 #[test]

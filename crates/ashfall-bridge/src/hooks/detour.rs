@@ -12,8 +12,8 @@
 //! On non-Windows targets the primitives fail gracefully — the bridge is only
 //! ever deployed inside a Wine/Proton process.
 
-use std::ptr;
 use crate::hooks::memory;
+use std::ptr;
 
 // JMP rel32 = opcode (1 byte) + displacement (4 bytes)
 const JMP_SIZE: usize = 5;
@@ -53,15 +53,11 @@ impl Detour {
         // Build trampoline: [original_bytes][JMP target+JMP_SIZE]
         ptr::copy_nonoverlapping(original.as_ptr(), trampoline, JMP_SIZE);
 
-        let jmp_back_offset =
-            (target as isize + JMP_SIZE as isize
-             - (trampoline as isize + JMP_SIZE as isize)
-             - 5) as i32;
+        let jmp_back_offset = (target as isize + JMP_SIZE as isize
+            - (trampoline as isize + JMP_SIZE as isize)
+            - 5) as i32;
         ptr::write_volatile(trampoline.add(JMP_SIZE), JMP_OPCODE);
-        ptr::write_volatile(
-            trampoline.add(JMP_SIZE + 1) as *mut i32,
-            jmp_back_offset,
-        );
+        ptr::write_volatile(trampoline.add(JMP_SIZE + 1) as *mut i32, jmp_back_offset);
 
         Some(Detour {
             target,
@@ -79,8 +75,7 @@ impl Detour {
         if self.installed {
             return;
         }
-        let jmp_offset =
-            (self.hook as isize - self.target as isize - JMP_SIZE as isize) as i32;
+        let jmp_offset = (self.hook as isize - self.target as isize - JMP_SIZE as isize) as i32;
         memory::safe_write8(self.target as usize, JMP_OPCODE);
         memory::safe_write32(self.target as usize + 1, jmp_offset as u32);
         self.installed = true;

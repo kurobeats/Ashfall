@@ -41,8 +41,7 @@ impl Channel {
         use super::Packet::*;
         matches!(
             packet,
-            UpdatePos { .. } | UpdateAngle { .. } | UpdateVelocity { .. }
-            | ProjectileRemove { .. }
+            UpdatePos { .. } | UpdateAngle { .. } | UpdateVelocity { .. } | ProjectileRemove { .. }
         )
     }
 }

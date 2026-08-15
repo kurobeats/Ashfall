@@ -52,7 +52,10 @@ async fn main() -> anyhow::Result<()> {
 
     let cli = Cli::parse();
 
-    tracing::info!("Ashfall dedicated server v{}", ashfall_core::constants::DEDICATED_VERSION);
+    tracing::info!(
+        "Ashfall dedicated server v{}",
+        ashfall_core::constants::DEDICATED_VERSION
+    );
 
     // Tool mode: ESM import (no server startup)
     if let Some(esm_path) = cli.import_esm {

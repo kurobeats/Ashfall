@@ -53,7 +53,10 @@ pub struct AutoPtr {
 
 impl AutoPtr {
     pub const fn new(resolve: fn() -> usize) -> Self {
-        Self { addr: std::sync::OnceLock::new(), resolve }
+        Self {
+            addr: std::sync::OnceLock::new(),
+            resolve,
+        }
     }
 
     /// Resolved address (resolves on first call).
@@ -264,7 +267,11 @@ mod tests {
         let ptr = AutoPtr::new(resolve);
         assert_eq!(ptr.get(), 0xDEADBEEF);
         assert_eq!(ptr.get(), 0xDEADBEEF);
-        assert_eq!(CALLS.load(std::sync::atomic::Ordering::SeqCst), 1, "resolved once");
+        assert_eq!(
+            CALLS.load(std::sync::atomic::Ordering::SeqCst),
+            1,
+            "resolved once"
+        );
     }
 
     /// Live-image prologue reads only run on Windows; on non-Windows the
@@ -275,8 +282,14 @@ mod tests {
     fn test_select_candidate_fallback_off_windows() {
         let picked = select_candidate(
             &[
-                Candidate { addr: 0x1111, signature: &[0x51, 0x8B] },
-                Candidate { addr: 0x2222, signature: &[0x55, 0x8B] },
+                Candidate {
+                    addr: 0x1111,
+                    signature: &[0x51, 0x8B],
+                },
+                Candidate {
+                    addr: 0x2222,
+                    signature: &[0x55, 0x8B],
+                },
             ],
             0x3333,
         );

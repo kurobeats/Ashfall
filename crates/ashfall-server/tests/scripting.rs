@@ -33,7 +33,10 @@ fn test_load_modules_nonexistent_dir() {
     let mut engine = ScriptEngine::new().unwrap();
     let dir = Path::new("/tmp/ashfall_nonexistent_scripts_xyz");
     let result = engine.load_modules(dir);
-    assert!(result.is_ok(), "load_modules on nonexistent dir should succeed gracefully");
+    assert!(
+        result.is_ok(),
+        "load_modules on nonexistent dir should succeed gracefully"
+    );
     assert_eq!(engine.module_count(), 0);
 }
 
@@ -73,7 +76,9 @@ fn test_timer_kill_nonexistent() {
 #[test]
 fn test_callback_stubs_auth() {
     use ashfall_server::script::callbacks::CallbackDispatcher;
-    assert!(CallbackDispatcher::on_client_authenticate("player", "password"));
+    assert!(CallbackDispatcher::on_client_authenticate(
+        "player", "password"
+    ));
     assert!(CallbackDispatcher::on_client_authenticate("", ""));
 }
 
@@ -81,7 +86,8 @@ fn test_callback_stubs_auth() {
 fn test_callback_stubs_chat() {
     use ashfall_server::script::callbacks::CallbackDispatcher;
     assert!(CallbackDispatcher::on_player_chat(
-        ashfall_core::id::NetworkID::new(1), "hello",
+        ashfall_core::id::NetworkID::new(1),
+        "hello",
     ));
 }
 
@@ -113,9 +119,9 @@ fn test_callback_stubs_equip() {
 
 #[test]
 fn test_core_sdk_types() {
+    use ashfall_core::form_id::FormID;
     use ashfall_core::id::NetworkID;
     use ashfall_core::types::{ObjectKind, Reason};
-    use ashfall_core::form_id::FormID;
 
     let nid = NetworkID::new(42);
     assert_eq!(nid.as_u64(), 42);
@@ -133,5 +139,9 @@ fn test_freeroam_script_exists() {
         .join("scripts")
         .join("freeroam")
         .join("Cargo.toml");
-    assert!(path.exists(), "freeroam Cargo.toml should exist at {}", path.display());
+    assert!(
+        path.exists(),
+        "freeroam Cargo.toml should exist at {}",
+        path.display()
+    );
 }

@@ -163,10 +163,7 @@ impl ActorAnimController {
         // on the local actor; only the resulting state matters remotely).
         let is_equip_cycle = matches!(
             weapon,
-            anim_group::IDLE
-                | anim_group::EQUIP
-                | anim_group::UNEQUIP
-                | anim_group::HOLSTER
+            anim_group::IDLE | anim_group::EQUIP | anim_group::UNEQUIP | anim_group::HOLSTER
         );
         if weapon != self.prev_weapon && !firing && alerted && !is_equip_cycle {
             if weapon == anim_group::AIM && self.prev_weapon == anim_group::AIM_IS {
@@ -262,7 +259,10 @@ mod tests {
         c.update(IDLE, 0, AIM_IS, true, false, false);
         // Leaving iron sights → Aim: down then up.
         let a = c.update(IDLE, 0, AIM, true, false, false);
-        assert_eq!(a.play_group, vec![(AIM_DOWN, true), (AIM_UP, true), (AIM, true)]);
+        assert_eq!(
+            a.play_group,
+            vec![(AIM_DOWN, true), (AIM_UP, true), (AIM, true)]
+        );
         // Into iron sights → AimIS then IS down/up.
         let a = c.update(IDLE, 0, AIM_IS, true, false, false);
         assert_eq!(
@@ -317,7 +317,10 @@ mod tests {
         // After reset the next update diffs against a clean slate: everything
         // that differs from the defaults is re-emitted.
         let a = c.update(FORWARD, 0, AIM, true, false, false);
-        assert!(!a.play_group.is_empty(), "reset should re-emit current state");
+        assert!(
+            !a.play_group.is_empty(),
+            "reset should re-emit current state"
+        );
         // And the update after that is a no-op again.
         let a = c.update(FORWARD, 0, AIM, true, false, false);
         assert_eq!(a, AnimAction::none());

@@ -40,7 +40,11 @@ impl StringTable {
     /// Empty placeholders (sparse ids from `Inline` registration) read as missing.
     pub fn lookup(&self, id: u16) -> Option<&str> {
         let s = self.by_id.get(id as usize)?;
-        if s.is_empty() { None } else { Some(s.as_str()) }
+        if s.is_empty() {
+            None
+        } else {
+            Some(s.as_str())
+        }
     }
 
     pub fn len(&self) -> usize {
@@ -145,12 +149,19 @@ mod tests {
     fn test_client_resolve_builds_table() {
         let mut t = StringTable::new();
         // Server first-sight: Inline{id=3, "Vault101"} (ids aren't dense).
-        let s = CachedString::Inline { id: 3, value: "Vault101".into() };
+        let s = CachedString::Inline {
+            id: 3,
+            value: "Vault101".into(),
+        };
         assert_eq!(s.resolve(&mut t), "Vault101");
         assert_eq!(t.lookup(3), Some("Vault101"));
         // Later: Id resolves against the learned table.
         assert_eq!(CachedString::Id(3).resolve(&mut t), "Vault101");
-        assert_eq!(CachedString::Id(7).resolve(&mut t), "", "unknown id → empty");
+        assert_eq!(
+            CachedString::Id(7).resolve(&mut t),
+            "",
+            "unknown id → empty"
+        );
         // Plain passes through without caching.
         assert_eq!(CachedString::Plain("raw".into()).resolve(&mut t), "raw");
         assert_eq!(t.lookup(0), None, "plain never registered");
@@ -160,7 +171,10 @@ mod tests {
     fn test_wire_roundtrip() {
         let cases = vec![
             CachedString::Plain("x".into()),
-            CachedString::Inline { id: 42, value: "Vault101".into() },
+            CachedString::Inline {
+                id: 42,
+                value: "Vault101".into(),
+            },
             CachedString::Id(42),
         ];
         for cs in cases {
@@ -170,7 +184,11 @@ mod tests {
         }
         // Id-only must be smaller than Inline.
         let id = postcard::to_stdvec(&CachedString::Id(42)).unwrap();
-        let inline = postcard::to_stdvec(&CachedString::Inline { id: 42, value: "Vault101".into() }).unwrap();
+        let inline = postcard::to_stdvec(&CachedString::Inline {
+            id: 42,
+            value: "Vault101".into(),
+        })
+        .unwrap();
         assert!(id.len() < inline.len());
     }
 }
