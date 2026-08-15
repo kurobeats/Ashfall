@@ -176,13 +176,19 @@ build, exe md5 `8a3adab8...`) under Proton Experimental:
 - **Live with a loaded save**: `OP_GET_POS` → (42878.5, -72844.4, 11118.6),
   `OP_GET_ANGLE` → (6.3, 0.0, 186.9), parent cell read, form probe shows a
   real object (0x0303A6F4) with a real vtable (0xF93958, all entries .text).
-- **Blocked (Steam only)**: vtable-call getters (`get_actor_value`, `get_actor_state`,
-  `is_moving`). The Steam TESObjectREFR vtable was REORDERED: index 4 holds
-  a destructor (`ret $0x4`, delete-flag arg) not a no-arg GetBaseForm;
-  calling the GOG slots corrupts the stack (game dies). 2026-08-14c: Steam
-  vtable base found (0xF938FC), GET_LOCKED slot re-derived (GOG +0xA0 →
-  Steam +0xFC) and wired. The AV/anim slots (+0x68/+0x70/+0x1E4) are in
-  the reordered early region — use OP_PROBE_FORM to read them live.
+- **Blocked (Steam only)**: vtable-call getters (`get_actor_state`, `is_moving`).
+  The Steam TESObjectREFR vtable was REORDERED: index 4 holds a destructor
+  (`ret $0x4`, delete-flag arg) not a no-arg GetBaseForm; calling the GOG
+  slots corrupts the stack (game dies). 2026-08-14c: Steam vtable base found
+  (0xF938FC), GET_LOCKED slot re-derived (GOG +0xA0 → Steam +0xFC) and wired.
+  **AV getters are SOLVED via the command table instead** (2026-08-14g): the
+  engine's ForceActorValue/GetActorValue handlers use `lea ecx,[actor+0x9C]`
+  (FO3) / `+0xA4` (FNV) → ActorValueOwner sub-object → vtable slot 3
+  (GetActorValueF) / slot 1 (GetBaseAVF) — wired for both builds, .rdata
+  vtable-range guarded. `set_actor_value` delta goes through Actor
+  vtbl[0]+0x3A0 (FO3) / +0x3A4 (FNV); `kill_actor` via 0x71AC50 + 0x71C280.
+  Remaining Steam anim slots (+0x1E4) are in the reordered early region —
+  use OP_PROBE_FORM to read them live.
   **Classic/GOG**: get_actor_state's alerted/sneaking now call the engine
   getters (alerted 0x6F6C70 / sneaking 0x6F58B0, byte-guarded — from the
   Anniversary-Patcher catalog, 2026-08-14); get_scale/set_scale + is_dead

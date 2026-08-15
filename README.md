@@ -194,8 +194,9 @@ lives in [docs/impl-plan.md](./docs/impl-plan.md). Recent highlights:
 - ~~**3D client view**~~ — explicitly out of scope: the game window IS the
   view (the client's top-down projection + health bars/names + server GUI
   are the companion HUD)
-- **Windows-native client** — currently Linux-only (the bridge DLL already
-  cross-compiles)
+- **Windows-native client** — cross-compiles for x86_64-pc-windows-gnu
+  (TCP IPC; Unix mode cfg-gated) with a CI job; runtime still needs a
+  Windows host to verify
 - **Co-op game modes** — the script stack works; actual game modes (shared
   quests, custom rules) are content work on top of it
 
