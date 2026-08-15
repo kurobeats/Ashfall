@@ -149,7 +149,7 @@ async fn test_real_freeroam_module_end_to_end() {
                     }
                     Packet::GameChat { message } => {
                         use ashfall_core::string_cache::StringTable;
-                        saw_welcome = message.resolve(&mut StringTable::new()) == "Welcome to the Wasteland!";
+                        saw_welcome = message.resolve(&mut StringTable::new()).starts_with("Welcome to the Wasteland!");
                     }
                     _ => {}
                 }

@@ -28,6 +28,9 @@ extern "C" {
     // ── World ──
     fn set_game_weather(weather: u32);
     fn set_game_time(year: u32, month: u32, day: u32, hour: u32);
+
+    // ── UI ──
+    fn ui_message(player_id: u64, ptr: *const u8, len: u32);
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -71,7 +74,8 @@ pub extern "C" fn on_client_authenticate(
 /// Player disconnected.
 #[no_mangle]
 pub extern "C" fn on_player_disconnect(player_id: u64, reason: u32) {
-    let _ = (player_id, reason);
+    let _ = reason;
+    unregister_player(player_id);
 }
 
 /// Choose spawn cell for a new player.
@@ -86,8 +90,9 @@ pub extern "C" fn on_player_request_game(_player_id: u64) -> u32 {
 /// Player spawned into the world.
 #[no_mangle]
 pub extern "C" fn on_spawn(player_id: u64) {
+    register_player(player_id);
     // Welcome message
-    let msg = b"Welcome to the Wasteland!";
+    let msg = b"Welcome to the Wasteland! Type !pvp to toggle friendly fire.";
     unsafe { chat_message(player_id, msg.as_ptr(), msg.len() as u32) };
 }
 
@@ -98,8 +103,17 @@ pub extern "C" fn on_player_chat(
     message_ptr: *const u8,
     message_len: u32,
 ) -> u32 {
-    let _ = (player_id, message_ptr, message_len);
-    1 // always allow
+    let msg = read_message(message_ptr, message_len);
+    if msg == b"!pvp" {
+        let on = PVP_ENABLED.fetch_not(Ordering::Relaxed);
+        if on {
+            announce(b"PvP OFF: friendly fire blocked", player_id);
+        } else {
+            announce(b"PvP ON: player damage enabled", player_id);
+        }
+        return 0; // consume the command, don't relay it
+    }
+    1 // relay normal chat
 }
 
 /// Object created.
@@ -151,9 +165,12 @@ pub extern "C" fn on_actor_value_change(actor_id: u64, index: u32, value: f32) {
 
 /// Hit event (combat).
 #[no_mangle]
-pub extern "C" fn on_hit(target_id: u64, attacker_id: u64, limb: u32, damage: f32) -> u32 {
-    let _ = (target_id, attacker_id, limb, damage);
-    1 // allow all hits
+pub extern "C" fn on_hit(target_id: u64, attacker_id: u64, _limb: u32, _damage: f32) -> u32 {
+    // Friendly fire rule: when PvP is off, block player-vs-player hits.
+    if !PVP_ENABLED.load(Ordering::Relaxed) && is_player(target_id) && is_player(attacker_id) {
+        return 0; // blocked
+    }
+    1 // allow (NPC hits, or PvP on)
 }
 
 /// Item equipped/unequipped.
@@ -177,3 +194,56 @@ pub extern "C" fn on_game_time_change(year: u32, month: u32, day: u32, hour: u32
 // on_dialogue_choice
 //
 // ponytail: add as needed for specific game modes.
+
+// ── PvP toggle (game-mode rule) ─────────────────────────────────
+//
+// Chat command `!pvp` flips PvP: when off (default), player-vs-player
+// hits are blocked (on_hit returns 0); NPC hits pass through. Players are
+// tracked by id so the rule only applies to player targets/attackers.
+
+use core::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+
+/// PvP enabled flag (default off — friendly fire blocked).
+static PVP_ENABLED: AtomicBool = AtomicBool::new(false);
+/// Player ids seen this session (freeroam-sized table).
+static PLAYERS: [AtomicU64; 16] = {
+    const Z: AtomicU64 = AtomicU64::new(0);
+    [Z; 16]
+};
+
+fn read_message(ptr: *const u8, len: u32) -> &'static [u8] {
+    // Copy the message into a static scratch buffer (the host memory is
+    // only valid during the call).
+    static mut BUF: [u8; 256] = [0; 256];
+    unsafe {
+        let n = (len as usize).min(BUF.len());
+        core::ptr::copy_nonoverlapping(ptr, BUF.as_mut_ptr(), n);
+        &BUF[..n]
+    }
+}
+
+fn is_player(id: u64) -> bool {
+    PLAYERS.iter().any(|p| p.load(Ordering::Relaxed) == id)
+}
+
+fn register_player(id: u64) {
+    for slot in PLAYERS.iter() {
+        if slot.load(Ordering::Relaxed) == 0 {
+            slot.store(id, Ordering::Relaxed);
+            return;
+        }
+    }
+}
+
+fn unregister_player(id: u64) {
+    for slot in PLAYERS.iter() {
+        if slot.load(Ordering::Relaxed) == id {
+            slot.store(0, Ordering::Relaxed);
+            return;
+        }
+    }
+}
+
+fn announce(msg: &[u8], player_id: u64) {
+    unsafe { ui_message(player_id, msg.as_ptr(), msg.len() as u32) };
+}
