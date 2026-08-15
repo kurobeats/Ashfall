@@ -45,10 +45,10 @@ mod tests {
 
     #[test]
     fn overlong_rejected() {
-        let long = "x".repeat(MAX_CHAT_LENGTH as usize + 1);
+        let long = "x".repeat(MAX_CHAT_LENGTH + 1);
         assert!(handle_chat(CachedString::Plain(long)).is_none());
         // at the limit is fine
-        let at_limit = "x".repeat(MAX_CHAT_LENGTH as usize);
+        let at_limit = "x".repeat(MAX_CHAT_LENGTH);
         assert!(handle_chat(CachedString::Plain(at_limit)).is_some());
     }
 }
