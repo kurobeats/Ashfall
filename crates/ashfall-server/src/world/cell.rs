@@ -179,42 +179,41 @@ mod tests {
     }
 }
 
+#[test]
+fn context_new_and_center() {
+    let c = CellContext::new(CellGrid::encode_cell(0x1, 5, 5));
+    assert_eq!(c.center(), CellGrid::encode_cell(0x1, 5, 5));
+    assert_eq!(c.cells.len(), 9);
+}
 
-    #[test]
-    fn context_new_and_center() {
-        let c = CellContext::new(CellGrid::encode_cell(0x1, 5, 5));
-        assert_eq!(c.center(), CellGrid::encode_cell(0x1, 5, 5));
-        assert_eq!(c.cells.len(), 9);
-    }
+#[test]
+fn context_update_only_on_change() {
+    let mut c = CellContext::new(CellGrid::encode_cell(0x1, 5, 5));
+    assert!(!c.update(CellGrid::encode_cell(0x1, 5, 5))); // same center
+    assert!(c.update(CellGrid::encode_cell(0x1, 6, 5))); // moved
+    assert_eq!(c.center(), CellGrid::encode_cell(0x1, 6, 5));
+}
 
-    #[test]
-    fn context_update_only_on_change() {
-        let mut c = CellContext::new(CellGrid::encode_cell(0x1, 5, 5));
-        assert!(!c.update(CellGrid::encode_cell(0x1, 5, 5))); // same center
-        assert!(c.update(CellGrid::encode_cell(0x1, 6, 5))); // moved
-        assert_eq!(c.center(), CellGrid::encode_cell(0x1, 6, 5));
-    }
+#[test]
+fn context_membership() {
+    let mut c = CellContext::new(CellGrid::encode_cell(0x1, 5, 5));
+    assert!(c.contains(CellGrid::encode_cell(0x1, 4, 4))); // neighbor
+    assert!(!c.contains(CellGrid::encode_cell(0x2, 5, 5))); // other world
+    c.update(CellGrid::encode_cell(0x1, 10, 10));
+    assert!(!c.contains(CellGrid::encode_cell(0x1, 5, 5))); // old cell gone
+    assert!(c.contains(CellGrid::encode_cell(0x1, 11, 11)));
+}
 
-    #[test]
-    fn context_membership() {
-        let mut c = CellContext::new(CellGrid::encode_cell(0x1, 5, 5));
-        assert!(c.contains(CellGrid::encode_cell(0x1, 4, 4))); // neighbor
-        assert!(!c.contains(CellGrid::encode_cell(0x2, 5, 5))); // other world
-        c.update(CellGrid::encode_cell(0x1, 10, 10));
-        assert!(!c.contains(CellGrid::encode_cell(0x1, 5, 5))); // old cell gone
-        assert!(c.contains(CellGrid::encode_cell(0x1, 11, 11)));
+#[test]
+fn context_diff_enter_leave() {
+    let a = CellContext::new(CellGrid::encode_cell(0x1, 5, 5));
+    let b = CellContext::new(CellGrid::encode_cell(0x1, 6, 5));
+    let (enter, leave) = a.diff(&b);
+    // moving east: enter the new east column cells, leave the west ones
+    assert!(!enter.is_empty());
+    assert!(!leave.is_empty());
+    // a cell that left must not be in enter
+    for c in &leave {
+        assert!(!enter.contains(c));
     }
-
-    #[test]
-    fn context_diff_enter_leave() {
-        let a = CellContext::new(CellGrid::encode_cell(0x1, 5, 5));
-        let b = CellContext::new(CellGrid::encode_cell(0x1, 6, 5));
-        let (enter, leave) = a.diff(&b);
-        // moving east: enter the new east column cells, leave the west ones
-        assert!(!enter.is_empty());
-        assert!(!leave.is_empty());
-        // a cell that left must not be in enter
-        for c in &leave {
-            assert!(!enter.contains(c));
-        }
-    }
+}
