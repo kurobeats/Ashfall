@@ -717,8 +717,35 @@ pub fn get_ref_count(ref_id: u32) -> u32 {
 
 /// Kill an actor (direct death, bypasses damage).
 pub fn kill_actor(ref_id: u32, killer_id: u32, limb: i8, cause: i8) {
-    let _ = (ref_id, killer_id, limb, cause);
-    // TODO: Actor::Kill() via GECK opcode
+    // Classic FO3 only (2026-08-14o): replicate the KillActor command
+    // handler (0x522030) — engine Kill = 0x71AC50(actor, killer, 0.0),
+    // then death processing 0x71C280(actor, cause, limb, killer) (arg
+    // order from the handler's push sequence; KillActor signature =
+    // (Killer, DismemberLimb, CauseOfDeath)). FNV Kill differs — no-op
+    // until re-derived.
+    if crate::hooks::is_fnv() {
+        return;
+    }
+    unsafe {
+        let actor = crate::hooks::vtable::lookup_form_by_id(ref_id);
+        if actor.is_null() {
+            return;
+        }
+        let killer = crate::hooks::vtable::lookup_form_by_id(killer_id);
+        let _: u32 = crate::hooks::address::call_thiscall_2::<usize, f32, u32>(
+            0x71AC50,
+            actor,
+            killer as usize,
+            0.0,
+        );
+        let _: u32 = crate::hooks::address::call_thiscall_3::<u32, u32, u32, u32>(
+            0x71C280,
+            actor,
+            cause as u32,
+            limb as u32,
+            killer as u32,
+        );
+    }
 }
 
 /// Apply damage to an actor value.
