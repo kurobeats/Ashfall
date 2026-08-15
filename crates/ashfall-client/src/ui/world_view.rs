@@ -50,12 +50,56 @@ pub fn draw_world(
         if !rect.expand(8.0).contains(p) {
             continue; // off-viewport
         }
-        let color = match registry.get(id) {
-            Some(ClientObject::Player { .. }) => Color32::from_rgb(90, 200, 120),
-            Some(ClientObject::Actor { .. }) => Color32::from_rgb(220, 90, 90),
-            Some(ClientObject::Item { .. }) => Color32::from_rgb(90, 150, 220),
-            _ => Color32::from_rgb(150, 150, 150),
+        // (color, health for bar, dead flag, name label)
+        let (color, health, dead, name) = match registry.get(id) {
+            Some(ClientObject::Player { name, health, .. }) => {
+                (Color32::from_rgb(90, 200, 120), Some(*health), false, Some(name.clone()))
+            }
+            Some(ClientObject::Actor { health, dead, .. }) => {
+                (Color32::from_rgb(220, 90, 90), Some(*health), *dead, None)
+            }
+            Some(ClientObject::Item { .. }) => (Color32::from_rgb(90, 150, 220), None, false, None),
+            _ => (Color32::from_rgb(150, 150, 150), None, false, None),
         };
-        painter.circle_filled(p, 3.0, color);
+        let dot = if dead {
+            Color32::from_rgb(90, 90, 90)
+        } else {
+            color
+        };
+        painter.circle_filled(p, 3.0, dot);
+        // Health bar for actors/players (ratio against the default 100 max).
+        if let Some(h) = health {
+            let ratio = (h / 100.0).clamp(0.0, 1.0);
+            let bar_w = 16.0_f32;
+            let bar_h = 2.0_f32;
+            let bar_origin = p + egui::vec2(-bar_w / 2.0, 5.0);
+            let bg = egui::Rect::from_min_size(bar_origin, egui::vec2(bar_w, bar_h));
+            painter.rect_filled(bg, 1.0, Color32::from_rgb(40, 40, 40));
+            if !dead {
+                let fill = (bar_w * ratio).max(0.0);
+                let col = if ratio > 0.5 {
+                    Color32::from_rgb(80, 200, 80)
+                } else if ratio > 0.25 {
+                    Color32::from_rgb(220, 200, 60)
+                } else {
+                    Color32::from_rgb(220, 60, 60)
+                };
+                painter.rect_filled(
+                    egui::Rect::from_min_size(bar_origin, egui::vec2(fill, bar_h)),
+                    1.0,
+                    col,
+                );
+            }
+        }
+        // Player name label below the bar.
+        if let Some(n) = name {
+            painter.text(
+                p + egui::vec2(0.0, 9.0),
+                egui::Align2::CENTER_TOP,
+                n,
+                egui::FontId::proportional(9.0),
+                Color32::from_rgb(200, 200, 210),
+            );
+        }
     }
 }

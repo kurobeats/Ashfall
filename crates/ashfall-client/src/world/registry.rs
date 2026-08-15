@@ -337,3 +337,43 @@ mod tests {
     }
 }
 
+
+    #[test]
+    fn test_actor_health_syncs_from_actor_value_events() {
+        let mut reg = ClientRegistry::new();
+        let id = NetworkID::new(11);
+        reg.apply_packet(&Packet::ActorNew {
+            id,
+            ref_id: 0x100,
+            base_id: 0x200,
+            values: Default::default(),
+            base_values: Default::default(),
+            race: 0,
+            age: 0,
+            idle: 0,
+            moving: 0,
+            moving_xy: 0,
+            weapon: 0,
+            female: false,
+            alerted: false,
+            sneaking: false,
+            dead: false,
+            death_limbs: 0,
+            death_cause: 0,
+            scale: 1.0,
+        });
+        // object type Actor: health defaults to 100 via the values map.
+        assert!(matches!(reg.objects.get(&id), Some(ClientObject::Actor { health, .. }) if *health == 100.0));
+        // server relays a remote actor-value update (index 0x14 = health).
+        reg.apply_packet(&Packet::UpdateActorValue { id, base: false, index: 0x14, value: 37.5 });
+        match reg.objects.get(&id).unwrap() {
+            ClientObject::Actor { health, .. } => assert_eq!(*health, 37.5),
+            _ => panic!("expected actor"),
+        }
+        // a non-health index must not touch health.
+        reg.apply_packet(&Packet::UpdateActorValue { id, base: false, index: 0x29, value: 10.0 });
+        match reg.objects.get(&id).unwrap() {
+            ClientObject::Actor { health, .. } => assert_eq!(*health, 37.5),
+            _ => panic!("expected actor"),
+        }
+    }
