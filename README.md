@@ -143,6 +143,14 @@ lives in [docs/impl-plan.md](./docs/impl-plan.md). Recent highlights:
 - A working bridge→client event pipeline (the co-op loop's transport)
 - NPC discovery via the engine's actor-processing gate + owned-NPC state
   reporting + remote-NPC application (the full sync loop, GOG-mapped)
+- Actor-value getters/setters wired for both games (2026-08-14) — the
+  engine's command-table handlers revealed the real AV access (FO3
+  ActorValueOwner at +0x9C, FNV at +0xA4, vtable slot 3 GetActorValueF;
+  SetActorValue delta via Actor vtable +0x3A0/+0x3A4), so health/DR/DT
+  now read and set for real; the client world view shows health bars +
+  player names from that data
+- Kill relay wired (FO3 engine Kill 0x71AC50 + death processing
+  0x71C280) — remote deaths apply locally
 - Verified ESM import for both games + all DLC (real GOG binaries)
 - Live Proton testing: Steam respawn-disable patch applied and verified on
   the game host
@@ -178,9 +186,11 @@ lives in [docs/impl-plan.md](./docs/impl-plan.md). Recent highlights:
   0x1202954 (canary XOR now `ebp`, not `esp`) + delegator fn 0x405E70.
   Remaining engine-bound OP stubs: SET_NAME, PLAY_SOUND's engine call,
   PLACE_AT_ME.
-- **Per-frame player hook** — wired for FNV (0x86B386 main-loop hook) and
-  FO3 classic (0x6EEB2F); Steam/Anniversary per-frame + live verification
-  remain
+- **Per-frame player hook** — wired for all three builds: FNV
+  (0x86B386), FO3 classic (0x6EEB2F), and Steam/Anniversary (0x9B3D77,
+  re-derived 2026-08-14 via the respawn-struct frame-body twin; the hook
+  derefs the SteamStub IAT slot so it's ASLR-safe). Live verification on
+  the game host remains
 - **3D client view** — today the client shows a top-down projection; the
   game window is the real view
 - **Windows-native client** — currently Linux-only (the bridge DLL already
