@@ -298,3 +298,66 @@ fn dispatch(frame: &ashfall_core::event::PipeFrame) -> Vec<u8> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::{LazyLock, Mutex};
+
+    static TEST_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+
+    #[test]
+    fn pipe_command_roundtrip() {
+        let frame = encode_pipe_command(0x42, crate::commands::opcodes::OP_GET_POS, &[0xAA; 8]);
+        // split_frames should yield one frame, opcode COMMAND, key 0x42
+        let (mut frames, _) = ashfall_core::event::split_frames(&frame);
+        assert_eq!(frames.len(), 1);
+        let f = frames.remove(0);
+        assert_eq!(f.opcode, PIPE_OP_COMMAND);
+        // payload after the frame header: [func:4][count:1][params...]
+        assert_eq!(f.payload[0..4], 0x42u32.to_le_bytes()); // key
+        assert_eq!(f.payload[4..8], crate::commands::opcodes::OP_GET_POS.to_le_bytes()); // func
+        assert_eq!(f.payload[8], 8); // param count
+        assert_eq!(&f.payload[9..], &[0xAA; 8]);
+    }
+
+    #[test]
+    fn pipe_return_roundtrip() {
+        let result = vec![1, 2, 3, 4];
+        let frame = encode_pipe_return(0x7F, &result);
+        let decoded = decode_pipe_return(&frame).expect("decodable");
+        assert_eq!(decoded.0, PIPE_OP_RETURN);
+        assert_eq!(decoded.1, 0x7F);
+        assert_eq!(decoded.2, result);
+    }
+
+    #[test]
+    fn decode_rejects_wrong_opcode_or_short() {
+        let bad = ashfall_core::event::encode_frame(PIPE_OP_EVENT, &[0; 4]);
+        assert!(decode_pipe_return(&bad).is_none());
+        assert!(decode_pipe_return(&[]).is_none());
+    }
+
+    #[test]
+    fn tracked_actor_set_add_remove_snapshot() {
+        let _g = TEST_LOCK.lock().unwrap();
+        reset_tracked();
+        track_actor(0x100);
+        track_actor(0x200);
+        track_actor(0x100); // dedupe
+        assert_eq!(tracked_actors(), vec![0x100, 0x200]);
+        untrack_actor(0x100);
+        assert_eq!(tracked_actors(), vec![0x200]);
+        reset_tracked();
+        assert!(tracked_actors().is_empty());
+    }
+
+    #[test]
+    fn player_state_due_throttles_to_10hz() {
+        let _g = TEST_LOCK.lock().unwrap();
+        // first call is due
+        assert!(report_player_state_due().is_some());
+        // immediate second call is throttled
+        assert!(report_player_state_due().is_none());
+    }
+}
