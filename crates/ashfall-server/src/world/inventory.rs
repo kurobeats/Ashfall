@@ -54,3 +54,45 @@ impl Inventory {
             .copied()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn map(pairs: &[(u64, u32)]) -> HashMap<NetworkID, u32> {
+        pairs
+            .iter()
+            .map(|(id, base)| (NetworkID::new(*id), *base))
+            .collect()
+    }
+
+    #[test]
+    fn add_dedupes_remove_contains() {
+        let mut items = vec![];
+        let a = NetworkID::new(1);
+        Inventory::add(&mut items, a);
+        Inventory::add(&mut items, a); // dedupe
+        assert_eq!(items.len(), 1);
+        assert!(Inventory::contains(&items, a));
+        assert!(Inventory::remove(&mut items, a));
+        assert!(!Inventory::remove(&mut items, a)); // already gone
+        assert!(!Inventory::contains(&items, a));
+    }
+
+    #[test]
+    fn count_and_find_by_base() {
+        let m = map(&[(1, 0x100), (2, 0x100), (3, 0x200)]);
+        let items = vec![NetworkID::new(1), NetworkID::new(2), NetworkID::new(3)];
+        assert_eq!(Inventory::count_by_base(&items, 0x100, &m), 2);
+        assert_eq!(Inventory::find_by_base(&items, 0x100, &m), Some(NetworkID::new(1)));
+        assert_eq!(Inventory::find_by_base(&items, 0x999, &m), None);
+    }
+
+    #[test]
+    fn empty_container() {
+        let m = HashMap::new();
+        assert_eq!(Inventory::count_by_base(&[], 0x100, &m), 0);
+        assert_eq!(Inventory::find_by_base(&[], 0x100, &m), None);
+        assert!(!Inventory::contains(&[], NetworkID::new(1)));
+    }
+}

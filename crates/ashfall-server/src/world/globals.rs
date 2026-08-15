@@ -46,3 +46,42 @@ impl Default for GlobalState {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn globals_default_missing() {
+        let g = GlobalState::new();
+        assert_eq!(g.get(1), None);
+    }
+
+    #[test]
+    fn globals_set_get_snapshot() {
+        let g = GlobalState::new();
+        g.set(1, 100);
+        g.set(2, -5);
+        assert_eq!(g.get(1), Some(100));
+        assert_eq!(g.get(2), Some(-5));
+        let mut all = g.all();
+        all.sort();
+        assert_eq!(all, vec![(1, 100), (2, -5)]);
+    }
+
+    #[test]
+    fn globals_overwrite() {
+        let g = GlobalState::new();
+        g.set(1, 1);
+        g.set(1, 2);
+        assert_eq!(g.get(1), Some(2));
+    }
+
+    #[test]
+    fn globals_clone_shares() {
+        let g = GlobalState::new();
+        let g2 = g.clone();
+        g.set(9, 42);
+        assert_eq!(g2.get(9), Some(42));
+    }
+}
