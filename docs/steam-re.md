@@ -758,3 +758,14 @@ E8 + NOP tail), and the hook calls the original through the IAT slot
 per frame. Byte-guarded, no-op on classic/FNV. Main-loop structure mirrors
 the classic: menu/pause check via global 0x123A93C `[+0x49]`, then the
 frame work.
+
+**2026-08-14q — kill_actor wired (classic); handler inventory complete.**
+KillActor command handler (entry 0xF56130, opcode 0x108B) = engine Kill
+0x71AC50(actor, killer, 0.0) + death processing 0x71C280(actor, cause,
+limb, killer); KillActor signature (Killer, DismemberLimb, CauseOfDeath).
+`kill_actor` wired for FO3 (FNV no-op — differs). Classic handler inventory
+now complete: ForceActorValue 0x521F20, GetActorValue 0x521760 →
+0x50EF90, KillActor 0x522030, PlaySound 0x523590 (SoundManager 0x11790C8
+→ 0xBCFBB0 + 0xBD00C0 — intricate sound-instance flow, OP_PLAY_SOUND
+stays stubbed), PlaceAtMe 0x53CA20 → 0x539280, PlayGroup 0x532690.
+FNV: ForceActorValue 0x5BE190, PlaySound 0x5C21E0.
