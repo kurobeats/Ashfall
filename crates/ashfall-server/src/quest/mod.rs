@@ -61,3 +61,45 @@ impl Default for QuestManager {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn stage_defaults_zero_and_updates() {
+        let q = QuestManager::new();
+        assert_eq!(q.get_stage(0x100), 0);
+        q.set_stage(0x100, 3);
+        assert_eq!(q.get_stage(0x100), 3);
+    }
+
+    #[test]
+    fn stage_sync_snapshot() {
+        let q = QuestManager::new();
+        q.set_stage(0xAAA, 1);
+        q.set_stage(0xBBB, 2);
+        let mut stages = q.all_stages();
+        stages.sort();
+        assert_eq!(stages, vec![(0xAAA, 1), (0xBBB, 2)]);
+    }
+
+    #[test]
+    fn flag_defaults_false_and_updates() {
+        let q = QuestManager::new();
+        assert!(!q.get_flag(7));
+        q.set_flag(7, true);
+        assert!(q.get_flag(7));
+        q.set_flag(7, false);
+        assert!(!q.get_flag(7));
+    }
+
+    #[test]
+    fn clone_shares_state() {
+        // Clone shares the Arc'd maps — script and server agree.
+        let q = QuestManager::new();
+        let q2 = q.clone();
+        q.set_stage(0x1, 5);
+        assert_eq!(q2.get_stage(0x1), 5);
+    }
+}
