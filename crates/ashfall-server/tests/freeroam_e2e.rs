@@ -5,6 +5,7 @@
 //!   on_server_init sets weather/time, on_client_authenticate gates names,
 //!   on_spawn private-chats the player.
 
+use ashfall_core::id::NetworkID;
 use ashfall_core::protocol::transport::CHANNEL_RELIABLE_FLAG;
 use ashfall_core::protocol::Packet;
 use ashfall_server::config::{DatabaseSection, ScriptSection, ServerConfig, ServerSection};
@@ -79,7 +80,7 @@ impl TestClient {
     }
 }
 
-async fn boot() -> (DedicatedServer, u16) {
+async fn boot_with_pvp(pvp_enabled: bool) -> (DedicatedServer, u16) {
     let seq = SEQ.fetch_add(1, Ordering::SeqCst);
     let wasm = freeroam_wasm().expect("freeroam.wasm built — run: cd scripts/freeroam && cargo build --release --target wasm32-unknown-unknown");
     let dir = std::env::temp_dir().join(format!(
@@ -107,7 +108,7 @@ async fn boot() -> (DedicatedServer, u16) {
             announce: "127.0.0.1".into(),
             master_port: port + 1,
             game_type: "fo3".into(),
-            pvp_enabled: false,
+            pvp_enabled,
             mods: Vec::new(),
         },
         scripts: ScriptSection { path: dir },
@@ -117,6 +118,10 @@ async fn boot() -> (DedicatedServer, u16) {
     let server = DedicatedServer::new(config).await.unwrap();
     tokio::time::sleep(Duration::from_millis(200)).await;
     (server, port)
+}
+
+async fn boot() -> (DedicatedServer, u16) {
+    boot_with_pvp(false).await
 }
 
 async fn run_with<F, O>(server: DedicatedServer, client: F) -> O
@@ -188,4 +193,94 @@ async fn test_real_freeroam_module_end_to_end() {
     };
 
     run_with(server, client).await;
+}
+
+/// Two-client PvP rule test: Alice hits Bob. While freeroam PvP is off
+/// (default), the script gate blocks the hit (Bob sees no ActorDamaged).
+/// After Alice runs `!pvp`, the same hit resolves (Bob receives the
+/// ActorDamaged broadcast — the sender is excluded from broadcasts).
+#[tokio::test]
+async fn test_freeroam_pvp_toggle_gates_player_hits() {
+    let _ = tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::INFO)
+        .try_init();
+    let (server, port) = boot_with_pvp(true).await;
+
+    let client = async {
+        let mut alice = TestClient::connect(port).await;
+        let mut bob = TestClient::connect(port).await;
+
+        // both players auth + spawn; capture ids
+        let alice_id = spawn_player(&mut alice, "Alice").await;
+        let bob_id = spawn_player(&mut bob, "Bob").await;
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let hit = |attacker: NetworkID, target: NetworkID| Packet::ActorHit {
+            target,
+            attacker,
+            limb: 0,
+            base_damage: 10.0,
+            flags: 0,
+            weapon_id: 0,
+            projectile: 0,
+        };
+
+        // PvP off (default): Alice -> Bob must be script-blocked. Bob sees
+        // nothing (the damage never resolves).
+        alice.send_reliable(&hit(alice_id, bob_id)).await;
+        let mut bob_saw_damage = false;
+        for _ in 0..12 {
+            if let Some(pkt) = bob.recv_packet().await {
+                if matches!(pkt, Packet::ActorDamaged { .. }) {
+                    bob_saw_damage = true;
+                }
+            }
+        }
+        assert!(!bob_saw_damage, "script blocked the hit while PvP off");
+
+        // Alice toggles PvP on.
+        alice
+            .send_reliable(&Packet::GameChat {
+                message: "!pvp".into(),
+            })
+            .await;
+        tokio::time::sleep(Duration::from_millis(150)).await;
+        // drain both sockets (toggle chat + join packets)
+        while alice.recv_packet().await.is_some() {}
+        while bob.recv_packet().await.is_some() {}
+
+        // Same hit again: now resolves, Bob receives ActorDamaged.
+        alice.send_reliable(&hit(alice_id, bob_id)).await;
+        let mut bob_saw_damage = false;
+        for _ in 0..20 {
+            if let Some(pkt) = bob.recv_packet().await {
+                if matches!(pkt, Packet::ActorDamaged { .. }) {
+                    bob_saw_damage = true;
+                    break;
+                }
+            }
+        }
+        assert!(
+            bob_saw_damage,
+            "hit resolved after !pvp (Bob saw ActorDamaged)"
+        );
+    };
+
+    run_with(server, client).await;
+}
+
+/// Auth a player and wait for their PlayerNew id.
+async fn spawn_player(sock: &mut TestClient, name: &str) -> NetworkID {
+    sock.send_reliable(&Packet::GameAuth {
+        name: name.into(),
+        password: String::new(),
+        version: ashfall_core::constants::DEDICATED_VERSION.into(),
+    })
+    .await;
+    for _ in 0..24 {
+        if let Some(Packet::PlayerNew { id, .. }) = sock.recv_packet().await {
+            return id;
+        }
+    }
+    panic!("player {name} did not spawn");
 }
