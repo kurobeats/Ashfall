@@ -158,6 +158,10 @@ pub fn install() {
     // FO3 classic per-frame player-state hook (0x6EEB2F frame-body call).
     // Byte-guarded — no-op on the Steam/Anniversary build (downgrade path).
     vaultmp::apply_fo3_frame_hook();
+    // FO3 Steam/Anniversary per-frame player-state hook (0x9B3D77
+    // main-loop call, re-derived 2026-08-14o via the respawn-struct
+    // frame-body twin). Byte-guarded — no-op on classic/FNV.
+    vaultmp::apply_steam_frame_hook();
     // TODO: locate TESObjectREFR vtable, patch all hooks.
     // For Proton: same VTable layout as Windows — Wine mirrors the binary exactly.
 }

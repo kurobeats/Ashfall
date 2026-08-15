@@ -837,6 +837,65 @@ pub fn apply_fo3_frame_hook() -> bool {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// Per-frame player-state hook (FO3 Steam/Anniversary — main loop)
+// ═══════════════════════════════════════════════════════════════
+//
+// The Steam (post-2023) main-loop frame body calls `[0xF241E4]` (a
+// kernel32 timer import, SteamStub-relocated IAT — adjacent to Sleep's
+// slot 0xF241E8) once per unpaused frame, comparing its result with the
+// respawn-struct timestamp (+0x10) at 0x9B3D83. Re-derived 2026-08-14o
+// via the frame-body twin `mov byte [0x123c5d4],1` at 0x9B3D92 (the
+// classic 0x6EEB50 respawn handling). Redirecting that call is the
+// per-frame hook; the hook calls the original through the IAT slot so it
+// works regardless of the import's ASLR-resolved address.
+
+/// Steam FO3 frame-hook site: `call [0xF241E4]` in the main-loop frame
+/// body (result compared with respawn-struct +0x10).
+#[cfg(target_arch = "x86")]
+pub const STEAM_FRAME_HOOK_SITE: usize = 0x009B_3D77;
+/// The SteamStub-relocated IAT slot (holds the resolved import address at
+/// load; the hook derefs it so no ASLR-sensitive constant is needed).
+#[cfg(target_arch = "x86")]
+const STEAM_FRAME_IAT_SLOT: usize = 0x00F2_41E4;
+/// Guard: `call [0xF241E4]` (6 bytes).
+#[cfg(target_arch = "x86")]
+const STEAM_FRAME_GUARD: [u8; 6] = [0xFF, 0x15, 0xE4, 0x41, 0xF2, 0x00];
+
+#[cfg(target_arch = "x86")]
+pub fn apply_steam_frame_hook() -> bool {
+    if crate::hooks::read_bytes(STEAM_FRAME_HOOK_SITE, 6) != STEAM_FRAME_GUARD {
+        return false; // not the Steam/Anniversary build at this site
+    }
+    unsafe {
+        unsafe extern "C" fn steam_frame_hook() -> u32 {
+            // call the original through the IAT slot (resolved at load)
+            let orig: unsafe extern "C" fn() -> u32 = unsafe {
+                std::mem::transmute(*(STEAM_FRAME_IAT_SLOT as *const usize))
+            };
+            let result = orig();
+            crate::network::report_player_state_due();
+            result
+        }
+        crate::hooks::memory::write_rel_call(
+            STEAM_FRAME_HOOK_SITE,
+            steam_frame_hook as *const () as usize,
+        );
+        // the original indirect call is 6 bytes; the redirect is 5 — NOP the tail
+        let tail = crate::hooks::memory::Patch::new(
+            (STEAM_FRAME_HOOK_SITE + 5) as *const u8,
+            &[0x90],
+        );
+        tail.apply();
+    }
+    true
+}
+
+#[cfg(not(target_arch = "x86"))]
+pub fn apply_steam_frame_hook() -> bool {
+    false // tests / x64 hosts — nothing to hook
+}
+
+// ═══════════════════════════════════════════════════════════════
 // Vaultmp behavior hooks — the 8 REQUIRED_HOOKS the recipe table needs
 // ═══════════════════════════════════════════════════════════════
 //
@@ -1167,6 +1226,34 @@ mod tests {
                 (0x400000..0x1200000).contains(&a),
                 "address 0x{a:x} outside FO3 image range"
             );
+        }
+    }
+
+    #[test]
+    fn steam_frame_hook_site_consistent() {
+        // The Steam frame-hook site + IAT slot must be in the image range,
+        // and the guard is a 6-byte `call [0xF241E4]` (FF 15 disp32) whose
+        // disp matches the IAT slot. (Constants are cfg(x86) — mirrored
+        // here for the non-x86 test host.)
+        #[cfg(target_arch = "x86")]
+        {
+            use super::{STEAM_FRAME_GUARD, STEAM_FRAME_HOOK_SITE, STEAM_FRAME_IAT_SLOT};
+            assert!((0x400000..0x1200000).contains(&STEAM_FRAME_HOOK_SITE));
+            assert!((0x400000..0x1200000).contains(&STEAM_FRAME_IAT_SLOT));
+            let disp = u32::from_le_bytes([
+                STEAM_FRAME_GUARD[2],
+                STEAM_FRAME_GUARD[3],
+                STEAM_FRAME_GUARD[4],
+                STEAM_FRAME_GUARD[5],
+            ]);
+            assert_eq!(disp as usize, STEAM_FRAME_IAT_SLOT);
+            assert_eq!(&STEAM_FRAME_GUARD[..2], &[0xFF, 0x15]);
+        }
+        // non-x86 host: verify the literal values stay in range
+        #[cfg(not(target_arch = "x86"))]
+        {
+            assert!((0x400000..0x1200000).contains(&0x009B_3D77usize));
+            assert!((0x400000..0x1200000).contains(&0x00F2_41E4usize));
         }
     }
 

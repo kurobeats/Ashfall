@@ -744,3 +744,17 @@ The static command tables exposed more:
   0x11790C8 → 0xBCFBB0, complex — OP_PLAY_SOUND stays stubbed), PlaceAtMe
   0x53CA20 (internal 0x539280), PlayGroup 0x532690. OP_PLACE_AT_ME is
   unused by server/client — left stubbed.
+
+**2026-08-14p — Steam/Anniversary per-frame hook re-derived + wired.**
+The last "Steam per-frame" gap is closed: found the Steam main-loop frame
+body via the respawn-struct write twin (`mov byte [0x123c5d4],1` at
+0x9B3D92 — the classic 0x6EEB50 pattern). The frame body's per-frame call
+is `call [0xF241E4]` at **0x9B3D77** — a SteamStub-relocated kernel32
+timer import (IAT slot 0xF241E4, adjacent to Sleep's 0xF241E8; the
+result is compared with the respawn-struct timestamp +0x10 at 0x9B3D83).
+`apply_steam_frame_hook()` redirects it (6-byte guard `FF 15 E4 41 F2 00`,
+E8 + NOP tail), and the hook calls the original through the IAT slot
+(ASLR-safe — no hardcoded resolved address) + `report_player_state_due()`
+per frame. Byte-guarded, no-op on classic/FNV. Main-loop structure mirrors
+the classic: menu/pause check via global 0x123A93C `[+0x49]`, then the
+frame work.
