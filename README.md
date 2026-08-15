@@ -167,10 +167,10 @@ lives in [docs/impl-plan.md](./docs/impl-plan.md). Recent highlights:
 - **NPC sync live** — the full loop is built and tested (discovery detours
   on both the classic and Steam builds; ownership, state sampling, remote
   application all wired). **Live 2026-08-15:** the event pipeline + respawn
-  patch work on the host, but the Steam AI-predicate detour (0x7F9B70) is a
-  prologue false-positive — installs but ~never fires — so Steam discovery
-  needs a re-derived site (classic 0x6FAE90 + FNV ActorProcessManager stay
-  as-is). See [docs/steam-re.md](./docs/steam-re.md)
+  patch work on the host; the first Steam AI-predicate site (0x7F9B70) was a
+  prologue false-positive (installs but ~never fires) — **re-derived 0x7DAF80**
+  (keeps the classic `56 8B F1` + +0x22C + singleton compare). Fire-rate
+  still unverified live. See [docs/steam-re.md](./docs/steam-re.md)
 - **Remaining Steam patch sites** — 2026-08-14: 6 more vaultmp behavior
   sites re-derived without the game — via the FalloutAnniversaryPatcher
   vcdiff (ai_fix1 0x5E99E2, get_activate_jmp 0x8D3BC8, delegator stub spot
@@ -201,9 +201,12 @@ lives in [docs/impl-plan.md](./docs/impl-plan.md). Recent highlights:
 - **Per-frame player hook** — wired for all three builds: FNV
   (0x86B386), FO3 classic (0x6EEB2F), and Steam/Anniversary (0x9B3D77,
   re-derived 2026-08-14 via the respawn-struct frame-body twin; the hook
-  derefs the SteamStub IAT slot so it's ASLR-safe). **Live 2026-08-15:**
-  the Steam site installs but never fires (zero player-state events, alive
-  or dead) — needs a real per-frame site; FNV + classic unverified live.
+  derefs the SteamStub IAT slot so it's ASLR-safe). **Static 2026-08-15:**
+  0x9B3D77 is confirmed inside the Steam `main()` (0x9B31A0, called from CRT
+  startup) — the hook DOES fire; the zero player-state events were
+  `get_actor_state` faulting on the unverified anim-data slot (0x1E4). A
+  pointer guard now lets the event through (pos/angle/health correct, anim
+  zero) until the real slot (classic 0x1EC / Steam 0x244) is pinned.
 - ~~**3D client view**~~ — explicitly out of scope: the game window IS the
   view (the client's top-down projection + health bars/names + server GUI
   are the companion HUD)

@@ -507,9 +507,13 @@ pub unsafe fn get_actor_state(ref_id: u32) -> (u32, u8, u8, u8, bool, bool) {
         return (0, 0, 0, 0, false, false);
     }
 
-    // Call VTable[0x01E4] → returns animation data pointer
+    // Call VTable[0x01E4] → returns animation data pointer.
+    // ponytail: the slot is unverified on Steam (the recompile reordered
+    // the early vtable; a wrong slot returns a small int, not a heap
+    // pointer). Guard the result so a wrong-slot call can't feed a garbage
+    // pointer into the field reads below (crash → no player-state events).
     let anim_data: *mut u8 = vcall_0(obj, VTBL_ACTOR_ANIM_DATA);
-    if anim_data.is_null() {
+    if anim_data.is_null() || (anim_data as usize) < 0x10000 {
         return (0, 0, 0, 0, false, false);
     }
 

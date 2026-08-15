@@ -17,7 +17,7 @@ pressure-vessel safe), stable across runs.
 | baseForm field | vtable 0x10 (WRONG) | **field +0x1C** | obj-field probe: +0x1C → form object with ID 0x7 (Player base) |
 | pos/angle/cell/scale/refID | fields | fields (+0x2C/0x30/0x34, +0x38, +0x3C, +0x0C) | live battery, game stable |
 | **Respawn disable** (patch sites) | 0x6D5965 / 0x78B230 | **0x9C43A5 / 0x8C9CE0→0x8C9D5D / 0x8C9D52** | semantic anchor (death-UI string → death flow) + probe-verified live; applied + behavior-verified 2026-08-08 |
-| **AI predicate** (actor-discovery detour) | 0x6FAE90 (`56 8B F1`) | **0x7F9B70** (`55 8B EC 51 57 8B F9`) | Steam re-derived 2026-08-13 from the flat dump via the `cmp [reg+0xFC],5/3` fingerprint (field survived the recompile). Structurally identical: `cmp byte [edi+0xF8],0`, state checks, player compare vs **0x123C674** (Steam PlayerCharacter singleton — classic 0x107A104), shared vtable slot +0x22C. Detour byte-guards both prologues and picks by signature (`ai_predicate_site`). ⚠️ **LIVE 2026-08-15: NOT the per-actor gate** — detour installs + trampoline chain byte-perfect (verified), but the site ~never executes (3 NPC events / 120s combat). Prologue false-positive; re-derive. |
+| **AI predicate** (actor-discovery detour) | 0x6FAE90 (`56 8B F1`) | **0x7DAF80** (`56 8B F1`) | Classic detour byte-guards `56 8B F1`. ⚠️ The first Steam re-derivation (0x7F9B70, `55 8B EC 51 57`) was a **prologue false-positive** — installs byte-perfect but ~never fires live (3 NPC events / 120s combat). **Re-derived 2026-08-15:** the real twin is **0x7DAF80** — keeps the classic frame-less thiscall prologue `56 8B F1`, calls vtable +0x22C (push 0), compares against singleton **0x123C674**, reads [actor+0x60]; sits 0x22 bytes past the vcdiff gap candidate 0x7DAF5E. Recompile changed return bool→int (0/1/0xC/table) and split the helper (0x7DAF50, 57 callers); only 2 call sites survive (rest inlined). Live fire-rate unverified. |
 | **PlayIdle stub** (anim_detour hook) | 0x73BB20 | **0x85E0A0** | byte-exact `c7 81 14 04 00 00 00 00 00 00 c3` (`mov dword [ecx+0x414],0; ret`), unique hit; same 11B method + padding shape. Re-derived 2026-08-14 |
 | **Lock fix** (disable vanilla lock-bypass) | 0x527F33 | **0x798B65** | 8B prefix match `74 02 88 08 6a 01 8b c8` + identical tail; vcdiff EXACT cover agrees. Re-derived 2026-08-14 |
 | **AI pause fix 1** (NOP 2B) | 0x72051E | **0x5E99E2** | vcdiff EXACT: `74 15 83 f8 03 74 10` → `74 1e 83 f8 03 74` (JE + cmp eax,3 + JE shape survived). **live-verified 2026-08-15**. 2026-08-14b |
@@ -823,3 +823,53 @@ when collection actually happens).
 Next: re-derive the Steam AI-predicate + per-frame sites statically
 (battlecruiser), then live-verify. Remaining patch groups still need Steam
 twins: fire_fix, match_race, place_at_me, ai_fix2/3/4.
+
+## Session 2026-08-15b — static re-derivation (battlecruiser, no game)
+
+Follow-up to the live session's two "installs but never fires" findings.
+Static work on `steam-fo3.bin` (flat, VA = file_off + 0x400000) + GOG
+`Fallout3.exe`.
+
+**AI predicate — RE-DERIVED: 0x7DAF80.**
+The 0x7F9B70 prologue match was a false positive (that function reads
+`[edi+0xF8]`, references global 0x12399C8 — NOT the player singleton). The
+classic predicate (0x6FAE90) is a 137-byte bool thiscall (`56 8B F1`,
+11 callers incl. HighProcess). Its Steam twin keeps the EXACT prologue
+`56 8B F1` and the +0x22C(push 0) vtable call + `cmp esi,[0x123C674]`
+singleton compare + [actor+0x60] sub-object — found at **0x7DAF80**
+(0x22 bytes past the vcdiff gap candidate 0x7DAF5E, which pointed at the
+tail of helper 0x7DAF50). The recompile restructured it: bool→int return
+(0 / 1 / 0xC for player / table lookup), and split the sub-object logic into
+helper 0x7DAF50 (57 callers). Only 2 call sites survive (0x63D1CC, 0x75EB08);
+the other 9 classic callers inlined it. Wired into `STEAM_AI_PREDICATE`
+(byte-guard `56 8B F1`, now 3 bytes like classic). **Live fire-rate
+unverified** — if the 2 surviving callers aren't per-actor, fall back to the
+HighProcess twin.
+
+**vtable slot map (classic 0xE16B10 vs Steam 0xF938FC):**
+- The AI-predicate slots **did NOT shift**: +0x214/0x22C/0x230/0x234 hold
+  recompiled twins at the SAME byte offsets (0x6F9EA0→0x75C6B0,
+  0x787580→0x8B8AF0, 0x70C940→0x75DC50, 0x70C970→0x8992A0).
+- The +0x58 shift is region-specific (anim 0x1E8/0x1EC/0x1F0 →
+  0x240/0x244/0x248; 0x228→0x280; 0x2D4→0x32C; lock 0xA0→0xFC).
+- classic +0x1E4 = 0x76FE20 (FPU math, NOT an anim pointer getter) — the
+  bridge's `VTBL_ACTOR_ANIM_DATA` (vaultmp "index 121") is suspect. The
+  real pointer-returning anim getters are 0x1EC (0x76CD00, returns
+  [actor+0x5e8]/[actor+0x1a0]) and 0x1F0 (0x76FED0).
+
+**Frame hook — site is CORRECT; the blocker was get_actor_state.**
+0x9B3D77 sits inside 0x9B31A0 = the Steam `main()` (classic `main` =
+0x6EE300, 3385B; Steam main called from CRT startup 0xD7A4DC). The frame
+body is the classic twin (inlined pause check `cmp byte [eax+0x49],0` +
+`call [0xF241E4]` + respawn-flag write `mov eax,[0x123C5D4]; mov byte[eax],1`
+— that flag write appears ONCE in the whole dump, confirming this is the
+main loop). So the hook fires every frame. The zero player-state events were
+`get_actor_state` calling the wrong/uncertain anim-data slot (0x1E4) → the
+wrong function returns a small int → the anim field reads fault → SEH
+swallows it → no event. Added a result-pointer guard (`< 0x10000` → return
+defaults) so `report_player_state` completes (pos/angle/health correct, anim
+state zero) until the real anim-data slot is pinned. **The correct slot is
+likely classic 0x1EC (Steam 0x244) — needs live OP_PROBE_FORM before wiring.**
+
+Next: live-verify 0x7DAF80 fire-rate + OP_PROBE_FORM the anim-data slot
+(0x1EC/0x244) on the game host.

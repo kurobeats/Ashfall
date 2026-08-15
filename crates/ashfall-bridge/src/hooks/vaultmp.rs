@@ -621,17 +621,21 @@ pub const AI_PREDICATE_FO3_CLASSIC: usize = 0x006F_AE90;
 #[cfg(target_arch = "x86")]
 const AI_PREDICATE_PROLOGUE: [u8; 3] = [0x56, 0x8B, 0xF1];
 
-/// Steam/Anniversary AI predicate — re-derived 2026-08-13 from the flat
-/// dump: entry `55 8B EC 51 57 8B F9` (push ebp; mov ebp,esp; push edi;
-/// mov edi,ecx — actor in edi, the classic's esi twin), same structure:
-/// `cmp byte [edi+0xF8],0` + `cmp [edi+0xFC],5/3` state checks + player
-/// compare against **0x123C674** + shared vtable slot +0x22C. Real VA
-/// (flat offset = VA − 0x400000; r2 PE-parses the dump +0xC00).
+/// Steam/Anniversary AI predicate — re-derived 2026-08-15 (static, after the
+/// 0x7F9B70 prologue match proved a false positive that never fires live).
+/// The REAL twin keeps the classic frame-less thiscall prologue
+/// `56 8B F1` (push esi; mov esi, ecx), calls vtable +0x22C (push 0),
+/// compares the actor against the player singleton **0x123C674**, and
+/// reads the [actor+0x60] sub-object — byte-identical markers to classic
+/// 0x6FAE90. Found 0x22 bytes past the vcdiff gap candidate 0x7DAF5E.
+/// NOTE: the recompile changed the return bool→int (0/1/0xC/table) and
+/// split the helper (0x7DAF50); 2 call sites survive (the rest inlined).
+/// Live fire-rate unverified — if sparse, fall back to the HighProcess twin.
 #[cfg(target_arch = "x86")]
-pub const STEAM_AI_PREDICATE: usize = 0x007F_9B70;
-/// Expected prologue: `55 8B EC 51 57`.
+pub const STEAM_AI_PREDICATE: usize = 0x007D_AF80;
+/// Expected prologue: `56 8B F1`.
 #[cfg(target_arch = "x86")]
-const STEAM_AI_PREDICATE_PROLOGUE: [u8; 5] = [0x55, 0x8B, 0xEC, 0x51, 0x57];
+const STEAM_AI_PREDICATE_PROLOGUE: [u8; 3] = [0x56, 0x8B, 0xF1];
 
 /// The Rust collector called by the thunk (cdecl: actor on the stack).
 #[no_mangle]
@@ -681,7 +685,7 @@ fn ai_predicate_site() -> Option<usize> {
     if read_bytes(AI_PREDICATE_FO3_CLASSIC, 3) == AI_PREDICATE_PROLOGUE {
         return Some(AI_PREDICATE_FO3_CLASSIC);
     }
-    if read_bytes(STEAM_AI_PREDICATE, 5) == STEAM_AI_PREDICATE_PROLOGUE {
+    if read_bytes(STEAM_AI_PREDICATE, 3) == STEAM_AI_PREDICATE_PROLOGUE {
         return Some(STEAM_AI_PREDICATE);
     }
     None
