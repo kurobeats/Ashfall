@@ -105,3 +105,58 @@ impl Default for CombatState {
 }
 
 pub mod resolver;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn formula_minimum_one_damage() {
+        // 100% DR + huge DT still lands the 1-damage floor.
+        let d = DamageFormula::calculate(50.0, 1.0, 0.85, 999.0, 1.0);
+        assert!((d - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn formula_applies_dr_then_dt() {
+        // 100 dmg, head (2.0), 0.5 DR, 10 DT: (100*2)*(0.5) - 10 = 90
+        let d = DamageFormula::calculate(100.0, 2.0, 0.5, 10.0, 1.0);
+        assert!((d - 90.0).abs() < 1e-3);
+    }
+
+    #[test]
+    fn formula_crit_scales_before_dr() {
+        // 100 dmg, crit 2.0, 0.25 DR: (100*2)*0.75 = 150
+        let d = DamageFormula::calculate(100.0, 1.0, 0.25, 0.0, 2.0);
+        assert!((d - 150.0).abs() < 1e-3);
+    }
+
+    #[test]
+    fn dr_capped_at_85_percent() {
+        // DR beyond 0.85 clamps to 0.85.
+        let d = DamageFormula::calculate(100.0, 1.0, 10.0, 0.0, 1.0);
+        assert!((d - 15.0).abs() < 1e-3);
+    }
+
+    #[test]
+    fn limb_multiplier_table() {
+        assert_eq!(DamageFormula::limb_multiplier(0), 1.0); // torso
+        assert_eq!(DamageFormula::limb_multiplier(1), 2.0); // head
+        assert_eq!(DamageFormula::limb_multiplier(4), 0.5); // leg
+        assert_eq!(DamageFormula::limb_multiplier(99), 1.0); // unknown → torso
+    }
+
+    #[test]
+    fn compute_dr_sums_and_caps() {
+        assert!((DamageFormula::compute_dr(&[0.2, 0.3]) - 0.5).abs() < 1e-6);
+        assert!((DamageFormula::compute_dr(&[0.9, 0.9]) - 0.85).abs() < 1e-6);
+        assert_eq!(DamageFormula::compute_dr(&[]), 0.0);
+    }
+
+    #[test]
+    fn headshot_fatal_threshold() {
+        assert!(DamageFormula::is_headshot_fatal(100.0, 50.0));
+        assert!(!DamageFormula::is_headshot_fatal(50.0, 100.0));
+        assert!(DamageFormula::is_headshot_fatal(50.0, 50.0)); // exact
+    }
+}
