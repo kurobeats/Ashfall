@@ -442,3 +442,78 @@ impl std::ops::DerefMut for Player {
         &mut self.actor
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn actor_value_defaults_and_sets() {
+        let mut a = Actor::new(NetworkID::new(1), 0x100, 0x7, 0x1);
+        assert_eq!(a.get_value(0x14), 0.0); // missing → 0
+        a.set_value(0x14, 100.0, false);
+        assert_eq!(a.get_value(0x14), 100.0);
+        a.set_value(0x14, 50.0, false);
+        assert_eq!(a.get_value(0x14), 50.0);
+    }
+
+    #[test]
+    fn base_and_current_values_are_separate() {
+        let mut a = Actor::new(NetworkID::new(1), 0x100, 0x7, 0x1);
+        a.set_value(0x14, 100.0, true); // base
+        a.set_value(0x14, 40.0, false); // current
+        assert_eq!(a.get_value(0x14), 40.0); // get_value reads current
+        assert_eq!(a.base_values.get(&0x14), Some(&100.0));
+    }
+
+    #[test]
+    fn actor_new_packet_roundtrip_fields() {
+        let mut a = Actor::new(NetworkID::new(1), 0x100, 0x7, 0x1);
+        a.set_value(0x14, 100.0, false);
+        a.set_value(0x14, 100.0, true);
+        a.race = 0x123;
+        a.female = true;
+        a.dead = false;
+        a.death_limbs = 3;
+        a.death_cause = 2;
+        let pkt = a.to_new_packet();
+        match pkt {
+            Packet::ActorNew {
+                id,
+                ref_id,
+                base_id,
+                race,
+                female,
+                values,
+                base_values,
+                ..
+            } => {
+                assert_eq!(id, NetworkID::new(1));
+                assert_eq!(ref_id, 0x100);
+                assert_eq!(base_id, 0x7);
+                assert_eq!(race, 0x123);
+                assert!(female);
+                assert_eq!(values.get(&0x14), Some(&100.0));
+                assert_eq!(base_values.get(&0x14), Some(&100.0));
+            }
+            other => panic!("expected ActorNew, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn object_and_item_packets() {
+        let o = Object::new(NetworkID::new(1), 0x100, 0x7, 0x5);
+        assert!(matches!(o.to_new_packet(), Packet::ObjectNew { .. }));
+        let i = Item::new(NetworkID::new(2), 0x200, 0x201, NetworkID::new(1));
+        assert!(matches!(i.to_new_packet(), Packet::ItemNew { .. }));
+    }
+
+    #[test]
+    fn container_holds_items() {
+        let mut c = Container::new(NetworkID::new(1), 0x100, 0x7, 0x5);
+        let item_id = NetworkID::new(9);
+        c.items.push(item_id);
+        assert!(c.items.contains(&item_id));
+        assert!(matches!(c.to_new_packets()[0], Packet::ContainerNew { .. }));
+    }
+}
