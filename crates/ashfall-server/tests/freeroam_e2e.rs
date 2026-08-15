@@ -284,3 +284,33 @@ async fn spawn_player(sock: &mut TestClient, name: &str) -> NetworkID {
     }
     panic!("player {name} did not spawn");
 }
+
+/// `!time <hour>` in the freeroam mode sets the authoritative game clock;
+/// the client sees the new GameTime broadcast.
+#[tokio::test]
+async fn test_freeroam_time_command_sets_clock() {
+    let (server, port) = boot().await;
+    let client = async {
+        let mut sock = TestClient::connect(port).await;
+        let _id = spawn_player(&mut sock, "Wanderer").await;
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        sock.send_reliable(&Packet::GameChat {
+            message: "!time 12".into(),
+        })
+        .await;
+        let mut saw_hour12 = false;
+        for _ in 0..20 {
+            if let Some(pkt) = sock.recv_packet().await {
+                if let Packet::GameTime { hour, .. } = pkt {
+                    if hour == 12 {
+                        saw_hour12 = true;
+                        break;
+                    }
+                }
+            }
+        }
+        assert!(saw_hour12, "!time 12 set the clock to hour 12");
+    };
+    run_with(server, client).await;
+}

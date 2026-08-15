@@ -29,6 +29,10 @@ extern "C" {
     fn set_game_weather(weather: u32);
     fn set_game_time(year: u32, month: u32, day: u32, hour: u32);
 
+    // ── Actors ──
+    fn kill_actor(actor_id: u64);
+    fn resurrect_actor(actor_id: u64);
+
     // ── UI ──
     fn ui_message(player_id: u64, ptr: *const u8, len: u32);
 }
@@ -113,7 +117,66 @@ pub extern "C" fn on_player_chat(
         }
         return 0; // consume the command, don't relay it
     }
+    if msg == b"!resurrect" {
+        unsafe { resurrect_actor(player_id) };
+        announce(b"You have been resurrected", player_id);
+        return 0;
+    }
+    if msg.starts_with(b"!time ") {
+        // !time <hour> — set the game clock (0-23)
+        let hour = parse_byte(&msg[6..]);
+        if hour <= 23 {
+            unsafe { set_game_time(2277, 8, 17, hour as u32) };
+        } else {
+            announce(b"Usage: !time <0-23>", player_id);
+        }
+        return 0;
+    }
+    if msg.starts_with(b"!weather ") {
+        // !weather <hex-id> — set the game weather (e.g. !weather 0x15E5E)
+        if let Some(id) = parse_hex(&msg[9..]) {
+            unsafe { set_game_weather(id) };
+        } else {
+            announce(b"Usage: !weather <hex-id>", player_id);
+        }
+        return 0;
+    }
     1 // relay normal chat
+}
+
+/// Parse a decimal byte (0-255) from the end of the message.
+fn parse_byte(s: &[u8]) -> u8 {
+    let mut v: u32 = 0;
+    for &b in s.iter().take(4) {
+        if !b.is_ascii_digit() {
+            break;
+        }
+        v = v * 10 + (b - b'0') as u32;
+    }
+    v.min(255) as u8
+}
+
+/// Parse a hex number (0x-prefixed or bare) from the end of the message.
+fn parse_hex(s: &[u8]) -> Option<u32> {
+    let t = if let Some(stripped) = s.strip_prefix(b"0x") {
+        stripped
+    } else {
+        s
+    };
+    if t.is_empty() || t.len() > 8 {
+        return None;
+    }
+    let mut v: u32 = 0;
+    for &b in t {
+        v = v.checked_mul(16)?;
+        v = v.checked_add(match b {
+            b'0'..=b'9' => (b - b'0') as u32,
+            b'a'..=b'f' => (b - b'a' + 10) as u32,
+            b'A'..=b'F' => (b - b'A' + 10) as u32,
+            _ => return None,
+        })?;
+    }
+    Some(v)
 }
 
 /// Object created.
