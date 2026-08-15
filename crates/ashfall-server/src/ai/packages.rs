@@ -35,3 +35,28 @@ pub fn package_priority(package_id: u32) -> u8 {
 pub fn can_interrupt(current: u32, new: u32) -> bool {
     package_priority(new) < package_priority(current)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn priority_order() {
+        // combat beats everything, guard is lowest of the defined set
+        assert!(package_priority(PACKAGE_COMBAT) < package_priority(PACKAGE_FLEE));
+        assert!(package_priority(PACKAGE_FLEE) < package_priority(PACKAGE_WANDER));
+        assert!(package_priority(PACKAGE_WANDER) < package_priority(PACKAGE_GUARD)); // guard 90 < wander 80
+        assert_eq!(package_priority(0xFFFF), 100); // unknown → lowest
+    }
+
+    #[test]
+    fn interrupt_rules() {
+        // higher priority (lower number) interrupts lower
+        assert!(can_interrupt(PACKAGE_WANDER, PACKAGE_COMBAT));
+        assert!(can_interrupt(PACKAGE_GUARD, PACKAGE_SLEEP));
+        // same or lower priority never interrupts
+        assert!(!can_interrupt(PACKAGE_COMBAT, PACKAGE_WANDER));
+        assert!(!can_interrupt(PACKAGE_WANDER, PACKAGE_WANDER));
+        assert!(!can_interrupt(PACKAGE_COMBAT, PACKAGE_COMBAT));
+    }
+}

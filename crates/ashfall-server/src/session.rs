@@ -98,3 +98,47 @@ impl Session {
         Packet::GameEnd { reason }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn session() -> Session {
+        Session::new(
+            NetworkID::new(1),
+            "127.0.0.1:9000".parse().unwrap(),
+            "Wanderer".into(),
+        )
+    }
+
+    #[test]
+    fn state_transitions() {
+        let mut s = session();
+        assert!(!s.is_ingame());
+        s.transition(SessionState::InGame);
+        assert!(s.is_ingame());
+        assert!(s.is_active());
+        s.transition(SessionState::Disconnecting);
+        assert!(!s.is_active());
+    }
+
+    #[test]
+    fn staleness_by_last_recv() {
+        let mut s = session();
+        s.record_recv(10);
+        assert!(!s.is_stale(30));
+        // backdate: a fresh session's last_recv is recent; simulate by
+        // constructing with an ancient last_recv via direct field access
+        s.last_recv = std::time::Instant::now() - std::time::Duration::from_secs(60);
+        assert!(s.is_stale(30));
+    }
+
+    #[test]
+    fn byte_accounting() {
+        let mut s = session();
+        s.record_recv(100);
+        s.record_sent(50);
+        assert_eq!(s.bytes_recv, 100);
+        assert_eq!(s.bytes_sent, 50);
+    }
+}
