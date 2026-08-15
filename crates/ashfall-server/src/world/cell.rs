@@ -107,3 +107,65 @@ impl CellContext {
         (enter, leave)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cell_roundtrip() {
+        // byte-coordinate format: x/y fit in u8 (world cells are small grids)
+        let cell = CellGrid::encode_cell(0x11, 5, 3);
+        assert_eq!(CellGrid::decode_cell(cell), (0x11, 5, 3));
+        let zero = CellGrid::encode_cell(0, 0, 0);
+        assert_eq!(CellGrid::decode_cell(zero), (0, 0, 0));
+    }
+
+    #[test]
+    fn interior_cell_has_no_neighbors() {
+        // world_id 0 = interior
+        let interior = CellGrid::encode_cell(0, 3, 4);
+        let (world, _, _) = CellGrid::decode_cell(interior);
+        assert_eq!(world, 0);
+        let n = CellGrid::neighbors(interior);
+        assert_eq!(n[4], interior); // center is itself
+        assert!(n.iter().all(|&c| c == 0 || c == interior)); // rest empty
+    }
+
+    #[test]
+    fn exterior_neighbors_3x3() {
+        let center = CellGrid::encode_cell(0x7, 10, 10);
+        let n = CellGrid::neighbors(center);
+        // all 9 distinct, center at index 4, all share the world id
+        let mut uniq: Vec<u32> = n.to_vec();
+        uniq.sort_unstable();
+        uniq.dedup();
+        assert_eq!(uniq.len(), 9);
+        assert_eq!(n[4], center);
+        for &c in &n {
+            assert_eq!(CellGrid::decode_cell(c).0, 0x7);
+        }
+    }
+
+    #[test]
+    fn neighbors_are_adjacent() {
+        let center = CellGrid::encode_cell(0x7, 10, 10);
+        let n = CellGrid::neighbors(center);
+        // NW neighbor is (9, 9)
+        let nw = CellGrid::encode_cell(0x7, 9, 9);
+        assert_eq!(n[0], nw);
+        // E neighbor is (11, 10)
+        let e = CellGrid::encode_cell(0x7, 11, 10);
+        assert_eq!(n[5], e);
+    }
+
+    #[test]
+    fn context_membership() {
+        let center = CellGrid::encode_cell(0x7, 10, 10);
+        let ctx = CellGrid::neighbors(center);
+        assert!(CellGrid::is_in_context(&ctx, center));
+        assert!(CellGrid::is_in_context(&ctx, CellGrid::encode_cell(0x7, 11, 11)));
+        assert!(!CellGrid::is_in_context(&ctx, CellGrid::encode_cell(0x7, 20, 20)));
+        assert!(!CellGrid::is_in_context(&ctx, CellGrid::encode_cell(0x8, 10, 10))); // other world
+    }
+}
