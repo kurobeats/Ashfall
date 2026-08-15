@@ -301,12 +301,10 @@ async fn test_freeroam_time_command_sets_clock() {
         .await;
         let mut saw_hour12 = false;
         for _ in 0..20 {
-            if let Some(pkt) = sock.recv_packet().await {
-                if let Packet::GameTime { hour, .. } = pkt {
-                    if hour == 12 {
-                        saw_hour12 = true;
-                        break;
-                    }
+            if let Some(Packet::GameTime { hour, .. }) = sock.recv_packet().await {
+                if hour == 12 {
+                    saw_hour12 = true;
+                    break;
                 }
             }
         }
