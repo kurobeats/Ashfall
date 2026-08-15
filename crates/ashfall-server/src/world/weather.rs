@@ -40,3 +40,29 @@ impl Default for WeatherState {
         Self::new(0x00015E5E) // ponytail: Fallout3Clear default
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn weather_get_set() {
+        let w = WeatherState::new(0x111);
+        assert_eq!(w.get(), 0x111);
+        w.set(0x222);
+        assert_eq!(w.get(), 0x222);
+    }
+
+    #[test]
+    fn weather_default_is_fallout3_clear() {
+        assert_eq!(WeatherState::default().get(), 0x0001_5E5E);
+    }
+
+    #[test]
+    fn weather_clone_shares_state() {
+        let w = WeatherState::new(1);
+        let w2 = w.clone();
+        w.set(2);
+        assert_eq!(w2.get(), 2); // script + server agree
+    }
+}

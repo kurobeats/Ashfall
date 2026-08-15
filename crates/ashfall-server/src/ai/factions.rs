@@ -52,3 +52,45 @@ impl FactionMatrix {
         self.get_hostility(faction_a, faction_b) == Hostility::Enemy
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn same_faction_is_ally() {
+        let m = FactionMatrix::new();
+        assert_eq!(m.get_hostility(0x1, 0x1), Hostility::Ally);
+        assert!(!m.are_hostile(0x1, 0x1));
+    }
+
+    #[test]
+    fn default_is_neutral() {
+        let m = FactionMatrix::new();
+        assert_eq!(m.get_hostility(0x1, 0x2), Hostility::Neutral);
+    }
+
+    #[test]
+    fn relation_is_symmetric() {
+        let m = FactionMatrix::new();
+        m.set_relation(0x1, 0x2, Hostility::Enemy);
+        assert!(m.are_hostile(0x1, 0x2));
+        assert!(m.are_hostile(0x2, 0x1));
+    }
+
+    #[test]
+    fn relation_overwrite() {
+        let m = FactionMatrix::new();
+        m.set_relation(0x1, 0x2, Hostility::Enemy);
+        m.set_relation(0x1, 0x2, Hostility::Ally);
+        assert!(!m.are_hostile(0x1, 0x2));
+    }
+
+    #[test]
+    fn clone_shares_matrix() {
+        let m = FactionMatrix::new();
+        let m2 = m.clone();
+        m.set_relation(0x1, 0x3, Hostility::Enemy);
+        assert!(m2.are_hostile(0x1, 0x3));
+    }
+}
