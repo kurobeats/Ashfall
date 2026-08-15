@@ -224,3 +224,87 @@ impl Default for ObjectRegistry {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::world::objects::Actor;
+
+    fn actor(id: u64) -> Actor {
+        Actor::new(NetworkID::new(id), 0x100 + id as u32, 0x7, 0x1)
+    }
+
+    #[test]
+    fn insert_get_remove_deleted() {
+        let r = ObjectRegistry::new();
+        let id = r.insert(actor(1));
+        assert!(r.get(id).is_some());
+        assert!(r.remove(id));
+        assert!(r.get(id).is_none()); // deleted → hidden
+        assert!(r.is_deleted(id));
+        assert!(!r.remove(id)); // already gone
+    }
+
+    #[test]
+    fn allocate_id_is_unique() {
+        let r = ObjectRegistry::new();
+        let a = r.allocate_id();
+        let b = r.allocate_id();
+        assert_ne!(a, b);
+    }
+
+    #[test]
+    fn owner_claim_release() {
+        let r = ObjectRegistry::new();
+        let id = r.insert(actor(1));
+        let p = NetworkID::new(9);
+        assert!(r.set_owner(id, p));
+        assert!(!r.set_owner(id, p)); // already owned
+        assert_eq!(r.owner_of(id), Some(p));
+        assert!(r.take_owner(id));
+        assert_eq!(r.owner_of(id), None);
+    }
+
+    #[test]
+    fn release_player_owned_clears_many() {
+        let r = ObjectRegistry::new();
+        let p = NetworkID::new(9);
+        let a = r.insert(actor(1));
+        let b = r.insert(actor(2));
+        let other = r.insert(actor(3));
+        r.set_owner(a, p);
+        r.set_owner(b, p);
+        r.set_owner(other, NetworkID::new(10));
+        let released = r.release_player_owned(p);
+        assert_eq!(released.len(), 2);
+        assert_eq!(r.owner_of(a), None);
+        assert_eq!(r.owner_of(other), Some(NetworkID::new(10)));
+    }
+
+    #[test]
+    fn cell_registration_and_lookup() {
+        let r = ObjectRegistry::new();
+        let a = r.insert(actor(1));
+        let b = r.insert(actor(2));
+        r.add_to_cell(0x5, a);
+        r.add_to_cell(0x5, b);
+        r.add_to_cell(0x6, a);
+        assert_eq!(r.get_by_cell(0x5).len(), 2);
+        assert_eq!(r.get_by_cell(0x6), vec![a]);
+        // remove cleans cell refs
+        r.remove(a);
+        assert_eq!(r.get_by_cell(0x5), vec![b]);
+        assert_eq!(r.get_by_cell(0x6), vec![]);
+    }
+
+    #[test]
+    fn type_counts_and_ref_map() {
+        let r = ObjectRegistry::new();
+        let a = r.insert(actor(1));
+        assert_eq!(r.type_count(ObjectKind::Actor), 1);
+        r.map_ref(0x200, a);
+        assert_eq!(r.lookup_ref(0x200), Some(a));
+        r.remove(a);
+        assert_eq!(r.type_count(ObjectKind::Actor), 0);
+    }
+}
