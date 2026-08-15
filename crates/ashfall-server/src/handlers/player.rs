@@ -232,13 +232,30 @@ mod tests {
     fn entity_new_packet_dispatches_all_kinds() {
         let registry = Arc::new(ObjectRegistry::new());
         let oid = registry.insert(Object::new(NetworkID::new(1), 0x100, 0x7, 0x5));
-        let iid = registry.insert(Item::new(NetworkID::new(2), 0x200, 0x201, NetworkID::new(1)));
+        let iid = registry.insert(Item::new(
+            NetworkID::new(2),
+            0x200,
+            0x201,
+            NetworkID::new(1),
+        ));
         let aid = registry.insert(Actor::new(NetworkID::new(3), 0x300, 0x7, 0x5));
         let pid = registry.insert(Player::new(NetworkID::new(4), 0x400, 0x7, 0x5));
-        assert!(matches!(entity_new_packet(&registry, oid), Some(Packet::ObjectNew { .. })));
-        assert!(matches!(entity_new_packet(&registry, iid), Some(Packet::ItemNew { .. })));
-        assert!(matches!(entity_new_packet(&registry, aid), Some(Packet::ActorNew { .. })));
-        assert!(matches!(entity_new_packet(&registry, pid), Some(Packet::PlayerNew { .. })));
+        assert!(matches!(
+            entity_new_packet(&registry, oid),
+            Some(Packet::ObjectNew { .. })
+        ));
+        assert!(matches!(
+            entity_new_packet(&registry, iid),
+            Some(Packet::ItemNew { .. })
+        ));
+        assert!(matches!(
+            entity_new_packet(&registry, aid),
+            Some(Packet::ActorNew { .. })
+        ));
+        assert!(matches!(
+            entity_new_packet(&registry, pid),
+            Some(Packet::PlayerNew { .. })
+        ));
         assert!(entity_new_packet(&registry, NetworkID::new(999)).is_none());
     }
 
