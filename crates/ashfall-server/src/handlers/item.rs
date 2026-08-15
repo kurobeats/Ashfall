@@ -137,3 +137,77 @@ pub fn handle_item_equipped(
         stick,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::session::Session;
+    use crate::world::objects::Player;
+    use crate::world::registry::ObjectRegistry;
+    use std::net::SocketAddr;
+
+    fn setup() -> (Arc<ObjectRegistry>, Session, NetworkID, NetworkID) {
+        let registry = Arc::new(ObjectRegistry::new());
+        let player_id = registry.insert(Player::new(NetworkID::new(2), 0x100, 0x7, 0x1));
+        let item_id = registry.insert(Item::new(NetworkID::new(3), 0x200, 0x201, player_id));
+        let mut session = Session::new(
+            NetworkID::new(1),
+            "127.0.0.1:9000".parse::<SocketAddr>().unwrap(),
+            "Wanderer".into(),
+        );
+        session.player_id = Some(player_id);
+        (registry, session, player_id, item_id)
+    }
+
+    #[test]
+    fn owner_can_update_item_count() {
+        let (registry, session, _, item_id) = setup();
+        let result = handle_item_count(&registry, &session, item_id, 12, false);
+        assert!(result.is_some());
+        let arc = registry.get(item_id).unwrap();
+        let guard = arc.read();
+        let item = guard.as_any().downcast_ref::<Item>().unwrap();
+        assert_eq!(item.count, 12);
+    }
+
+    #[test]
+    fn non_owner_item_count_rejected() {
+        let (registry, session, _, item_id) = setup();
+        let mut other = session;
+        other.player_id = Some(NetworkID::new(99));
+        assert!(handle_item_count(&registry, &other, item_id, 12, false).is_none());
+    }
+
+    #[test]
+    fn overstack_item_count_rejected() {
+        let (registry, session, _, item_id) = setup();
+        let bad = ashfall_core::constants::MAX_ITEM_STACK + 1;
+        assert!(handle_item_count(&registry, &session, item_id, bad, false).is_none());
+    }
+
+    #[test]
+    fn invalid_item_condition_rejected() {
+        let (registry, session, _, item_id) = setup();
+        assert!(handle_item_condition(&registry, &session, item_id, 101.0, 100).is_none());
+        assert!(handle_item_condition(&registry, &session, item_id, -1.0, 100).is_none());
+    }
+
+    #[test]
+    fn item_new_from_client_rejected() {
+        // server-authoritative creation only — ItemNew from a client is a mint.
+        let (registry, session, _, _) = setup();
+        let packet = Packet::ItemNew {
+            id: NetworkID::new(50),
+            ref_id: 0x300,
+            base_id: 0x301,
+            container: NetworkID::new(2),
+            count: 1,
+            condition: 1.0,
+            equipped: false,
+            silent: false,
+            stick: false,
+            scale: 1.0,
+        };
+        assert!(handle_item_new(&registry, &session, &packet).is_none());
+    }
+}
