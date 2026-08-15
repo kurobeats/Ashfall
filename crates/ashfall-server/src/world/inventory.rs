@@ -84,7 +84,10 @@ mod tests {
         let m = map(&[(1, 0x100), (2, 0x100), (3, 0x200)]);
         let items = vec![NetworkID::new(1), NetworkID::new(2), NetworkID::new(3)];
         assert_eq!(Inventory::count_by_base(&items, 0x100, &m), 2);
-        assert_eq!(Inventory::find_by_base(&items, 0x100, &m), Some(NetworkID::new(1)));
+        assert_eq!(
+            Inventory::find_by_base(&items, 0x100, &m),
+            Some(NetworkID::new(1))
+        );
         assert_eq!(Inventory::find_by_base(&items, 0x999, &m), None);
     }
 
