@@ -90,8 +90,13 @@ impl Game {
         // Engine bridge (config ipc_mode: stub / tcp / unix). Stub mode is
         // the default and always succeeds — the real game hooks in later.
         let mode = match self.config.ipc_mode.as_str() {
+            #[cfg(unix)]
             "unix" => crate::ipc::IpcMode::Native {
                 path: "/tmp/ashfall-ipc.sock".into(),
+            },
+            #[cfg(not(unix))]
+            "unix" => crate::ipc::IpcMode::Proton {
+                port: self.config.ipc_port,
             },
             "tcp" => crate::ipc::IpcMode::Proton {
                 port: self.config.ipc_port,

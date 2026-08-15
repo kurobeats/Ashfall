@@ -1,14 +1,21 @@
 //! IPC transport layer — TCP, Unix sockets, or stub.
+//!
+//! Windows builds get TCP + Stub only (the Unix-socket mode is for native
+//! Linux engine stubs); the Unix variant is `#[cfg(unix)]`-gated so the
+//! client cross-compiles for Windows (README: Windows-native client).
 
 use std::path::PathBuf;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::{TcpStream, UnixStream};
+use tokio::net::TcpStream;
+#[cfg(unix)]
+use tokio::net::UnixStream;
 
 /// How to connect to the game engine bridge.
 pub enum IpcMode {
     /// Connect to bridge.dll inside Proton/Wine via TCP loopback.
     Proton { port: u16 },
-    /// Connect to native Linux engine stub via Unix socket.
+    /// Connect to native Linux engine stub via Unix socket (Unix only).
+    #[cfg(unix)]
     Native { path: PathBuf },
     /// Development mode — returns canned responses without a real game engine.
     Stub,
@@ -23,6 +30,7 @@ impl Default for IpcMode {
 /// Active transport connection.
 pub enum IpcTransport {
     Tcp(TcpStream),
+    #[cfg(unix)]
     Unix(UnixStream),
     Stub,
 }
@@ -37,6 +45,7 @@ pub async fn connect(mode: IpcMode) -> anyhow::Result<IpcTransport> {
             tracing::info!("IPC connected to bridge via TCP {addr}");
             Ok(IpcTransport::Tcp(stream))
         }
+        #[cfg(unix)]
         IpcMode::Native { path } => {
             let stream = UnixStream::connect(&path).await?;
             tracing::info!("IPC connected to bridge via Unix socket {path:?}");
@@ -59,6 +68,7 @@ impl IpcTransport {
     pub fn try_read(&self, buf: &mut [u8]) -> usize {
         match self {
             IpcTransport::Tcp(stream) => stream.try_read(buf).unwrap_or(0),
+            #[cfg(unix)]
             IpcTransport::Unix(stream) => stream.try_read(buf).unwrap_or(0),
             IpcTransport::Stub => 0,
         }
@@ -70,6 +80,7 @@ impl IpcTransport {
             IpcTransport::Tcp(ref mut stream) => {
                 let _ = stream.write_all(data).await;
             }
+            #[cfg(unix)]
             IpcTransport::Unix(ref mut stream) => {
                 let _ = stream.write_all(data).await;
             }
@@ -83,6 +94,7 @@ impl IpcTransport {
     pub async fn recv(&mut self, buf: &mut [u8]) -> usize {
         match self {
             IpcTransport::Tcp(ref mut stream) => stream.read(buf).await.unwrap_or(0),
+            #[cfg(unix)]
             IpcTransport::Unix(ref mut stream) => stream.read(buf).await.unwrap_or(0),
             IpcTransport::Stub => {
                 // Return a fake framed wakeup so the frame parser stays happy.
