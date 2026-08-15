@@ -118,12 +118,31 @@ mod tests {
     #[test]
     fn opcodes_are_distinct() {
         let ops = [
-            OP_GET_POS, OP_SET_POS, OP_GET_ANGLE, OP_SET_ANGLE,
-            OP_GET_CELL, OP_SET_CELL, OP_GET_ACTOR_STATE, OP_GET_ACTOR_VALUE,
-            OP_SET_ACTOR_VALUE, OP_GET_CONTROL, OP_SET_CONTROL, OP_GET_ACTIVATE,
-            OP_FIRE_WEAPON, OP_GET_NAME, OP_SET_NAME, OP_GET_LOCK, OP_SET_LOCK,
-            OP_SET_ENABLED, OP_MOVE_TO, OP_PLAY_SOUND, OP_SET_SCALE, OP_PLAY_GROUP,
-            OP_KILL, OP_TRACK_ACTOR, OP_UNTRACK_ACTOR,
+            OP_GET_POS,
+            OP_SET_POS,
+            OP_GET_ANGLE,
+            OP_SET_ANGLE,
+            OP_GET_CELL,
+            OP_SET_CELL,
+            OP_GET_ACTOR_STATE,
+            OP_GET_ACTOR_VALUE,
+            OP_SET_ACTOR_VALUE,
+            OP_GET_CONTROL,
+            OP_SET_CONTROL,
+            OP_GET_ACTIVATE,
+            OP_FIRE_WEAPON,
+            OP_GET_NAME,
+            OP_SET_NAME,
+            OP_GET_LOCK,
+            OP_SET_LOCK,
+            OP_SET_ENABLED,
+            OP_MOVE_TO,
+            OP_PLAY_SOUND,
+            OP_SET_SCALE,
+            OP_PLAY_GROUP,
+            OP_KILL,
+            OP_TRACK_ACTOR,
+            OP_UNTRACK_ACTOR,
         ];
         let mut sorted = ops.to_vec();
         sorted.sort_unstable();
