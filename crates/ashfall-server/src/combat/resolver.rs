@@ -243,11 +243,15 @@ mod tests {
     #[test]
     fn hit_lands_damage_and_death() {
         let (registry, a, t) = actor_pair();
-        let packets = CombatResolver::resolve_hit(&registry, &hit(a, t, 100.0, 0, 0))
-            .expect("hit resolves");
+        let packets =
+            CombatResolver::resolve_hit(&registry, &hit(a, t, 100.0, 0, 0)).expect("hit resolves");
         // 100 dmg, no DR/DT → target dead
-        assert!(packets.iter().any(|p| matches!(p, Packet::ActorDamaged { .. })));
-        assert!(packets.iter().any(|p| matches!(p, Packet::ActorDeathExt { .. })));
+        assert!(packets
+            .iter()
+            .any(|p| matches!(p, Packet::ActorDamaged { .. })));
+        assert!(packets
+            .iter()
+            .any(|p| matches!(p, Packet::ActorDeathExt { .. })));
         let arc = registry.get(t).unwrap();
         let guard = arc.read();
         let actor = guard.as_any().downcast_ref::<Actor>().unwrap();
@@ -258,10 +262,14 @@ mod tests {
     #[test]
     fn non_lethal_hit_keeps_target_alive() {
         let (registry, a, t) = actor_pair();
-        let packets = CombatResolver::resolve_hit(&registry, &hit(a, t, 30.0, 0, 0))
-            .expect("hit resolves");
-        assert!(packets.iter().any(|p| matches!(p, Packet::ActorDamaged { .. })));
-        assert!(!packets.iter().any(|p| matches!(p, Packet::ActorDeathExt { .. })));
+        let packets =
+            CombatResolver::resolve_hit(&registry, &hit(a, t, 30.0, 0, 0)).expect("hit resolves");
+        assert!(packets
+            .iter()
+            .any(|p| matches!(p, Packet::ActorDamaged { .. })));
+        assert!(!packets
+            .iter()
+            .any(|p| matches!(p, Packet::ActorDeathExt { .. })));
         let arc = registry.get(t).unwrap();
         let guard = arc.read();
         let actor = guard.as_any().downcast_ref::<Actor>().unwrap();
@@ -302,11 +310,15 @@ mod tests {
     #[test]
     fn critical_flag_scales_damage() {
         let (registry, a, t) = actor_pair();
-        let packets = CombatResolver::resolve_hit(&registry, &hit(a, t, 100.0, 0, protocol::HIT_FLAG_CRITICAL))
-            .expect("hit resolves");
+        let packets = CombatResolver::resolve_hit(
+            &registry,
+            &hit(a, t, 100.0, 0, protocol::HIT_FLAG_CRITICAL),
+        )
+        .expect("hit resolves");
         // 100 * 1.5 crit = 150 → death regardless; check the damaged value
-        if let Some(Packet::ActorDamaged { final_damage, .. }) =
-            packets.iter().find(|p| matches!(p, Packet::ActorDamaged { .. }))
+        if let Some(Packet::ActorDamaged { final_damage, .. }) = packets
+            .iter()
+            .find(|p| matches!(p, Packet::ActorDamaged { .. }))
         {
             assert!((*final_damage - 150.0).abs() < 1e-3);
         } else {
