@@ -327,7 +327,7 @@ mod tests {
     use std::collections::HashMap;
     use std::net::SocketAddr;
 
-    fn session_owning(registry: &ObjectRegistry, id: NetworkID) -> Session {
+    fn session_owning(id: NetworkID) -> Session {
         let mut s = Session::new(
             NetworkID::new(1),
             "127.0.0.1:9000".parse::<SocketAddr>().unwrap(),
@@ -365,7 +365,7 @@ mod tests {
     fn actor_new_grants_ownership_and_registers() {
         let registry = Arc::new(ObjectRegistry::new());
         let pid = registry.insert(Player::new(NetworkID::new(1), 0x100, 0x7, 0x1));
-        let session = session_owning(&registry, pid);
+        let session = session_owning(pid);
         let pkt = actor_new_packet(50, 0x200);
         let (grant, relay) = handle_actor_new(&registry, &session, &pkt);
         assert!(matches!(grant, Some(Packet::OwnershipGranted { .. })));
@@ -380,7 +380,7 @@ mod tests {
     fn actor_new_dedupes_by_ref_id() {
         let registry = Arc::new(ObjectRegistry::new());
         let pid = registry.insert(Player::new(NetworkID::new(1), 0x100, 0x7, 0x1));
-        let session = session_owning(&registry, pid);
+        let session = session_owning(pid);
         handle_actor_new(&registry, &session, &actor_new_packet(50, 0x200));
         // second client reports the same NPC with a different id → rejected
         let (grant, relay) = handle_actor_new(&registry, &session, &actor_new_packet(51, 0x200));
@@ -392,7 +392,7 @@ mod tests {
     fn actor_new_rejects_owned_actor() {
         let registry = Arc::new(ObjectRegistry::new());
         let pid = registry.insert(Player::new(NetworkID::new(1), 0x100, 0x7, 0x1));
-        let session = session_owning(&registry, pid);
+        let session = session_owning(pid);
         // pre-claim the id via a different ref (already owned)
         registry.set_owner(NetworkID::new(50), pid);
         let (grant, relay) = handle_actor_new(&registry, &session, &actor_new_packet(50, 0x300));
@@ -403,9 +403,12 @@ mod tests {
     fn ownership_claim_only_for_unowned() {
         let registry = Arc::new(ObjectRegistry::new());
         let pid = registry.insert(Player::new(NetworkID::new(1), 0x100, 0x7, 0x1));
-        let session = session_owning(&registry, pid);
+        let session = session_owning(pid);
         let aid = registry.insert(crate::world::objects::Actor::new(
-            NetworkID::new(50), 0x200, 0x7, 0x1,
+            NetworkID::new(50),
+            0x200,
+            0x7,
+            0x1,
         ));
         assert!(handle_ownership_claim(&registry, &session, aid).is_some());
         // second claim fails — already owned
