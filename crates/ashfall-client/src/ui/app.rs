@@ -46,6 +46,21 @@ impl eframe::App for AshfallApp {
                         ui.separator();
                         ui.label("⚔ PvP");
                     }
+                    // Local player health (updated by UpdateActorValue events
+                    // via the wired bridge AV getters).
+                    if let Some(id) = game.local_player_id {
+                        if let Some(health) = game.registry.player_health(id) {
+                            ui.separator();
+                            let h = format!("❤ {health:.0}");
+                            ui.colored_label(if health > 50.0 {
+                                egui::Color32::from_rgb(80, 200, 80)
+                            } else if health > 25.0 {
+                                egui::Color32::from_rgb(220, 200, 60)
+                            } else {
+                                egui::Color32::from_rgb(220, 60, 60)
+                            }, h);
+                        }
+                    }
                 });
             });
 

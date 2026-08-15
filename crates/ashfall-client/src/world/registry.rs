@@ -561,3 +561,14 @@ fn test_actor_health_syncs_from_actor_value_events() {
         _ => panic!("expected actor"),
     }
 }
+
+impl ClientRegistry {
+    /// Current health of a player/actor object, if known.
+    pub fn player_health(&self, id: NetworkID) -> Option<f32> {
+        match self.objects.get(&id) {
+            Some(ClientObject::Actor { health, .. }) => Some(*health),
+            Some(ClientObject::Player { health, .. }) => Some(*health),
+            _ => None,
+        }
+    }
+}
