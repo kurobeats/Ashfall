@@ -104,11 +104,35 @@ mod tests {
     #[test]
     fn upsert_replaces_and_lists() {
         let mut list = ServerList::new();
-        list.upsert(addr(1), "alpha".into(), "map".into(), 1, 4, "fo3".into(), vec![]);
-        list.upsert(addr(2), "beta".into(), "map".into(), 2, 4, "fo3".into(), vec![]);
+        list.upsert(
+            addr(1),
+            "alpha".into(),
+            "map".into(),
+            1,
+            4,
+            "fo3".into(),
+            vec![],
+        );
+        list.upsert(
+            addr(2),
+            "beta".into(),
+            "map".into(),
+            2,
+            4,
+            "fo3".into(),
+            vec![],
+        );
         assert_eq!(list.all().len(), 2);
         // re-upsert updates the same entry (no duplicate)
-        list.upsert(addr(1), "alpha2".into(), "map".into(), 3, 4, "fo3".into(), vec![]);
+        list.upsert(
+            addr(1),
+            "alpha2".into(),
+            "map".into(),
+            3,
+            4,
+            "fo3".into(),
+            vec![],
+        );
         assert_eq!(list.all().len(), 2);
         assert!(list.all().iter().any(|e| e.players == 3));
     }
@@ -116,7 +140,15 @@ mod tests {
     #[test]
     fn remove_drops_entry() {
         let mut list = ServerList::new();
-        list.upsert(addr(1), "alpha".into(), "map".into(), 1, 4, "fo3".into(), vec![]);
+        list.upsert(
+            addr(1),
+            "alpha".into(),
+            "map".into(),
+            1,
+            4,
+            "fo3".into(),
+            vec![],
+        );
         list.remove(addr(1));
         assert!(list.all().is_empty());
     }
@@ -127,10 +159,8 @@ mod tests {
         let mut fresh = entry(1, 4);
         let mut stale = entry(1, 4);
         // force staleness by backdating last_seen
-        unsafe {
-            stale.last_seen = Instant::now() - Duration::from_secs(200);
-            fresh.last_seen = Instant::now() - Duration::from_secs(1);
-        }
+        stale.last_seen = Instant::now() - Duration::from_secs(200);
+        fresh.last_seen = Instant::now() - Duration::from_secs(1);
         list.servers.insert(addr(1), fresh);
         list.servers.insert(addr(2), stale);
         list.cull_stale();
