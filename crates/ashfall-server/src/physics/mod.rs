@@ -67,8 +67,14 @@ mod tests {
 
     #[test]
     fn teleport_delta_bounds() {
-        assert!(PhysicsValidator::validate_delta([0.0; 3], [100.0, 0.0, 0.0]));
-        assert!(!PhysicsValidator::validate_delta([0.0; 3], [MAX_TELEPORT_DISTANCE, 0.0, 0.0]));
+        assert!(PhysicsValidator::validate_delta(
+            [0.0; 3],
+            [100.0, 0.0, 0.0]
+        ));
+        assert!(!PhysicsValidator::validate_delta(
+            [0.0; 3],
+            [MAX_TELEPORT_DISTANCE, 0.0, 0.0]
+        ));
     }
 
     #[test]
@@ -83,9 +89,17 @@ mod tests {
     #[test]
     fn validate_all_combines() {
         // good pos + good vel + small delta
-        assert!(PhysicsValidator::validate_all([10.0, 0.0, 0.0], [1.0, 0.0, 0.0], Some([0.0; 3])));
+        assert!(PhysicsValidator::validate_all(
+            [10.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            Some([0.0; 3])
+        ));
         // bad velocity fails
-        assert!(!PhysicsValidator::validate_all([10.0, 0.0, 0.0], [MAX_SPEED; 3], Some([0.0; 3])));
+        assert!(!PhysicsValidator::validate_all(
+            [10.0, 0.0, 0.0],
+            [MAX_SPEED; 3],
+            Some([0.0; 3])
+        ));
         // teleport delta fails
         assert!(!PhysicsValidator::validate_all(
             [MAX_TELEPORT_DISTANCE + 1.0, 0.0, 0.0],
@@ -93,6 +107,10 @@ mod tests {
             Some([0.0; 3])
         ));
         // no previous position → delta skipped
-        assert!(PhysicsValidator::validate_all([10.0, 0.0, 0.0], [0.0; 3], None));
+        assert!(PhysicsValidator::validate_all(
+            [10.0, 0.0, 0.0],
+            [0.0; 3],
+            None
+        ));
     }
 }
