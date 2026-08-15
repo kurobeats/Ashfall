@@ -194,3 +194,63 @@ pub fn handle_console(
     }
     Some(Packet::UpdateConsole { id, enabled })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::session::Session;
+    use crate::world::objects::{Actor, Item, Object};
+    use crate::world::registry::ObjectRegistry;
+    use std::net::SocketAddr;
+
+    fn session_for(id: NetworkID) -> Session {
+        let mut s = Session::new(
+            NetworkID::new(1),
+            "127.0.0.1:9000".parse::<SocketAddr>().unwrap(),
+            "Wanderer".into(),
+        );
+        s.player_id = Some(id);
+        s
+    }
+
+    #[test]
+    fn update_control_owner_only() {
+        let registry = Arc::new(ObjectRegistry::new());
+        let pid = registry.insert(Player::new(NetworkID::new(2), 0x100, 0x7, 0x1));
+        let session = session_for(pid);
+        // own player → accepted, control recorded
+        assert!(handle_update_control(&registry, &session, pid, 0x30, 1).is_some());
+        let arc = registry.get(pid).unwrap();
+        let guard = arc.read();
+        let player = guard.as_any().downcast_ref::<Player>().unwrap();
+        assert!(player.controls.contains_key(&0x30));
+        // other id → rejected
+        assert!(handle_update_control(&registry, &session, NetworkID::new(99), 0x30, 1).is_none());
+    }
+
+    #[test]
+    fn entity_new_packet_dispatches_all_kinds() {
+        let registry = Arc::new(ObjectRegistry::new());
+        let oid = registry.insert(Object::new(NetworkID::new(1), 0x100, 0x7, 0x5));
+        let iid = registry.insert(Item::new(NetworkID::new(2), 0x200, 0x201, NetworkID::new(1)));
+        let aid = registry.insert(Actor::new(NetworkID::new(3), 0x300, 0x7, 0x5));
+        let pid = registry.insert(Player::new(NetworkID::new(4), 0x400, 0x7, 0x5));
+        assert!(matches!(entity_new_packet(&registry, oid), Some(Packet::ObjectNew { .. })));
+        assert!(matches!(entity_new_packet(&registry, iid), Some(Packet::ItemNew { .. })));
+        assert!(matches!(entity_new_packet(&registry, aid), Some(Packet::ActorNew { .. })));
+        assert!(matches!(entity_new_packet(&registry, pid), Some(Packet::PlayerNew { .. })));
+        assert!(entity_new_packet(&registry, NetworkID::new(999)).is_none());
+    }
+
+    #[test]
+    fn entity_cell_dispatches_kinds() {
+        let registry = Arc::new(ObjectRegistry::new());
+        let oid = registry.insert(Object::new(NetworkID::new(1), 0x100, 0x7, 0x5));
+        let aid = registry.insert(Actor::new(NetworkID::new(3), 0x300, 0x7, 0x9));
+        let pid = registry.insert(Player::new(NetworkID::new(4), 0x400, 0x7, 0x11));
+        assert_eq!(entity_cell(&registry, oid), Some(0x5));
+        assert_eq!(entity_cell(&registry, aid), Some(0x9));
+        assert_eq!(entity_cell(&registry, pid), Some(0x11));
+        assert_eq!(entity_cell(&registry, NetworkID::new(999)), None);
+    }
+}
