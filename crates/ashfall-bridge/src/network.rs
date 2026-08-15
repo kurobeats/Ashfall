@@ -242,7 +242,11 @@ fn handle_client(mut stream: TcpStream) {
         match stream.read(&mut buf) {
             Ok(0) => break, // EOF, client disconnected
             Ok(n) => pending.extend_from_slice(&buf[..n]),
-            Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
+            Err(ref e)
+                if matches!(
+                    e.kind(),
+                    std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
+                ) => {}
             Err(_) => break,
         }
 

@@ -154,14 +154,23 @@ lives in [docs/impl-plan.md](./docs/impl-plan.md). Recent highlights:
 - Verified ESM import for both games + all DLC (real GOG binaries)
 - Live Proton testing: Steam respawn-disable patch applied and verified on
   the game host
+- Live session 2026-08-15 (game host tetsuo.chaotic.lan): fixed the i686
+  bridge build (global_asm underscore + thiscall/vcall register pressure)
+  and a TCP server bug that dropped clients after 50ms idle; live-verified
+  fire_weapon 0x770880, get_activate 0x8D3BC8/0x8D3CB8, ai_fix1 0x5E99E2,
+  play_idle/play_group/delegator sites. Found the Steam discovery detour
+  (0x7F9B70) and frame hook (0x9B3D77) install but ~never fire — both need
+  re-derivation (see [docs/steam-re.md](./docs/steam-re.md) Session 2026-08-15)
 
 ### What's left
 
 - **NPC sync live** — the full loop is built and tested (discovery detours
-  on both the classic and Steam builds — the Steam AI predicate was
-  re-derived from the dump; ownership, state sampling, remote application
-  all wired); remaining is live verification on the game host
-  (see [docs/steam-re.md](./docs/steam-re.md))
+  on both the classic and Steam builds; ownership, state sampling, remote
+  application all wired). **Live 2026-08-15:** the event pipeline + respawn
+  patch work on the host, but the Steam AI-predicate detour (0x7F9B70) is a
+  prologue false-positive — installs but ~never fires — so Steam discovery
+  needs a re-derived site (classic 0x6FAE90 + FNV ActorProcessManager stay
+  as-is). See [docs/steam-re.md](./docs/steam-re.md)
 - **Remaining Steam patch sites** — 2026-08-14: 6 more vaultmp behavior
   sites re-derived without the game — via the FalloutAnniversaryPatcher
   vcdiff (ai_fix1 0x5E99E2, get_activate_jmp 0x8D3BC8, delegator stub spot
@@ -184,13 +193,17 @@ lives in [docs/impl-plan.md](./docs/impl-plan.md). Recent highlights:
   (recompile restructured every target function); they need live probe
   (OP_PROBE_CODE/OP_PROBE_FORM). New confirmed: Steam `__security_cookie`
   0x1202954 (canary XOR now `ebp`, not `esp`) + delegator fn 0x405E70.
-  Remaining engine-bound OP stubs: SET_NAME, PLAY_SOUND's engine call,
-  PLACE_AT_ME.
+  **Live 2026-08-15:** fire_weapon 0x770880, get_activate 0x8D3BC8/0x8D3CB8,
+  ai_fix1 0x5E99E2, play_idle_fix (4 cands), play_group_fix 0x4350F9,
+  delegator pad 0x405E69 all byte-confirmed on the running build. Still
+  underivable: fire_fix, match_race, place_at_me, ai_fix2/3/4. Remaining
+  engine-bound OP stubs: SET_NAME, PLAY_SOUND's engine call, PLACE_AT_ME.
 - **Per-frame player hook** — wired for all three builds: FNV
   (0x86B386), FO3 classic (0x6EEB2F), and Steam/Anniversary (0x9B3D77,
   re-derived 2026-08-14 via the respawn-struct frame-body twin; the hook
-  derefs the SteamStub IAT slot so it's ASLR-safe). Live verification on
-  the game host remains
+  derefs the SteamStub IAT slot so it's ASLR-safe). **Live 2026-08-15:**
+  the Steam site installs but never fires (zero player-state events, alive
+  or dead) — needs a real per-frame site; FNV + classic unverified live.
 - ~~**3D client view**~~ — explicitly out of scope: the game window IS the
   view (the client's top-down projection + health bars/names + server GUI
   are the companion HUD)

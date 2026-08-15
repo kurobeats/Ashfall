@@ -643,14 +643,14 @@ pub unsafe extern "C" fn ashfall_collect_actor_c(actor: usize) {
 // x86 thunk: `this` arrives in ecx. Push it as the collector's argument,
 // call, restore ecx, then run the original through the trampoline.
 core::arch::global_asm!(
-    ".globl ashfall_actor_collect_thunk",
-    "ashfall_actor_collect_thunk:",
+    ".globl _ashfall_actor_collect_thunk",
+    "_ashfall_actor_collect_thunk:",
     "    push ecx",
     "    push ecx",
-    "    call ashfall_collect_actor_c",
+    "    call _ashfall_collect_actor_c",
     "    add esp, 4",
     "    pop ecx",
-    "    jmp dword ptr [ashfall_trampoline_addr]",
+    "    jmp dword ptr [_ashfall_trampoline_addr]",
 );
 
 /// Indirect pointer the thunk `jmp`s through (single writer on the apply
@@ -931,14 +931,14 @@ pub mod hooks {
     #[cfg(target_arch = "x86")]
     pub fn resolve(name: &str) -> Option<usize> {
         match name {
-            "respawn_detour" => Some(respawn_detour_thunk as *const () as usize),
-            "bethesda_delegator" => Some(bethesda_delegator_thunk as *const () as usize),
-            "play_idle_detour" => Some(play_idle_detour_thunk as *const () as usize),
-            "anim_detour" => Some(anim_detour_thunk as *const () as usize),
-            "av_fix" => Some(av_fix_thunk as *const () as usize),
-            "get_activate" => Some(get_activate_thunk as *const () as usize),
-            "place_at_me" => Some(place_at_me_thunk as *const () as usize),
-            "fire_weapon" => Some(fire_weapon_thunk as *const () as usize),
+            "respawn_detour" => Some(ashfall_respawn_detour_thunk as *const () as usize),
+            "bethesda_delegator" => Some(ashfall_bethesda_delegator_thunk as *const () as usize),
+            "play_idle_detour" => Some(ashfall_play_idle_detour_thunk as *const () as usize),
+            "anim_detour" => Some(ashfall_anim_detour_thunk as *const () as usize),
+            "av_fix" => Some(ashfall_av_fix_thunk as *const () as usize),
+            "get_activate" => Some(ashfall_get_activate_thunk as *const () as usize),
+            "place_at_me" => Some(ashfall_place_at_me_thunk as *const () as usize),
+            "fire_weapon" => Some(ashfall_fire_weapon_thunk as *const () as usize),
             _ => None,
         }
     }
@@ -946,14 +946,14 @@ pub mod hooks {
     // All thunks as extern "C" symbols for the resolver.
     #[cfg(target_arch = "x86")]
     extern "C" {
-        fn respawn_detour_thunk();
-        fn bethesda_delegator_thunk();
-        fn play_idle_detour_thunk();
-        fn anim_detour_thunk();
-        fn av_fix_thunk();
-        fn get_activate_thunk();
-        fn place_at_me_thunk();
-        fn fire_weapon_thunk();
+        fn ashfall_respawn_detour_thunk();
+        fn ashfall_bethesda_delegator_thunk();
+        fn ashfall_play_idle_detour_thunk();
+        fn ashfall_anim_detour_thunk();
+        fn ashfall_av_fix_thunk();
+        fn ashfall_get_activate_thunk();
+        fn ashfall_place_at_me_thunk();
+        fn ashfall_fire_weapon_thunk();
     }
 
     /// Rust collectors (cdecl; called from asm with args on the stack).
@@ -1011,55 +1011,55 @@ pub mod hooks {
     // the thunk must re-enter the original; the trampoline pattern from
     // the actor-discovery detour applies where needed.
     core::arch::global_asm!(
-        ".globl ashfall_respawn_detour_thunk",
-        ".globl ashfall_bethesda_delegator_thunk",
-        ".globl ashfall_play_idle_detour_thunk",
-        ".globl ashfall_anim_detour_thunk",
-        ".globl ashfall_av_fix_thunk",
-        ".globl ashfall_get_activate_thunk",
-        ".globl ashfall_place_at_me_thunk",
-        ".globl ashfall_fire_weapon_thunk",
-        "ashfall_respawn_detour_thunk:",
+        ".globl _ashfall_respawn_detour_thunk",
+        ".globl _ashfall_bethesda_delegator_thunk",
+        ".globl _ashfall_play_idle_detour_thunk",
+        ".globl _ashfall_anim_detour_thunk",
+        ".globl _ashfall_av_fix_thunk",
+        ".globl _ashfall_get_activate_thunk",
+        ".globl _ashfall_place_at_me_thunk",
+        ".globl _ashfall_fire_weapon_thunk",
+        "_ashfall_respawn_detour_thunk:",
         "    pushad",
-        "    call ashfall_hook_respawn",
+        "    call _ashfall_hook_respawn",
         "    popad",
         "    ret",
-        "ashfall_bethesda_delegator_thunk:",
+        "_ashfall_bethesda_delegator_thunk:",
         "    pushad",
-        "    call ashfall_hook_delegator",
+        "    call _ashfall_hook_delegator",
         "    popad",
         "    ret",
-        "ashfall_play_idle_detour_thunk:",
+        "_ashfall_play_idle_detour_thunk:",
         "    pushad",
-        "    call ashfall_hook_play_idle",
+        "    call _ashfall_hook_play_idle",
         "    popad",
         "    ret",
-        "ashfall_anim_detour_thunk:",
+        "_ashfall_anim_detour_thunk:",
         "    pushad",
-        "    call ashfall_hook_anim",
+        "    call _ashfall_hook_anim",
         "    popad",
         "    ret",
-        "ashfall_av_fix_thunk:",
+        "_ashfall_av_fix_thunk:",
         "    pushad",
-        "    call ashfall_hook_av",
+        "    call _ashfall_hook_av",
         "    popad",
         "    ret",
-        "ashfall_get_activate_thunk:",
+        "_ashfall_get_activate_thunk:",
         "    pushad",
         "    push eax",
-        "    call ashfall_hook_activate",
+        "    call _ashfall_hook_activate",
         "    add esp, 4",
         "    popad",
         "    ret",
-        "ashfall_place_at_me_thunk:",
+        "_ashfall_place_at_me_thunk:",
         "    pushad",
-        "    call ashfall_hook_anim",
+        "    call _ashfall_hook_anim",
         "    popad",
         "    ret",
-        "ashfall_fire_weapon_thunk:",
+        "_ashfall_fire_weapon_thunk:",
         "    pushad",
         "    push eax",
-        "    call ashfall_hook_fire",
+        "    call _ashfall_hook_fire",
         "    add esp, 4",
         "    popad",
         "    ret",

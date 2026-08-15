@@ -17,14 +17,14 @@ pressure-vessel safe), stable across runs.
 | baseForm field | vtable 0x10 (WRONG) | **field +0x1C** | obj-field probe: +0x1C → form object with ID 0x7 (Player base) |
 | pos/angle/cell/scale/refID | fields | fields (+0x2C/0x30/0x34, +0x38, +0x3C, +0x0C) | live battery, game stable |
 | **Respawn disable** (patch sites) | 0x6D5965 / 0x78B230 | **0x9C43A5 / 0x8C9CE0→0x8C9D5D / 0x8C9D52** | semantic anchor (death-UI string → death flow) + probe-verified live; applied + behavior-verified 2026-08-08 |
-| **AI predicate** (actor-discovery detour) | 0x6FAE90 (`56 8B F1`) | **0x7F9B70** (`55 8B EC 51 57 8B F9`) | Steam re-derived 2026-08-13 from the flat dump via the `cmp [reg+0xFC],5/3` fingerprint (field survived the recompile). Structurally identical: `cmp byte [edi+0xF8],0`, state checks, player compare vs **0x123C674** (Steam PlayerCharacter singleton — classic 0x107A104), shared vtable slot +0x22C. Detour byte-guards both prologues and picks by signature (`ai_predicate_site`) |
+| **AI predicate** (actor-discovery detour) | 0x6FAE90 (`56 8B F1`) | **0x7F9B70** (`55 8B EC 51 57 8B F9`) | Steam re-derived 2026-08-13 from the flat dump via the `cmp [reg+0xFC],5/3` fingerprint (field survived the recompile). Structurally identical: `cmp byte [edi+0xF8],0`, state checks, player compare vs **0x123C674** (Steam PlayerCharacter singleton — classic 0x107A104), shared vtable slot +0x22C. Detour byte-guards both prologues and picks by signature (`ai_predicate_site`). ⚠️ **LIVE 2026-08-15: NOT the per-actor gate** — detour installs + trampoline chain byte-perfect (verified), but the site ~never executes (3 NPC events / 120s combat). Prologue false-positive; re-derive. |
 | **PlayIdle stub** (anim_detour hook) | 0x73BB20 | **0x85E0A0** | byte-exact `c7 81 14 04 00 00 00 00 00 00 c3` (`mov dword [ecx+0x414],0; ret`), unique hit; same 11B method + padding shape. Re-derived 2026-08-14 |
 | **Lock fix** (disable vanilla lock-bypass) | 0x527F33 | **0x798B65** | 8B prefix match `74 02 88 08 6a 01 8b c8` + identical tail; vcdiff EXACT cover agrees. Re-derived 2026-08-14 |
-| **AI pause fix 1** (NOP 2B) | 0x72051E | **0x5E99E2** | vcdiff EXACT: `74 15 83 f8 03 74 10` → `74 1e 83 f8 03 74` (JE + cmp eax,3 + JE shape survived). 2026-08-14b |
-| **GetActivate interception** | 0x78A68D | **0x8D3BC8** | vcdiff EXACT: `0f 84 dd 00 00 00 8b 06 8b ce 8b 80 00 01` — guard bytes identical, vtable slot shifted 0x224→0x100. Ret target still probing. 2026-08-14b |
+| **AI pause fix 1** (NOP 2B) | 0x72051E | **0x5E99E2** | vcdiff EXACT: `74 15 83 f8 03 74 10` → `74 1e 83 f8 03 74` (JE + cmp eax,3 + JE shape survived). **live-verified 2026-08-15**. 2026-08-14b |
+| **GetActivate interception** | 0x78A68D | **0x8D3BC8** | vcdiff EXACT: `0f 84 dd 00 00 00 8b 06 8b ce 8b 80 00 01` — guard bytes identical, vtable slot shifted 0x224→0x100. **live-verified 2026-08-15**: jmp + ret **0x8D3CB8** (`8b 4d 08 83 f9 01`) both confirmed. 2026-08-14b |
 | **Delegator stub spot** | 0x6EDBD9 | **0x405E69** | int3 padding after `ret` — vaultmp plants its PUSH-ECX stub here (stub bytes injected, only location translates). 2026-08-14b |
 | **PlayGroup fix** (EB 27 into pad) | 0x49DD6A | **0x4350F9** | int3 padding + `cmp dword [0x13148c4],0; je`; vcdiff EXACT. 2026-08-14b |
-| **FireWeapon relay** (call site / callee) | 0x71F05F / 0x4BE1A0 | **0x7DF3F7 / 0x770880** | E8 rel math verified (call → callee in both builds) + call-site shape + callee size/prologue; still probe before hooking. 2026-08-14 |
+| **FireWeapon relay** (call site / callee) | 0x71F05F / 0x4BE1A0 | **0x7DF3F7 / 0x770880** | E8 rel math verified (call → callee in both builds) + call-site shape + callee size/prologue. **live-verified 2026-08-15**: call `e8 84 14 f9 ff` → callee `53 8b dc` prologue. 2026-08-14 |
 | **AV fix** (ActorValue formatter) | 0x473D35/3B/3E85 | **0x5B7AC7 / 0x5B7ACC / 0x5B7AE2** | vtable +0x130 call survived + "%s %s (%08X)" string; fn 0x5B79B3 SEH-prologue twin of classic 0x473C50. 2026-08-14 |
 | **plugins.txt → .vmp** | 0xE10FF1 | **0xF9FDB1** | `.txt` at +9 of `\Plugins.txt` (0xF9FDA8), exact same layout. Re-derived 2026-08-14 |
 
@@ -769,3 +769,57 @@ now complete: ForceActorValue 0x521F20, GetActorValue 0x521760 →
 → 0xBCFBB0 + 0xBD00C0 — intricate sound-instance flow, OP_PLAY_SOUND
 stays stubbed), PlaceAtMe 0x53CA20 → 0x539280, PlayGroup 0x532690.
 FNV: ForceActorValue 0x5BE190, PlaySound 0x5C21E0.
+
+## Session 2026-08-15 — live session (game host tetsuo.chaotic.lan)
+
+First live-game session on the Steam build with the current code. Game
+launched via Steam (Fallout3.exe), bridge live on 127.0.0.1:1771.
+
+**Code fixes shipped (the i686 build had never actually linked — only
+`cargo check`ed):**
+1. `global_asm!` symbols lacked the C-ABI leading underscore on
+   i686-pc-windows-gnu (`#[no_mangle]`/`extern "C"` get `_`, GNU as does
+   not). Renamed all asm symbols (`_ashfall_*_thunk`, `_ashfall_hook_*`,
+   `_ashfall_trampoline_addr`, `_ashfall_collect_actor_c`, `_ashfall_actor_
+   collect_thunk`) + the `resolve()` extern decls/arms.
+2. thiscall/vcall inline-asm shims (address.rs / vtable.rs) over-constrained
+   registers ("requires more registers than available" on i686). Rewrote to
+   `in("ecx") this` + `push {arg}` + `call {addr}` + `lateout("eax") ret`;
+   disasm-verified the generated thiscall is correct.
+3. TCP server dropped clients after 50ms idle — `set_read_timeout` returns
+   `ErrorKind::TimedOut` on Linux, the old `Err(_) => break` closed the
+   connection → every event frame was lost. Now matches
+   `WouldBlock | TimedOut`.
+
+**Live-verified (OP_PROBE_CODE / OP_PROBE_PTR, read-only):**
+- respawn disable: all 5 sites patched, flag clear.
+- fire_weapon: call 0x7DF3F7 `e8 84 14 f9 ff` → **0x770880** (callee prologue
+  `53 8b dc` matches classic shape).
+- get_activate: jmp **0x8D3BC8** `0f 84 dd 00 00 00 8b 06 8b ce 8b 80 00 01 00 00`
+  EXACT + ret **0x8D3CB8** `8b 4d 08 83 f9 01` ✓.
+- ai_fix1 **0x5E99E2** `74 1e 83 f8 03 74 19` EXACT ✓.
+- play_idle_fix: all 4 candidates (`cmp byte [reg+0x250],0`) present —
+  0x6EFDA9 / 0x6F00DA (`74 29`), 0x6F28DA (`74 4a`), 0x6F45B3 (`74 69`).
+- play_group_fix **0x4350F9** (int3 pad + `83 3d c4 48 31 01 00 74`) ✓.
+- delegator pad **0x405E69** (7× `cc` + `51 56 8b f1`) ✓.
+
+**NOT firing (re-derivation needed):**
+- **AI-predicate detour 0x7F9B70** — installed byte-perfect (live-verified the
+  full chain: site `e9` → thunk `push ecx; push ecx; call collect_actor_c;
+  add esp,4; pop ecx; jmp [trampoline]`; trampoline 0x001F0000 = original
+  prologue `55 8b ec 51 57` + jmp back 0x7F9B75; call target =
+  `_ashfall_collect_actor_c`). But it ~never executes: 3 NPC events over
+  120s of combat + death (same ref 0x03008462). The `55 8B EC 51 57`
+  prologue match is a false positive — not the per-actor gate.
+- **Steam frame hook 0x9B3D77** — installed (`e8` + NOP; hook fn verified
+  calling `[0xF241E4]` then `report_player_state_due`), but ZERO
+  player-state events — alive or dead. The "frame body" twin is not a
+  per-frame path. Re-derive a real per-frame site.
+
+**Verified working live:** pipe round-trip + OP_GET_DEAD/GET_POS/PROBE_*,
+respawn-patch behavior, discovery event pipeline (spawn/remove frames flow
+when collection actually happens).
+
+Next: re-derive the Steam AI-predicate + per-frame sites statically
+(battlecruiser), then live-verify. Remaining patch groups still need Steam
+twins: fire_fix, match_race, place_at_me, ai_fix2/3/4.

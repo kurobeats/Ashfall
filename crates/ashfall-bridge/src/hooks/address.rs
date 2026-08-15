@@ -80,22 +80,12 @@ impl AutoPtr {
 /// Call a thiscall function at `addr` with `this` only.
 #[cfg(target_arch = "x86")]
 pub unsafe fn call_thiscall_0<R: Copy>(addr: usize, this: *mut u8) -> R {
-    let mut ret: usize = 0;
+    let mut ret: usize;
     core::arch::asm!(
-        "push ecx",
-        "push edx",
-        "mov ecx, {this}",
-        "mov eax, {addr}",
-        "call eax",
-        "mov edi, eax",
-        "mov {ret}, edi",
-        "pop edx",
-        "pop ecx",
+        "call {addr}",
         addr = in(reg) addr,
-        this = in(reg) this as usize,
-        ret = out(reg) ret,
-        out("edi") _,
-        out("eax") _,
+        in("ecx") this as usize,
+        lateout("eax") ret,
     );
     std::mem::transmute_copy(&ret)
 }
@@ -104,24 +94,14 @@ pub unsafe fn call_thiscall_0<R: Copy>(addr: usize, this: *mut u8) -> R {
 #[cfg(target_arch = "x86")]
 pub unsafe fn call_thiscall_1<T: Copy, R: Copy>(addr: usize, this: *mut u8, a1: T) -> R {
     let arg: usize = std::mem::transmute_copy(&a1);
-    let mut ret: usize = 0;
+    let mut ret: usize;
     core::arch::asm!(
-        "push ecx",
-        "push edx",
-        "mov ecx, {this}",
-        "mov eax, {addr}",
         "push {arg}",
-        "call eax",
-        "mov edi, eax",
-        "mov {ret}, edi",
-        "pop edx",
-        "pop ecx",
+        "call {addr}",
         addr = in(reg) addr,
-        this = in(reg) this as usize,
+        in("ecx") this as usize,
         arg = in(reg) arg,
-        ret = out(reg) ret,
-        out("edi") _,
-        out("eax") _,
+        lateout("eax") ret,
     );
     std::mem::transmute_copy(&ret)
 }
@@ -136,26 +116,16 @@ pub unsafe fn call_thiscall_2<T1: Copy, T2: Copy, R: Copy>(
 ) -> R {
     let arg1: usize = std::mem::transmute_copy(&a1);
     let arg2: usize = std::mem::transmute_copy(&a2);
-    let mut ret: usize = 0;
+    let mut ret: usize;
     core::arch::asm!(
-        "push ecx",
-        "push edx",
-        "mov ecx, {this}",
-        "mov eax, {addr}",
         "push {arg2}",
         "push {arg1}",
-        "call eax",
-        "mov edi, eax",
-        "mov {ret}, edi",
-        "pop edx",
-        "pop ecx",
+        "call {addr}",
         addr = in(reg) addr,
-        this = in(reg) this as usize,
+        in("ecx") this as usize,
         arg1 = in(reg) arg1,
         arg2 = in(reg) arg2,
-        ret = out(reg) ret,
-        out("edi") _,
-        out("eax") _,
+        lateout("eax") ret,
     );
     std::mem::transmute_copy(&ret)
 }
@@ -172,28 +142,18 @@ pub unsafe fn call_thiscall_3<T1: Copy, T2: Copy, T3: Copy, R: Copy>(
     let arg1: usize = std::mem::transmute_copy(&a1);
     let arg2: usize = std::mem::transmute_copy(&a2);
     let arg3: usize = std::mem::transmute_copy(&a3);
-    let mut ret: usize = 0;
+    let mut ret: usize;
     core::arch::asm!(
-        "push ecx",
-        "push edx",
-        "mov ecx, {this}",
-        "mov eax, {addr}",
         "push {arg3}",
         "push {arg2}",
         "push {arg1}",
-        "call eax",
-        "mov edi, eax",
-        "mov {ret}, edi",
-        "pop edx",
-        "pop ecx",
+        "call {addr}",
         addr = in(reg) addr,
-        this = in(reg) this as usize,
+        in("ecx") this as usize,
         arg1 = in(reg) arg1,
         arg2 = in(reg) arg2,
         arg3 = in(reg) arg3,
-        ret = out(reg) ret,
-        out("edi") _,
-        out("eax") _,
+        lateout("eax") ret,
     );
     std::mem::transmute_copy(&ret)
 }

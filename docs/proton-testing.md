@@ -237,3 +237,35 @@ Everything client/server/bridge-side is built and tested. On the host:
    OP_PROBE_CODE / OP_PROBE_FORM on the live host. New confirmed for the
    probe list: Steam `__security_cookie` 0x1202954 (canary XOR is `ebp`,
    not `esp`) + delegator fn 0x405E70.
+
+## 2026-08-15 live session (game host tetsuo.chaotic.lan)
+
+First live session with the current code. Fixed three blockers before any
+in-game testing was possible:
+- **i686 bridge never actually linked** — `global_asm!` symbols lacked the
+  C-ABI `_` prefix (only `cargo check` had ever run). Renamed all asm
+  symbols + extern decls/arms.
+- **thiscall/vcall inline-asm shims over-constrained registers** on i686
+  ("requires more registers than available") — rewrote to `in("ecx") this`
+  + `push {arg}` + `call {addr}` + `lateout("eax") ret`; disasm-verified.
+- **TCP server dropped clients after 50ms idle** — `set_read_timeout`
+  returns `ErrorKind::TimedOut` on Linux; the old `Err(_) => break` closed
+  the connection and every event frame was lost. Now matches
+  `WouldBlock | TimedOut`.
+
+Live results:
+- **Respawn disable** — all 5 sites patched, flag clear. ✓
+- **fire_weapon 0x770880, get_activate 0x8D3BC8/0x8D3CB8, ai_fix1 0x5E99E2,
+  play_idle_fix (4 cands), play_group_fix 0x4350F9, delegator pad
+  0x405E69** — all byte-confirmed via read-only probes. ✓
+- **Discovery detour 0x7F9B70 — does NOT fire.** Installs byte-perfect (full
+  thunk+trampoline chain verified live) but the site is a prologue
+  false-positive, not the per-actor gate: 3 NPC events over 120s of combat.
+  Re-derive.
+- **Steam frame hook 0x9B3D77 — does NOT fire.** Zero player-state events,
+  alive or dead. Re-derive a real per-frame site.
+- Event pipeline itself works (NPC spawn/remove frames flow when collection
+  happens); pipe round-trip + OP_GET_DEAD/GET_POS/PROBE_* all live.
+
+Next host session: after the Steam AI-predicate + per-frame sites are
+re-derived statically, re-run this matrix — the code paths are ready.

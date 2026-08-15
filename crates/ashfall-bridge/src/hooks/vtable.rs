@@ -58,20 +58,12 @@ pub unsafe fn vtable_entry<T>(object: *mut u8, index: usize) -> Option<T> {
 #[cfg(target_arch = "x86")]
 pub unsafe fn vcall_0<R: Copy>(obj: *mut u8, index: usize) -> R {
     let fn_ptr: usize = vtable_entry(obj, index).expect("vcall_0: null vtable entry");
-    let mut ret: usize = 0;
+    let mut ret: usize;
     core::arch::asm!(
-        "push ecx",
-        "push edx",
-        "mov ecx, {this}",
-        "call eax",
-        "mov edi, eax",
-        "mov {ret}, edi",
-        "pop edx",
-        "pop ecx",
-        inout("eax") fn_ptr => _,
-        this = in(reg) obj as usize,
-        ret = out(reg) ret,
-        out("edi") _,
+        "call {fn_ptr}",
+        fn_ptr = in(reg) fn_ptr,
+        in("ecx") obj as usize,
+        lateout("eax") ret,
     );
     std::mem::transmute_copy(&ret)
 }
@@ -82,22 +74,14 @@ pub unsafe fn vcall_0<R: Copy>(obj: *mut u8, index: usize) -> R {
 pub unsafe fn vcall_1<T: Copy, R: Copy>(obj: *mut u8, index: usize, a1: T) -> R {
     let fn_ptr: usize = vtable_entry(obj, index).expect("vcall_1: null vtable entry");
     let arg: usize = std::mem::transmute_copy(&a1);
-    let mut ret: usize = 0;
+    let mut ret: usize;
     core::arch::asm!(
-        "push ecx",
-        "push edx",
-        "mov ecx, {this}",
         "push {arg}",
-        "call eax",
-        "mov edi, eax",
-        "mov {ret}, edi",
-        "pop edx",
-        "pop ecx",
-        inout("eax") fn_ptr => _,
-        this = in(reg) obj as usize,
+        "call {fn_ptr}",
+        fn_ptr = in(reg) fn_ptr,
+        in("ecx") obj as usize,
         arg = in(reg) arg,
-        ret = out(reg) ret,
-        out("edi") _,
+        lateout("eax") ret,
     );
     std::mem::transmute_copy(&ret)
 }
@@ -113,24 +97,16 @@ pub unsafe fn vcall_2<T1: Copy, T2: Copy, R: Copy>(
     let fn_ptr: usize = vtable_entry(obj, index).expect("vcall_2: null vtable entry");
     let arg1: usize = std::mem::transmute_copy(&a1);
     let arg2: usize = std::mem::transmute_copy(&a2);
-    let mut ret: usize = 0;
+    let mut ret: usize;
     core::arch::asm!(
-        "push ecx",
-        "push edx",
-        "mov ecx, {this}",
         "push {arg2}",
         "push {arg1}",
-        "call eax",
-        "mov edi, eax",
-        "mov {ret}, edi",
-        "pop edx",
-        "pop ecx",
-        inout("eax") fn_ptr => _,
-        this = in(reg) obj as usize,
+        "call {fn_ptr}",
+        fn_ptr = in(reg) fn_ptr,
+        in("ecx") obj as usize,
         arg1 = in(reg) arg1,
         arg2 = in(reg) arg2,
-        ret = out(reg) ret,
-        out("edi") _,
+        lateout("eax") ret,
     );
     std::mem::transmute_copy(&ret)
 }
@@ -148,26 +124,18 @@ pub unsafe fn vcall_3<T1: Copy, T2: Copy, T3: Copy, R: Copy>(
     let arg1: usize = std::mem::transmute_copy(&a1);
     let arg2: usize = std::mem::transmute_copy(&a2);
     let arg3: usize = std::mem::transmute_copy(&a3);
-    let mut ret: usize = 0;
+    let mut ret: usize;
     core::arch::asm!(
-        "push ecx",
-        "push edx",
-        "mov ecx, {this}",
         "push {arg3}",
         "push {arg2}",
         "push {arg1}",
-        "call eax",
-        "mov edi, eax",
-        "mov {ret}, edi",
-        "pop edx",
-        "pop ecx",
-        inout("eax") fn_ptr => _,
-        this = in(reg) obj as usize,
+        "call {fn_ptr}",
+        fn_ptr = in(reg) fn_ptr,
+        in("ecx") obj as usize,
         arg1 = in(reg) arg1,
         arg2 = in(reg) arg2,
         arg3 = in(reg) arg3,
-        ret = out(reg) ret,
-        out("edi") _,
+        lateout("eax") ret,
     );
     std::mem::transmute_copy(&ret)
 }

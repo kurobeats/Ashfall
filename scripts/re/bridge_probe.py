@@ -5,9 +5,9 @@ Run against a live game process (the bridge TCP server on 127.0.0.1:1771
 inside Proton/Wine — Wine maps Windows loopback to the host's, so connect
 from the Linux side or through an SSH tunnel).
 
-Wire format:
-  command:  [0x02 PIPE_OP_COMMAND][key:4B LE][func:4B LE][param_count:1B][params...]
-  response: [0x03 PIPE_OP_RETURN][key:4B LE][result...]
+Wire format (length-prefixed, matches ashfall_core::event::encode_frame):
+  command:  [len:2B LE][0x02][key:4B LE][func:4B LE][param_count:1B][params...]
+  response: [len:2B LE][0x03][key:4B LE][result...]
   OP_DUMP_IMAGE result: [0x04][size:4B LE][image bytes]
 
 Usage:
@@ -39,28 +39,27 @@ STEAM_DEATH_HANDLED = 0x1228871
 
 
 def cmd(conn, func, params=b"", key=7):
-    frame = bytes([PIPE_OP_COMMAND]) + struct.pack("<I", key) + struct.pack("<I", func) + bytes([len(params)]) + params
+    # Length-prefixed pipe frame (matches ashfall_core::event::encode_frame):
+    #   [len:2 LE][opcode][payload]  payload = [key:4 LE][func:4 LE][count:1][params...]
+    payload = struct.pack("<I", key) + struct.pack("<I", func) + bytes([len(params)]) + params
+    frame = struct.pack("<H", len(payload)) + bytes([PIPE_OP_COMMAND]) + payload
     conn.sendall(frame)
+    # Response is one length-prefixed frame: [len:2][opcode][key:4][result...]
     data = b""
-    while len(data) < 5:
+    while len(data) < 3:
         chunk = conn.recv(65536)
+        if not chunk:
+            return b""
+        data += chunk
+    ln = struct.unpack("<H", data[0:2])[0]
+    while len(data) < 3 + ln:
+        chunk = conn.recv(1 << 20)
         if not chunk:
             break
         data += chunk
-    if len(data) < 5:
-        return b""
-    op = data[0]
-    payload = data[5:]
-    # Small results arrive in one chunk; OP_DUMP_IMAGE streams the whole
-    # image — keep reading until the declared size is fully received.
-    if payload and payload[0] == PIPE_OP_RETURN_BIG and len(payload) >= 5:
-        size = struct.unpack("<I", payload[1:5])[0]
-        while len(payload) < 5 + size:
-            chunk = conn.recv(1 << 20)
-            if not chunk:
-                break
-            payload += chunk
-    return payload
+    body = data[3:3 + ln]
+    # body = [key:4][result...]; return the result (after the key).
+    return body[4:] if len(body) >= 4 else b""
 
 
 def action_probe(conn):
