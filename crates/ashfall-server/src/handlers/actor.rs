@@ -317,3 +317,99 @@ pub fn handle_spell_cast(
         target,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::session::Session;
+    use crate::world::objects::Player;
+    use crate::world::registry::ObjectRegistry;
+    use std::collections::HashMap;
+    use std::net::SocketAddr;
+
+    fn session_owning(registry: &ObjectRegistry, id: NetworkID) -> Session {
+        let mut s = Session::new(
+            NetworkID::new(1),
+            "127.0.0.1:9000".parse::<SocketAddr>().unwrap(),
+            "Wanderer".into(),
+        );
+        s.player_id = Some(id);
+        s.current_cell = 0x1;
+        s
+    }
+
+    fn actor_new_packet(id: u64, ref_id: u32) -> Packet {
+        Packet::ActorNew {
+            id: NetworkID::new(id),
+            ref_id,
+            base_id: 0x7,
+            values: HashMap::new(),
+            base_values: HashMap::new(),
+            race: 0,
+            age: 0,
+            idle: 0,
+            moving: 0,
+            moving_xy: 0,
+            weapon: 0,
+            female: false,
+            alerted: false,
+            sneaking: false,
+            dead: false,
+            death_limbs: 0,
+            death_cause: 0,
+            scale: 1.0,
+        }
+    }
+
+    #[test]
+    fn actor_new_grants_ownership_and_registers() {
+        let registry = Arc::new(ObjectRegistry::new());
+        let pid = registry.insert(Player::new(NetworkID::new(1), 0x100, 0x7, 0x1));
+        let session = session_owning(&registry, pid);
+        let pkt = actor_new_packet(50, 0x200);
+        let (grant, relay) = handle_actor_new(&registry, &session, &pkt);
+        assert!(matches!(grant, Some(Packet::OwnershipGranted { .. })));
+        assert!(relay.is_some());
+        // ref is mapped to the actor id, owner recorded, actor in cell
+        assert_eq!(registry.lookup_ref(0x200), Some(NetworkID::new(50)));
+        assert_eq!(registry.owner_of(NetworkID::new(50)), Some(pid));
+        assert!(registry.get_by_cell(0x1).contains(&NetworkID::new(50)));
+    }
+
+    #[test]
+    fn actor_new_dedupes_by_ref_id() {
+        let registry = Arc::new(ObjectRegistry::new());
+        let pid = registry.insert(Player::new(NetworkID::new(1), 0x100, 0x7, 0x1));
+        let session = session_owning(&registry, pid);
+        handle_actor_new(&registry, &session, &actor_new_packet(50, 0x200));
+        // second client reports the same NPC with a different id → rejected
+        let (grant, relay) = handle_actor_new(&registry, &session, &actor_new_packet(51, 0x200));
+        assert!(grant.is_none() && relay.is_none());
+        assert!(registry.lookup_ref(0x200) == Some(NetworkID::new(50)));
+    }
+
+    #[test]
+    fn actor_new_rejects_owned_actor() {
+        let registry = Arc::new(ObjectRegistry::new());
+        let pid = registry.insert(Player::new(NetworkID::new(1), 0x100, 0x7, 0x1));
+        let session = session_owning(&registry, pid);
+        // pre-claim the id via a different ref (already owned)
+        registry.set_owner(NetworkID::new(50), pid);
+        let (grant, relay) = handle_actor_new(&registry, &session, &actor_new_packet(50, 0x300));
+        assert!(grant.is_none() && relay.is_none());
+    }
+
+    #[test]
+    fn ownership_claim_only_for_unowned() {
+        let registry = Arc::new(ObjectRegistry::new());
+        let pid = registry.insert(Player::new(NetworkID::new(1), 0x100, 0x7, 0x1));
+        let session = session_owning(&registry, pid);
+        let aid = registry.insert(crate::world::objects::Actor::new(
+            NetworkID::new(50), 0x200, 0x7, 0x1,
+        ));
+        assert!(handle_ownership_claim(&registry, &session, aid).is_some());
+        // second claim fails — already owned
+        assert!(handle_ownership_claim(&registry, &session, aid).is_none());
+        assert_eq!(registry.owner_of(aid), Some(pid));
+    }
+}
