@@ -164,8 +164,17 @@ mod tests {
         let center = CellGrid::encode_cell(0x7, 10, 10);
         let ctx = CellGrid::neighbors(center);
         assert!(CellGrid::is_in_context(&ctx, center));
-        assert!(CellGrid::is_in_context(&ctx, CellGrid::encode_cell(0x7, 11, 11)));
-        assert!(!CellGrid::is_in_context(&ctx, CellGrid::encode_cell(0x7, 20, 20)));
-        assert!(!CellGrid::is_in_context(&ctx, CellGrid::encode_cell(0x8, 10, 10))); // other world
+        assert!(CellGrid::is_in_context(
+            &ctx,
+            CellGrid::encode_cell(0x7, 11, 11)
+        ));
+        assert!(!CellGrid::is_in_context(
+            &ctx,
+            CellGrid::encode_cell(0x7, 20, 20)
+        ));
+        assert!(!CellGrid::is_in_context(
+            &ctx,
+            CellGrid::encode_cell(0x8, 10, 10)
+        )); // other world
     }
 }
