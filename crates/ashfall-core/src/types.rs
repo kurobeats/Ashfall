@@ -84,3 +84,58 @@ pub enum Reason {
     Quit = 4,
     None = 5,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn kind_masks() {
+        assert_eq!(ObjectKind::Actor.mask(), 0x20);
+        assert_eq!(ObjectKind::Player.mask(), 0x40);
+        assert_eq!(ObjectKind::Item.mask(), 0x8);
+    }
+
+    #[test]
+    fn actor_hierarchy() {
+        // Actor descends from Reference, Object, Container, ItemList — and itself
+        assert!(ObjectKind::Actor.is_kind(ObjectKind::Reference));
+        assert!(ObjectKind::Actor.is_kind(ObjectKind::Object));
+        assert!(ObjectKind::Actor.is_kind(ObjectKind::Container));
+        assert!(ObjectKind::Actor.is_kind(ObjectKind::ItemList));
+        assert!(ObjectKind::Actor.is_kind(ObjectKind::Actor));
+        // Actor is NOT a Player or Item
+        assert!(!ObjectKind::Actor.is_kind(ObjectKind::Player));
+        assert!(!ObjectKind::Actor.is_kind(ObjectKind::Item));
+    }
+
+    #[test]
+    fn player_hierarchy() {
+        assert!(ObjectKind::Player.is_kind(ObjectKind::Actor));
+        assert!(ObjectKind::Player.is_kind(ObjectKind::Reference));
+        assert!(ObjectKind::Player.is_kind(ObjectKind::Object));
+        assert!(!ObjectKind::Player.is_kind(ObjectKind::Window));
+    }
+
+    #[test]
+    fn item_and_window() {
+        assert!(ObjectKind::Item.is_kind(ObjectKind::Item));
+        assert!(!ObjectKind::Item.is_kind(ObjectKind::Container));
+        assert!(ObjectKind::Window.is_kind(ObjectKind::Window));
+        // UI sub-kinds descend from Window (ALL_WINDOWS = 0x7F80)
+        assert!(ObjectKind::Button.is_kind(ObjectKind::Window));
+        assert!(ObjectKind::Checkbox.is_kind(ObjectKind::Window));
+        assert!(ObjectKind::List.is_kind(ObjectKind::Window));
+        // windows are NOT actors / items / plain references
+        assert!(!ObjectKind::Window.is_kind(ObjectKind::Actor));
+        assert!(!ObjectKind::Window.is_kind(ObjectKind::Reference));
+        assert!(!ObjectKind::Window.is_kind(ObjectKind::Item));
+    }
+
+    #[test]
+    fn exact_match_fallback() {
+        // non-hierarchy kinds match only themselves
+        assert!(ObjectKind::Checkbox.is_kind(ObjectKind::Checkbox));
+        assert!(!ObjectKind::Checkbox.is_kind(ObjectKind::Button));
+    }
+}
