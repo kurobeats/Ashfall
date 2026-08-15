@@ -90,3 +90,33 @@ impl FormIDSync {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn form_id_parts() {
+        let f = FormID::new(0x01AB_CDEF);
+        assert_eq!(f.mod_index(), 0x01);
+        assert_eq!(f.object_id(), 0xAB_CDEF);
+        assert_eq!(f.as_u32(), 0x01AB_CDEF);
+        assert!(!f.is_null());
+        assert!(FormID::NULL.is_null());
+        assert_eq!(FormID::default(), FormID::NULL);
+    }
+
+    #[test]
+    fn form_id_conversions_and_display() {
+        assert_eq!(FormID::from(0x12_3456), FormID::new(0x12_3456));
+        assert_eq!(u32::from(FormID::new(0x77)), 0x77);
+        assert_eq!(format!("{}", FormID::new(0x0A0B0C0D)), "0A0B0C0D");
+    }
+
+    #[test]
+    fn form_id_sync_new() {
+        let s = FormIDSync::new(FormID::new(1), [0.0; 3], [0.0; 3], 1.0, 0x01);
+        assert_eq!(s.flags, 0x01);
+        assert_eq!(s.form_id, FormID::new(1));
+    }
+}

@@ -51,3 +51,26 @@ impl Default for NetworkID {
         NetworkID::NULL
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn network_id_newtype() {
+        let n = NetworkID::new(42);
+        assert_eq!(n.as_u64(), 42);
+        assert!(!n.is_null());
+        assert!(NetworkID::NULL.is_null());
+        assert_eq!(NetworkID::default(), NetworkID::NULL);
+        assert_eq!(NetworkID::from(7u64), NetworkID::new(7));
+        assert_eq!(u64::from(NetworkID::new(7)), 7);
+        assert_eq!(format!("{n}"), "42");
+    }
+
+    #[test]
+    fn network_id_equality_and_hash() {
+        assert_eq!(NetworkID::new(1), NetworkID::new(1));
+        assert_ne!(NetworkID::new(1), NetworkID::new(2));
+    }
+}
