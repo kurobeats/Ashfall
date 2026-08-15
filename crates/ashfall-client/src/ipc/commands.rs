@@ -110,3 +110,65 @@ impl CommandResult {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn opcodes_are_distinct() {
+        let ops = [
+            OP_GET_POS, OP_SET_POS, OP_GET_ANGLE, OP_SET_ANGLE,
+            OP_GET_CELL, OP_SET_CELL, OP_GET_ACTOR_STATE, OP_GET_ACTOR_VALUE,
+            OP_SET_ACTOR_VALUE, OP_GET_CONTROL, OP_SET_CONTROL, OP_GET_ACTIVATE,
+            OP_FIRE_WEAPON, OP_GET_NAME, OP_SET_NAME, OP_GET_LOCK, OP_SET_LOCK,
+            OP_SET_ENABLED, OP_MOVE_TO, OP_PLAY_SOUND, OP_SET_SCALE, OP_PLAY_GROUP,
+            OP_KILL, OP_TRACK_ACTOR, OP_UNTRACK_ACTOR,
+        ];
+        let mut sorted = ops.to_vec();
+        sorted.sort_unstable();
+        sorted.dedup();
+        assert_eq!(sorted.len(), ops.len(), "opcodes must be unique");
+    }
+
+    #[test]
+    fn param_encode_wire_layout() {
+        let mut buf = Vec::new();
+        Param::U32(0x01020304).encode_into(&mut buf);
+        assert_eq!(buf, [0x04, 0x03, 0x02, 0x01]); // LE
+        buf.clear();
+        Param::F32(1.0).encode_into(&mut buf);
+        assert_eq!(buf, 1.0f32.to_le_bytes());
+        buf.clear();
+        Param::U8(0x14).encode_into(&mut buf);
+        assert_eq!(buf, [0x14]);
+        buf.clear();
+        Param::Bool(true).encode_into(&mut buf);
+        assert_eq!(buf, [1]);
+        buf.clear();
+        Param::Str("hi".into()).encode_into(&mut buf);
+        assert_eq!(buf, [2, b'h', b'i']); // len-prefixed
+    }
+
+    #[test]
+    fn result_decode_empty_is_success() {
+        assert!(matches!(CommandResult::decode(&[]), CommandResult::Success));
+    }
+
+    #[test]
+    fn result_decode_12_bytes_heuristic_floats() {
+        let mut buf = Vec::new();
+        for f in [1.5f32, -2.0f32, 3.25f32] {
+            buf.extend_from_slice(&f.to_le_bytes());
+        }
+        match CommandResult::decode(&buf) {
+            CommandResult::Floats(floats) => {
+                assert_eq!(floats.len(), 3);
+                assert!((floats[0] - 1.5).abs() < 1e-6);
+                assert!((floats[1] + 2.0).abs() < 1e-6);
+                assert!((floats[2] - 3.25).abs() < 1e-6);
+            }
+            other => panic!("expected floats, got {other:?}"),
+        }
+    }
+}
