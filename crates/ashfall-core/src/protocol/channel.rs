@@ -54,20 +54,49 @@ mod tests {
     #[test]
     fn packet_channel_mapping() {
         assert_eq!(Channel::from_packet(&Packet::GameStart), Channel::System);
-        assert_eq!(Channel::from_packet(&Packet::GameChat { message: "hi".into() }), Channel::Chat);
-        assert_eq!(Channel::from_packet(&Packet::UpdatePos { id: crate::id::NetworkID::new(1), pos: [0.0; 3] }), Channel::Game);
-        assert_eq!(Channel::from_packet(&Packet::QuestStage { quest_id: 1, stage: 2 }), Channel::System);
+        assert_eq!(
+            Channel::from_packet(&Packet::GameChat {
+                message: "hi".into()
+            }),
+            Channel::Chat
+        );
+        assert_eq!(
+            Channel::from_packet(&Packet::UpdatePos {
+                id: crate::id::NetworkID::new(1),
+                pos: [0.0; 3]
+            }),
+            Channel::Game
+        );
+        assert_eq!(
+            Channel::from_packet(&Packet::QuestStage {
+                quest_id: 1,
+                stage: 2
+            }),
+            Channel::System
+        );
     }
 
     #[test]
     fn unreliable_delivery_set() {
-        let pos = Packet::UpdatePos { id: crate::id::NetworkID::new(1), pos: [0.0; 3] };
-        let ang = Packet::UpdateAngle { id: crate::id::NetworkID::new(1), angle: [0.0; 2] };
-        let vel = Packet::UpdateVelocity { id: crate::id::NetworkID::new(1), vel: [0.0; 3], on_ground: true };
+        let pos = Packet::UpdatePos {
+            id: crate::id::NetworkID::new(1),
+            pos: [0.0; 3],
+        };
+        let ang = Packet::UpdateAngle {
+            id: crate::id::NetworkID::new(1),
+            angle: [0.0; 2],
+        };
+        let vel = Packet::UpdateVelocity {
+            id: crate::id::NetworkID::new(1),
+            vel: [0.0; 3],
+            on_ground: true,
+        };
         assert!(Channel::is_unreliable(&pos));
         assert!(Channel::is_unreliable(&ang));
         assert!(Channel::is_unreliable(&vel));
         assert!(!Channel::is_unreliable(&Packet::GameStart));
-        assert!(!Channel::is_unreliable(&Packet::GameChat { message: "hi".into() }));
+        assert!(!Channel::is_unreliable(&Packet::GameChat {
+            message: "hi".into()
+        }));
     }
 }
