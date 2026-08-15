@@ -205,3 +205,112 @@ impl CombatResolver {
         base_damage > 0.0 && base_damage < 10000.0 // no 10k+ damage weapons
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::world::registry::ObjectRegistry;
+    use ashfall_core::protocol;
+    use std::sync::Arc;
+
+    fn actor_pair() -> (Arc<ObjectRegistry>, NetworkID, NetworkID) {
+        let registry = Arc::new(ObjectRegistry::new());
+        let a = registry.insert(Actor::new(NetworkID::new(1), 0x100, 0x7, 0x1));
+        let t = registry.insert(Actor::new(NetworkID::new(2), 0x200, 0x7, 0x1));
+        // both at the same position → in range
+        for id in [a, t] {
+            let arc = registry.get(id).unwrap();
+            let mut guard = arc.write();
+            let actor = guard.as_any_mut().downcast_mut::<Actor>().unwrap();
+            actor.container.object.net_pos = [0.0, 0.0, 0.0];
+            actor.set_value(0x14, 100.0, false); // full health
+        }
+        (registry, a, t)
+    }
+
+    fn hit(attacker: NetworkID, target: NetworkID, dmg: f32, limb: u8, flags: u8) -> Packet {
+        Packet::ActorHit {
+            target,
+            attacker,
+            limb,
+            base_damage: dmg,
+            flags,
+            weapon_id: 0x1000,
+            projectile: 0,
+        }
+    }
+
+    #[test]
+    fn hit_lands_damage_and_death() {
+        let (registry, a, t) = actor_pair();
+        let packets = CombatResolver::resolve_hit(&registry, &hit(a, t, 100.0, 0, 0))
+            .expect("hit resolves");
+        // 100 dmg, no DR/DT → target dead
+        assert!(packets.iter().any(|p| matches!(p, Packet::ActorDamaged { .. })));
+        assert!(packets.iter().any(|p| matches!(p, Packet::ActorDeathExt { .. })));
+        let arc = registry.get(t).unwrap();
+        let guard = arc.read();
+        let actor = guard.as_any().downcast_ref::<Actor>().unwrap();
+        assert!(actor.dead);
+        assert_eq!(actor.get_value(0x14), 0.0);
+    }
+
+    #[test]
+    fn non_lethal_hit_keeps_target_alive() {
+        let (registry, a, t) = actor_pair();
+        let packets = CombatResolver::resolve_hit(&registry, &hit(a, t, 30.0, 0, 0))
+            .expect("hit resolves");
+        assert!(packets.iter().any(|p| matches!(p, Packet::ActorDamaged { .. })));
+        assert!(!packets.iter().any(|p| matches!(p, Packet::ActorDeathExt { .. })));
+        let arc = registry.get(t).unwrap();
+        let guard = arc.read();
+        let actor = guard.as_any().downcast_ref::<Actor>().unwrap();
+        assert!(!actor.dead);
+        assert!((actor.get_value(0x14) - 70.0).abs() < 1e-3);
+    }
+
+    #[test]
+    fn dead_target_rejected() {
+        let (registry, a, t) = actor_pair();
+        let arc = registry.get(t).unwrap();
+        let mut guard = arc.write();
+        let actor = guard.as_any_mut().downcast_mut::<Actor>().unwrap();
+        actor.dead = true;
+        drop(guard);
+        assert!(CombatResolver::resolve_hit(&registry, &hit(a, t, 10.0, 0, 0)).is_none());
+    }
+
+    #[test]
+    fn out_of_range_rejected() {
+        let (registry, a, t) = actor_pair();
+        // move the attacker 6000 units away
+        let arc = registry.get(a).unwrap();
+        let mut guard = arc.write();
+        let actor = guard.as_any_mut().downcast_mut::<Actor>().unwrap();
+        actor.container.object.net_pos = [6000.0, 0.0, 0.0];
+        drop(guard);
+        assert!(CombatResolver::resolve_hit(&registry, &hit(a, t, 10.0, 0, 0)).is_none());
+    }
+
+    #[test]
+    fn missing_attacker_rejected() {
+        let (registry, _, t) = actor_pair();
+        let ghost = NetworkID::new(99); // not in the registry
+        assert!(CombatResolver::resolve_hit(&registry, &hit(ghost, t, 10.0, 0, 0)).is_none());
+    }
+
+    #[test]
+    fn critical_flag_scales_damage() {
+        let (registry, a, t) = actor_pair();
+        let packets = CombatResolver::resolve_hit(&registry, &hit(a, t, 100.0, 0, protocol::HIT_FLAG_CRITICAL))
+            .expect("hit resolves");
+        // 100 * 1.5 crit = 150 → death regardless; check the damaged value
+        if let Some(Packet::ActorDamaged { final_damage, .. }) =
+            packets.iter().find(|p| matches!(p, Packet::ActorDamaged { .. }))
+        {
+            assert!((*final_damage - 150.0).abs() < 1e-3);
+        } else {
+            panic!("no ActorDamaged packet");
+        }
+    }
+}
