@@ -119,12 +119,16 @@ pub mod delegated_opcodes {
     // Actor state ops
     pub const SET_AV: u16 = 0x110E; // ForceActorValue
     pub const KILL: u16 = 0x108B; // KillActor
+    // 2026-08-17: verified against the Steam FO3 command table 0x110B388
+    // (name 'SetRestrained', handler 0x7A6670).
     pub const SET_RESTRAINED: u16 = 0x10F3;
     pub const PLAY_GROUP: u16 = 0x1013;
 
     // World ops
     pub const LOCK: u16 = 0x1072; // adjacent to verified UnLock 0x1073
     pub const UNLOCK: u16 = 0x1073;
+    // 2026-08-17: verified against the Steam FO3 command table 0x110B388
+    // (name 'SetOwnership', handler 0x7A5C20).
     pub const SET_OWNERSHIP: u16 = 0x1117;
     pub const ACTIVATE: u16 = 0x100D; // verified; 0x100C is GetSecondsPassed
 
