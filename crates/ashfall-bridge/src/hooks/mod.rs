@@ -738,8 +738,13 @@ pub fn kill_actor(ref_id: u32, killer_id: u32, limb: i8, cause: i8) {
     // handler (0x522030) — engine Kill = 0x71AC50(actor, killer, 0.0),
     // then death processing 0x71C280(actor, cause, limb, killer) (arg
     // order from the handler's push sequence; KillActor signature =
-    // (Killer, DismemberLimb, CauseOfDeath)). FNV Kill differs — no-op
-    // until re-derived.
+    // (Killer, DismemberLimb, CauseOfDeath)).
+    // FNV: re-derived 2026-08-17 (data/re lane b1) — KillActor handler
+    // 0x5C7F10 (opcode 0x108B) → engine Kill 0x8B86E0(actor, killer,
+    // limb, isPlayer?) + death helpers 0x8B8290/0x8B8580; death-state
+    // +0xFC writes at 0x45F492/0x8D5FCA/0xA28F07. PENDING-LIVE: arg
+    // order/signature differs from FO3 (3 args vs 2+float), needs a live
+    // probe before wiring — no-op on FNV for now.
     if crate::hooks::is_fnv() {
         return;
     }

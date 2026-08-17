@@ -199,6 +199,79 @@ pub mod fo3_steam_17_vaultmp {
     /// plugins.txt loader: `.txt` in `\Plugins.txt` at +9 (GOG 0xE10FF1,
     /// exact same layout). Patched to `.vmp`.
     pub const PLUGINS_VMP: usize = 0x00F9_FDB1;
+
+    // ── 2026-08-17 data/re campaign (lanes A1/A2) — newly solved sites ──
+    // All byte-guarded before patching, exactly like `apply_steam_respawn`.
+    // Full derivations: data/re/fo3/steam-vaultmp-twins.md.
+
+    /// ai_fix2 (death-state-5 JE redirect): Steam twin of classic 0x6FAEE8
+    /// (2nd byte of `74 2c` JE). Steam JE `74 2a` @ 0x7D0AA5 inside AI
+    /// predicate 0x7D0A50; write 0x2E → redirects death-state-5 from
+    /// return-false to the ai_fix3 test block (classic wrote 0x30).
+    /// Guard: `74 2a 83 f8 03 74`.
+    pub const AI_FIX2: usize = 0x007D_0AA6;
+    /// ai_fix3 (test-block): Steam twin of classic 0x6FAF19 int3 pad @
+    /// 0x7D0AD5 (after predicate 0x7D0A50 ends 0x7D0AD4). Write
+    /// `85 FF 74 CE EB F6` (classic `85 FF 74 CC EB F6`; JE disp CC→CE for
+    /// Steam layout — je → cmp eax,3 @ 0x7D0AA7, jmp → return-false @
+    /// 0x7D0AD1). Guard: `cc cc cc cc cc cc`.
+    pub const AI_FIX3: usize = 0x007D_0AD5;
+    /// AI predicate itself (corrected 2026-08-17): 0x7D0A50 is the 1:1
+    /// structural twin of classic 0x6FAE90 (same slot order + death-state
+    /// cmp 5/3 + player singleton 0x123C674, 12 callers). The earlier
+    /// 0x7DAF80 never fires live. See `STEAM_AI_PREDICATE`.
+    pub const AI_PREDICATE: usize = 0x007D_0A50;
+    /// delegator_src (bethesda delegator call): Steam twin of classic
+    /// 0x6EEC86 in the main game loop — `mov ecx,[0x123c5d4]; call
+    /// 0x9B0740` @ 0x9B3EF6 (0x9B0740 = delegator twin of 0x6EDBE0,
+    /// timer-check prologue verified). Recipe: relcall → delegator stub
+    /// 0x405E69. Guard: `8b 0d d4 c5 23 01`.
+    pub const DELEGATOR_SRC: usize = 0x009B_3EF6;
+    /// play_idle_fix_src (PlayIdle detour site): Steam twin of classic
+    /// 0x534D8D — `push 0x80; call [vtable+0x60c]` @ 0x79DA88 (+5 nop site
+    /// 0x79DA8D), 2nd twin instance 0x79F2BB (duplicated handler). The 4
+    /// older candidates (0x6EFDA9/0x6F00DA/0x6F28DA/0x6F45B3) are the
+    /// post-site +0x250 check, NOT the fix site. Guard:
+    /// `68 80 00 00 00 8b 01 ff 90 0c`. Choice between twins pending-live.
+    pub const PLAY_IDLE_FIX_SRC: usize = 0x0079_DA88;
+    /// fire_fix_jmp (fire relay): Steam twin of classic 0x79236C —
+    /// vtable +0x224 dispatch `8b 80 24 02 00 00 ff d0` @ 0x8DA397 (the
+    /// +0x224 slot SURVIVED the recompile). CAVEAT: vaultmp's 3-byte
+    /// `EB 57 90` rel8 + mid-instruction re-entry does NOT transfer (Steam
+    /// re-entry 0x8DA399 is mid-instruction); needs 5-byte E9 + rewritten
+    /// relay stub — pending-live for exact stub bytes.
+    pub const FIRE_FIX_JMP: usize = 0x008D_A397;
+    /// fire_fix_patch (relay stub pad): Steam int3 pad after ret 4 @
+    /// 0x8DA3CB — pad at 0x8DA3CE (`cc cc`). Stub bytes are vaultmp-
+    /// authored; only the pad location translates (relay stub must be
+    /// re-derived for Steam register alloc). Guard: `c2 04 00 cc cc`.
+    pub const FIRE_FIX_PATCH: usize = 0x008D_A3CE;
+    /// place_at_me_jmp (spawn interception): Steam twin of classic
+    /// 0x539785 — internal spawn call `e8 25 5f f6 ff` → 0x704480 @
+    /// 0x79E556 (command-table route: PlaceAtMe entry 0x110F910 → handler
+    /// 0x79E6C0 → engine 0x79DE90). UNIQUE (1 hit). Guard:
+    /// `6a 00 6a 00 6a 00 8b cf e8`.
+    pub const PLACE_AT_ME_JMP: usize = 0x0079_E556;
+    /// place_at_me_call (internal spawn fn): Steam twin of classic
+    /// 0x43DEF0 = 0x704480 (SEH prologue frame 0x7C, cookie 0x1202954,
+    /// 7 args). Guard: `55 8b ec 6a ff 68 ba 4e de 00`.
+    pub const PLACE_AT_ME_CALL: usize = 0x0070_4480;
+    /// place_at_me_fix (skip the +0x2A8 spawn): Steam twin of classic
+    /// 0x6F1CB6 — `0f 84 e2 02 00 00` (je → 0x9CBF97) @ 0x9CBCAF, preceded
+    /// by movss pos copy, followed by `call [eax+0x2a8]`. je pattern 6 hits
+    /// but unique with pos-copy + +0x2A8-after + epilogue dest. Recipe:
+    /// 5B E9 rel32 to dest + 1B NOP @ +5.
+    pub const PLACE_AT_ME_FIX: usize = 0x009C_BCAF;
+    /// place_at_me_fix_dest: the je target = SEH epilogue @ 0x9CBF97.
+    pub const PLACE_AT_ME_FIX_DEST: usize = 0x009C_BF97;
+    /// match_race sites (Steam fn 0x6F71E0, restructured — +0x218 vtable
+    /// slot GONE, new guard chain: actor-null + [reg+0x1c] base-form +
+    /// form-type 0x2a + cmove). Recipe bytes do NOT transfer; fix semantics
+    /// must be re-derived against the new guard chain (pending-live for
+    /// exact bytes). Sites for reference:
+    pub const MATCH_RACE_NOP1: usize = 0x006F_71FA;
+    pub const MATCH_RACE_NOP2: usize = 0x006F_720E;
+    pub const MATCH_RACE_PATCH: usize = 0x006F_7220; // `8b 82 10 01 00 00 3b 81` unique (1 hit)
 }
 
 /// Steam FO3 (post-2023) respawn-disable sites — re-derived 2026-08-08 by
@@ -631,8 +704,18 @@ const AI_PREDICATE_PROLOGUE: [u8; 3] = [0x56, 0x8B, 0xF1];
 /// NOTE: the recompile changed the return bool→int (0/1/0xC/table) and
 /// split the helper (0x7DAF50); 2 call sites survive (the rest inlined).
 /// Live fire-rate unverified — if sparse, fall back to the HighProcess twin.
+///
+/// CORRECTED 2026-08-17 (data/re campaign lane A1): the true structural
+/// twin of classic 0x6FAE90 is **0x7D0A50**, not 0x7DAF80. 0x7D0A50 is the
+/// 1:1 twin (same vtable slot order +0x234/0x22C/0x3E0/0x230/0x214, death-
+/// state cmp 5/3, player singleton 0x123C674, 12 callers); 0x7DAF80 has a
+/// different order (vtable+0x22C first, player-compare early, helper
+/// 0x7DAF50) and NO death-state cmp 5/3 sequence — it was the fn that
+/// "installs byte-perfect but ~never fires" in the 2026-08-15 live session.
+/// Verified in the dump: 0x7D0A50 = `56 8b f1 8b 06 8b 80 34` (classic
+/// 0x6FAE90 = `56 8b f1 8b 06 8b 90 34` — register-alloc only).
 #[cfg(target_arch = "x86")]
-pub const STEAM_AI_PREDICATE: usize = 0x007D_AF80;
+pub const STEAM_AI_PREDICATE: usize = 0x007D_0A50;
 /// Expected prologue: `56 8B F1`.
 #[cfg(target_arch = "x86")]
 const STEAM_AI_PREDICATE_PROLOGUE: [u8; 3] = [0x56, 0x8B, 0xF1];
@@ -675,10 +758,11 @@ static DETOUR: std::sync::OnceLock<std::sync::Mutex<Option<super::detour::Detour
 unsafe impl Send for super::detour::Detour {}
 
 /// Install the actor-discovery detour on the classic FO3 build. Byte-guarded
-/// like `apply_steam_respawn` — no-op on Steam (address TBD) and non-Windows.
+/// like `apply_steam_respawn` — no-op on unknown builds and non-Windows.
 /// Select the AI-predicate site for the running build by prologue signature
-/// (classic `push esi; mov esi, ecx` vs Steam/Anniversary `push ebp; mov
-/// ebp,esp; push ecx; push edi; mov edi,ecx` — Steam re-derived 2026-08-13).
+/// (both classic 0x6FAE90 and Steam 0x7D0A50 use the frame-less thiscall
+/// prologue `56 8B F1` — push esi; mov esi, ecx — so the same 3-byte guard
+/// validates both; the address split is by build, the bytes are identical).
 #[cfg(target_arch = "x86")]
 fn ai_predicate_site() -> Option<usize> {
     use crate::hooks::read_bytes;

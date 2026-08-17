@@ -330,7 +330,7 @@ const VTBL_REF_GET_POS: usize = vtable_index(0x30); // index 12 (x86)
                                                     // REMOVED 2026-08-14k — the audit proved the documented vtable bases are
                                                     // run-start artifacts and +0x68/+0x70 are flag-setter/ret-stub slots, not
                                                     // AV getters (see get_actor_value's ponytail note).
-const VTBL_ACTOR_ANIM_DATA: usize = vtable_index(0x01E4); // index 121 (x86, vaultmp.cpp GetActorState)
+const VTBL_ACTOR_ANIM_DATA: usize = vtable_index(0x01EC); // index 123 — corrected 2026-08-17 (data/re lane a3): the old 0x1E4 (0x76FE20) is FPU math, NOT the anim getter (0 byte hits in the Steam dump). Real anim pointer getters: 0x1EC (0x76CD00, returns [actor+0x5e8]/[actor+0x1a0]) → Steam 0x244 (0x8B8D40) and 0x1F0 (0x76FED0) → Steam 0x248 (0x8B8F60), both 32B byte-identical.
 
 // ═══════════════════════════════════════════════════════════════
 // Steam (post-2023) vtable — re-derived 2026-08-14 (static, see steam-re.md)
@@ -382,6 +382,10 @@ pub fn steam_slot_for(gog_slot: usize) -> Option<usize> {
         // "+0xFC" claim (steam-re.md 2026-08-14) was a minority vtable whose
         // +0xFC is a `xor eax,eax; ret` stub, not the lock getter.
         0xA0 => Some(fo3_steam_vtable::GET_LOCKED),
+        // GOG +0x1EC anim-data getter 0x76CD00 (`80 b9 a8 05 00 00 00 75 0a`:
+        // cmp byte [ecx+0x5a8],0; jne +0xa) -> Steam +0x244 = 0x8B8D40
+        // (32B byte-identical, data/re lane a3 2026-08-17).
+        0x1EC => Some(0x244),
         _ => None,
     }
 }
@@ -507,12 +511,15 @@ pub unsafe fn get_actor_state(ref_id: u32) -> (u32, u8, u8, u8, bool, bool) {
         return (0, 0, 0, 0, false, false);
     }
 
-    // Call VTable[0x01E4] → returns animation data pointer.
-    // ponytail: the slot is unverified on Steam (the recompile reordered
-    // the early vtable; a wrong slot returns a small int, not a heap
-    // pointer). Guard the result so a wrong-slot call can't feed a garbage
+    // Call VTable[0x01EC] → returns animation data pointer. Corrected
+    // 2026-08-17 (data/re lane a3): the old 0x1E4 slot was FPU math, not
+    // the anim getter. Steam uses +0x244 (0x8B8D40, 32B byte-identical,
+    // guard `80 b9 a8 05 00 00 00 75 0a`) via steam_slot_for.
+    // ponytail: a wrong slot returns a small int, not a heap pointer.
+    // Guard the result so a wrong-slot call can't feed a garbage
     // pointer into the field reads below (crash → no player-state events).
-    let anim_data: *mut u8 = vcall_0(obj, VTBL_ACTOR_ANIM_DATA);
+    let anim_slot = steam_slot_for(VTBL_ACTOR_ANIM_DATA).unwrap_or(VTBL_ACTOR_ANIM_DATA);
+    let anim_data: *mut u8 = vcall_0(obj, anim_slot);
     if anim_data.is_null() || (anim_data as usize) < 0x10000 {
         return (0, 0, 0, 0, false, false);
     }
@@ -660,11 +667,14 @@ pub unsafe fn set_actor_value(ref_id: u32, index: u8, value: f32) {
         return;
     }
     // Replicate the engine's ForceActorValue handler for each build
-    // (FO3 0x521F20 / FNV 0x5BE190): current = GetActorValueF via the
+    // (FO3 0x521F20 / FNV 0x5CD910): current = GetActorValueF via the
     // avOwner vtable slot 3, then apply the delta via Actor vtbl[0]
     // slot +0x3A0 (FO3) / +0x3A4 (FNV), thiscall args index, delta, 0.
+    // (2026-08-17 data/re lane b1: FNV ForceActorValue handler is 0x5CD910,
+    // opcode 0x110E — the earlier 0x5BE190 was ModPCSkill. The avOwner
+    // member at +0xA4 / slot 3 / SetAV +0x3A4 path is confirmed correct.)
     let (av_off, setter_slot) = if crate::hooks::is_fnv() {
-        (0xA4usize, 0x3A4usize) // FNV: avOwner member, setter confirmed 0x5BE190
+        (0xA4usize, 0x3A4usize) // FNV: avOwner member, setter slot confirmed 0x3A4
     } else {
         (0x9Cusize, 0x3A0usize) // FO3: avOwner base sub-object, setter confirmed 0x521F20
     };
@@ -784,8 +794,17 @@ pub unsafe fn set_lock(ref_id: u32, locked: bool) {
 }
 
 /// Set the lock byte on an already-resolved object pointer (+0xA bit 0).
+///
+/// FO3/Steam only (2026-08-17 data/re campaign lane b2): the +0xA-bit-0
+/// lock byte is the FO3/GOG + Steam layout (verified getter
+/// `mov al,[ecx+0xa]; and al,1; ret`, GOG 0x4017F0 / Steam 0x57C780). FNV's
+/// lock is a DIFFERENT mechanism — the getter signature has zero hits in
+/// gog-fnv.exe; FNV lock = pointer at +0x20 → TESObjectLOCK vtable slot
+/// 0xB8 (fn 0x57B410). Writing +0xA on FNV would corrupt an unrelated
+/// byte, so this no-ops on FNV until the FNV path is re-derived + live-
+/// probed.
 pub unsafe fn set_lock_flags(obj: *mut u8, locked: bool) {
-    if obj.is_null() {
+    if obj.is_null() || crate::hooks::is_fnv() {
         return;
     }
     let mut byte = read_field::<u8>(obj, 0x0A);

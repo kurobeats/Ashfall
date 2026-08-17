@@ -17,7 +17,7 @@ pressure-vessel safe), stable across runs.
 | baseForm field | vtable 0x10 (WRONG) | **field +0x1C** | obj-field probe: +0x1C → form object with ID 0x7 (Player base) |
 | pos/angle/cell/scale/refID | fields | fields (+0x2C/0x30/0x34, +0x38, +0x3C, +0x0C) | live battery, game stable |
 | **Respawn disable** (patch sites) | 0x6D5965 / 0x78B230 | **0x9C43A5 / 0x8C9CE0→0x8C9D5D / 0x8C9D52** | semantic anchor (death-UI string → death flow) + probe-verified live; applied + behavior-verified 2026-08-08 |
-| **AI predicate** (actor-discovery detour) | 0x6FAE90 (`56 8B F1`) | **0x7DAF80** (`56 8B F1`) | Classic detour byte-guards `56 8B F1`. ⚠️ The first Steam re-derivation (0x7F9B70, `55 8B EC 51 57`) was a **prologue false-positive** — installs byte-perfect but ~never fires live (3 NPC events / 120s combat). **Re-derived 2026-08-15:** the real twin is **0x7DAF80** — keeps the classic frame-less thiscall prologue `56 8B F1`, calls vtable +0x22C (push 0), compares against singleton **0x123C674**, reads [actor+0x60]; sits 0x22 bytes past the vcdiff gap candidate 0x7DAF5E. Recompile changed return bool→int (0/1/0xC/table) and split the helper (0x7DAF50, 57 callers); only 2 call sites survive (rest inlined). Live fire-rate unverified. |
+| **AI predicate** (actor-discovery detour) | 0x6FAE90 (`56 8B F1`) | **0x7D0A50** (`56 8B F1`) | Classic detour byte-guards `56 8B F1`. ⚠️ Two earlier re-derivations were **prologue false-positives**: 0x7F9B70 (`55 8B EC 51 57`) and **0x7DAF80** — both install byte-perfect but ~never fire live (3 NPC events / 120s combat). **CORRECTED 2026-08-17 (data/re lane A1):** the true 1:1 structural twin is **0x7D0A50** — same vtable slot order (+0x234/0x22C/0x3E0/0x230/0x214), death-state cmp 5/3, player singleton 0x123C674, 12 callers. 0x7DAF80 has a different order (vtable+0x22C first, player-compare early, helper 0x7DAF50) and NO death-state cmp. Verified: 0x7D0A50 = `56 8b f1 8b 06 8b 80 34` (classic = `56 8b f1 8b 06 8b 90 34`). Wired into `STEAM_AI_PREDICATE` 2026-08-17. |
 | **PlayIdle stub** (anim_detour hook) | 0x73BB20 | **0x85E0A0** | byte-exact `c7 81 14 04 00 00 00 00 00 00 c3` (`mov dword [ecx+0x414],0; ret`), unique hit; same 11B method + padding shape. Re-derived 2026-08-14 |
 | **Lock fix** (disable vanilla lock-bypass) | 0x527F33 | **0x798B65** | 8B prefix match `74 02 88 08 6a 01 8b c8` + identical tail; vcdiff EXACT cover agrees. Re-derived 2026-08-14 |
 | **AI pause fix 1** (NOP 2B) | 0x72051E | **0x5E99E2** | vcdiff EXACT: `74 15 83 f8 03 74 10` → `74 1e 83 f8 03 74` (JE + cmp eax,3 + JE shape survived). **live-verified 2026-08-15**. 2026-08-14b |
@@ -737,7 +737,8 @@ The static command tables exposed more:
   **0x50EF90**: `lea ecx,[actor+0x9C]` (avOwner; base-form path uses +0x100)
   → `call [avowner_vtable+0xC]` = GetActorValueF slot 3. Triple-confirms the
   wired path (ForceActorValue handler + GetActorValue handler + direct fn).
-- **FNV SetActorValue** (ForceActorValue handler 0x5BE190): current via
+- **FNV SetActorValue** (ForceActorValue handler 0x5CD910 — corrected 2026-08-17
+  data/re lane b1; 0x5BE190 was ModPCSkill): current via
   avOwner +0xA4 slot 3, delta applied via **Actor vtbl[0] slot +0x3A4**
   (FO3 uses +0x3A0). `set_actor_value` now wired for both builds.
 - **Other handlers found** (classic): PlaySound 0x523590 (SoundManager
@@ -768,7 +769,9 @@ now complete: ForceActorValue 0x521F20, GetActorValue 0x521760 →
 0x50EF90, KillActor 0x522030, PlaySound 0x523590 (SoundManager 0x11790C8
 → 0xBCFBB0 + 0xBD00C0 — intricate sound-instance flow, OP_PLAY_SOUND
 stays stubbed), PlaceAtMe 0x53CA20 → 0x539280, PlayGroup 0x532690.
-FNV: ForceActorValue 0x5BE190, PlaySound 0x5C21E0.
+FNV: ForceActorValue 0x5CD910 (corrected 2026-08-17 — 0x5BE190 is
+ModPCSkill 0x110F), PlaySound 0x5C4A70 (corrected — 0x5C21E0 is
+GetDisease 0x1027).
 
 ## Session 2026-08-15 — live session (game host tetsuo.chaotic.lan)
 
@@ -830,18 +833,20 @@ Follow-up to the live session's two "installs but never fires" findings.
 Static work on `steam-fo3.bin` (flat, VA = file_off + 0x400000) + GOG
 `Fallout3.exe`.
 
-**AI predicate — RE-DERIVED: 0x7DAF80.**
+**AI predicate — RE-DERIVED (twice): 0x7DAF80 → CORRECTED 0x7D0A50 (2026-08-17).**
 The 0x7F9B70 prologue match was a false positive (that function reads
 `[edi+0xF8]`, references global 0x12399C8 — NOT the player singleton). The
 classic predicate (0x6FAE90) is a 137-byte bool thiscall (`56 8B F1`,
-11 callers incl. HighProcess). Its Steam twin keeps the EXACT prologue
-`56 8B F1` and the +0x22C(push 0) vtable call + `cmp esi,[0x123C674]`
-singleton compare + [actor+0x60] sub-object — found at **0x7DAF80**
-(0x22 bytes past the vcdiff gap candidate 0x7DAF5E, which pointed at the
-tail of helper 0x7DAF50). The recompile restructured it: bool→int return
-(0 / 1 / 0xC for player / table lookup), and split the sub-object logic into
-helper 0x7DAF50 (57 callers). Only 2 call sites survive (0x63D1CC, 0x75EB08);
-the other 9 classic callers inlined it. Wired into `STEAM_AI_PREDICATE`
+11 callers incl. HighProcess). The 0x7DAF80 candidate kept the EXACT prologue
+`56 8B F1` + the +0x22C(push 0) vtable call + `cmp esi,[0x123C674]`
+singleton compare + [actor+0x60] sub-object — but its slot order differs and
+it has NO death-state cmp 5/3 sequence; it ~never fired live (3 events/120s).
+**2026-08-17 data/re lane A1 re-derived the true twin = 0x7D0A50** (1:1
+structural: same slot order +0x234/0x22C/0x3E0/0x230/0x214, death-state
+cmp 5/3, player singleton, 12 callers: 0x7e928f, 0x7ed315, 0x7efc0c,
+0x7f18a6, 0x7f18f6, 0x86ac08, 0x88575c, 0x8a16ab, 0x8a7b1d, 0x8a9dae,
+0x8c72fd, 0x8cdc3b). Verified `56 8b f1 8b 06 8b 80 34` (classic `56 8b f1
+8b 06 8b 90 34`). Wired into `STEAM_AI_PREDICATE`
 (byte-guard `56 8B F1`, now 3 bytes like classic). **Live fire-rate
 unverified** — if the 2 surviving callers aren't per-actor, fall back to the
 HighProcess twin.
@@ -871,5 +876,5 @@ defaults) so `report_player_state` completes (pos/angle/health correct, anim
 state zero) until the real anim-data slot is pinned. **The correct slot is
 likely classic 0x1EC (Steam 0x244) — needs live OP_PROBE_FORM before wiring.**
 
-Next: live-verify 0x7DAF80 fire-rate + OP_PROBE_FORM the anim-data slot
+Next: live-verify 0x7D0A50 fire-rate (re-wired 2026-08-17) + OP_PROBE_FORM the anim-data slot
 (0x1EC/0x244) on the game host.
