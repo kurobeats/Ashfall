@@ -151,6 +151,12 @@ lives in [docs/impl-plan.md](./docs/impl-plan.md). Recent highlights:
   player names from that data
 - Kill relay wired (FO3 engine Kill 0x71AC50 + death processing
   0x71C280) — remote deaths apply locally
+- Static RE campaign 2026-08-17 (docs/steam-re.md + data/re): Steam FO3
+  command table found (0x110B388) → 13 handlers; Steam AI predicate
+  corrected to 0x7D0A50; `apply_steam_vaultmp()` wires ai_fix2/3,
+  delegator, place_at_me, fire_weapon on Steam; FNV kill_actor wired
+  (0x8B86E0, 4-arg signature); FNV command table (0x1190950) + class
+  vtables mapped; vtable map static-exhausted (89 byte-matches)
 - Verified ESM import for both games + all DLC (real GOG binaries)
 - Live Proton testing: Steam respawn-disable patch applied and verified on
   the game host
@@ -166,22 +172,26 @@ lives in [docs/impl-plan.md](./docs/impl-plan.md). Recent highlights:
 
 - **NPC sync live** — the full loop is built and tested (discovery detours
   on both the classic and Steam builds; ownership, state sampling, remote
-  application all wired). **Live 2026-08-15:** the event pipeline + respawn
-  patch work on the host; the first Steam AI-predicate site (0x7F9B70) was a
-  prologue false-positive (installs but ~never fires) — **re-derived 0x7DAF80**
-  (keeps the classic `56 8B F1` + +0x22C + singleton compare). Fire-rate
+  application all wired). Two Steam AI-predicate sites were prologue
+  false-positives (0x7F9B70, then 0x7DAF80 — both install but ~never fire);
+  **re-derived 2026-08-17: 0x7D0A50** (1:1 structural twin of classic
+  0x6FAE90, byte-verified) and wired into `STEAM_AI_PREDICATE`. Fire-rate
   still unverified live. See [docs/steam-re.md](./docs/steam-re.md)
-- **Remaining Steam patch sites** — 2026-08-14: 6 more vaultmp behavior
-  sites re-derived without the game — via the FalloutAnniversaryPatcher
-  vcdiff (ai_fix1 0x5E99E2, get_activate_jmp 0x8D3BC8, delegator stub spot
-  0x405E69, play_group_fix 0x4350F9) + static analysis (av_fix 0x5B7AC7,
-  fire_weapon confirmed 0x7DF3F7/0x770880) — live-probe before hooking.
-  Steam PC vtable base found (0xF938FC); GET_LOCKED slot re-derived
-  (GOG +0xA0 → Steam +0xFC) and wired. get_activate fully solved
-  (jmp 0x8D3BC8 + ret 0x8D3CB8). The 8 vaultmp hooks are implemented
-  (EVENT_ACTIVATE/EVENT_FIRE relay) and the activate/fire/cell/enabled/
-  move/scale/lock/sound relay paths are complete end-to-end (field writes,
-  Steam-safe); get_scale/set_scale + is_dead are field-based (no vtable);
+- **Remaining Steam patch sites** — 2026-08-17 static campaign (data/re):
+  found the **Steam FO3 command table** (0x110B388, 569 entries) → 13
+  handlers → engine fns; wired `apply_steam_vaultmp()` (ai_fix2/3,
+  delegator chain, place_at_me, fire_weapon 0x7DF3F7) + FNV kill_actor
+  (0x8B86E0, signature pinned). vtable map static-exhausted (89
+  byte-matches; ~310 slots need live OP_PROBE_FORM). Still pending-live:
+  Steam kill death-path (0x7F3200 mid-arg), fire_fix relay stub, match_race
+  recipe bytes, play_idle twin choice, play_group entry, ai_fix4, FNV
+  GetFullName + FNV lock getter. Steam PC vtable base found (0xF938FC);
+  GET_LOCKED slot re-derived (GOG +0xA0 → Steam +0xFC) and wired.
+  get_activate fully solved (jmp 0x8D3BC8 + ret 0x8D3CB8). The 8 vaultmp
+  hooks are implemented (EVENT_ACTIVATE/EVENT_FIRE relay) and the
+  activate/fire/cell/enabled/move/scale/lock/sound relay paths are complete
+  end-to-end (field writes, Steam-safe); get_scale/set_scale + is_dead are
+  field-based (no vtable);
   alerted/sneaking call the classic engine getters (byte-guarded). A gh
   crawl found Project Crossroads' Anniversary-Patcher catalog — the full
   vaultmp site table byte-verified, independently confirming our classic

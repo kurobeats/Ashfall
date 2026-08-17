@@ -1191,6 +1191,114 @@ pub unsafe fn apply_classic_vaultmp() -> bool {
     false // tests / x64 hosts — nothing to hook
 }
 
+/// Apply the Steam/Anniversary vaultmp behavior patches solved by the
+/// 2026-08-17 data/re campaign (lanes A1/A2), byte-guarded like
+/// `apply_steam_respawn` — each site is verified against its documented
+/// guard bytes before patching, so this is a no-op on classic/GOG/FNV and
+/// on any build whose bytes drift.
+///
+/// Applied (fully solved-static, recipe transfers):
+///   - ai_fix2 (0x7D0AA6, write 0x2E) + ai_fix3 (0x7D0AD5, 6B block) —
+///     AI-pause behavior inside the Steam predicate 0x7D0A50
+///   - delegator_src (0x9B3EF6 relcall → stub 0x405E69) + the stub's
+///     push-ecx / pop-ecx / bethesda_delegator hook (delegator pad
+///     live-verified 2026-08-15)
+///   - place_at_me_jmp (0x79E556 reljumphook) + place_at_me_fix
+///     (0x9CBCAF reljump → 0x9CBF97 + nop @ +5)
+///
+///   - fire_weapon_jmp (0x7DF3F7 E8→0x770880 reljump; E8 math + call-site
+///     shape statically confirmed 2026-08-17 — same RelJumpHook-over-E8
+///     pattern vaultmp uses on classic 0x71F05F, live-verified there)
+///
+/// NOT applied (pending-live — documented in `fo3_steam_17_vaultmp`):
+///   - fire_fix_jmp/patch: relay stub bytes must be re-derived for Steam
+///     register alloc (the 3-byte EB rel8 doesn't transfer)
+///   - match_race_*: recipe bytes don't transfer (restructured guard chain)
+///   - play_idle_fix_src: choice between the 2 twin instances pending-live
+///
+/// # Safety
+///
+/// Patches executable memory of the current process; every site is
+/// byte-guarded and skipped on mismatch.
+#[cfg(target_arch = "x86")]
+pub unsafe fn apply_steam_vaultmp() -> bool {
+    use crate::hooks::memory;
+    use crate::hooks::read_bytes;
+    use fo3_steam_17_vaultmp as s;
+
+    let mut applied = false;
+
+    // ai_fix2: death-state-5 JE redirect. Guard `74 2a 83 f8 03 74` @ site-1.
+    if read_bytes(s::AI_FIX2 - 1, 6) == [0x74, 0x2A, 0x83, 0xF8, 0x03, 0x74] {
+        let p = memory::Patch::new(s::AI_FIX2 as *const u8, &[0x2E]);
+        p.apply();
+        applied = true;
+    }
+    // ai_fix3: test block in the int3 pad. Guard cc x6.
+    if read_bytes(s::AI_FIX3, 6) == [0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC] {
+        let p = memory::Patch::new(
+            s::AI_FIX3 as *const u8,
+            &[0x85, 0xFF, 0x74, 0xCE, 0xEB, 0xF6],
+        );
+        p.apply();
+        applied = true;
+    }
+    // Delegator chain (classic 0x6EEC86/0x6EDBD9/0x6EDBDA twin):
+    //   - stub pad 0x405E69 gets PUSH ECX (0x51), call_src+5 gets POP ECX
+    //   - delegator_src 0x9B3EF6 relcalls the stub
+    //   - bethesda_delegator hook wired at delegator_call_src
+    if read_bytes(s::DELEGATOR_SRC, 6) == [0x8B, 0x0D, 0xD4, 0xC5, 0x23, 0x01] {
+        memory::write_rel_call(s::DELEGATOR_SRC, s::DELEGATOR_DEST);
+        applied = true;
+    }
+    if read_bytes(s::DELEGATOR_DEST, 3) == [0xCC, 0xCC, 0xCC] {
+        let push_ecx = memory::Patch::new(s::DELEGATOR_DEST as *const u8, &[0x51]);
+        push_ecx.apply();
+        let pop_ecx = memory::Patch::new((s::DELEGATOR_CALL_SRC + 5) as *const u8, &[0x59]);
+        pop_ecx.apply();
+        if let Some(hook) = hooks::resolve("bethesda_delegator") {
+            memory::write_rel_call(s::DELEGATOR_CALL_SRC, hook);
+        }
+        applied = true;
+    }
+    // place_at_me_jmp: reljumphook at the spawn call site 0x79E556.
+    // Guard = the unique call bytes themselves (`e8 25 5f f6 ff` →
+    // 0x704480, objdump-validated, 1 hit in the dump). The campaign's
+    // "3-zero push" note described the enclosing fn, not the immediate
+    // prefix — the site prefix is `50 ff b5 80 fe ff ff` (push eax;
+    // push [ebp-0x180]).
+    if read_bytes(s::PLACE_AT_ME_JMP, 5) == [0xE8, 0x25, 0x5F, 0xF6, 0xFF] {
+        if let Some(hook) = hooks::resolve("place_at_me") {
+            memory::write_rel_jump(s::PLACE_AT_ME_JMP, hook);
+            applied = true;
+        }
+    }
+    // place_at_me_fix: force-skip the +0x2A8 spawn. Guard `0f 84 e2 02 00 00`.
+    if read_bytes(s::PLACE_AT_ME_FIX, 6) == [0x0F, 0x84, 0xE2, 0x02, 0x00, 0x00] {
+        memory::write_rel_jump(s::PLACE_AT_ME_FIX, s::PLACE_AT_ME_FIX_DEST);
+        let nop = memory::Patch::new((s::PLACE_AT_ME_FIX + 5) as *const u8, &[0x90]);
+        nop.apply();
+        applied = true;
+    }
+    // fire_weapon_jmp: RelJumpHook at the fire call site. Guard = the
+    // unique E8 rel32 (→0x770880, objdump-verified; same E9-over-E8 pattern
+    // vaultmp uses on classic 0x71F05F, live-verified there). The thunk
+    // reports the FIRE event and `ret`s to site+5.
+    if read_bytes(s::FIRE_WEAPON_JMP, 5) == [0xE8, 0x84, 0x14, 0xF9, 0xFF] {
+        if let Some(hook) = hooks::resolve("fire_weapon") {
+            memory::write_rel_jump(s::FIRE_WEAPON_JMP, hook);
+            applied = true;
+        }
+    }
+
+    applied
+}
+
+#[cfg(not(target_arch = "x86"))]
+pub unsafe fn apply_steam_vaultmp() -> bool {
+    false // tests / x64 hosts — nothing to hook
+}
+
 /// Resolve the engine's weapon-fire routine for the running build.
 /// Classic/GOG: 0x4BE1A0 (SEH prologue `6a ff 68 da 2f c3 00`). Steam:
 /// 0x770880 (SEH prologue `53 8b dc 83 ec 08`). Picks by reading the
@@ -1420,6 +1528,32 @@ mod tests {
     #[test]
     fn plugins_vmp_bytes_are_literal_dot_vmp() {
         assert_eq!(u32::from_le_bytes(*b".vmp"), 0x706D762E);
+    }
+
+    #[test]
+    fn steam_vaultmp_site_constants_are_documented() {
+        // Pin the campaign-derived Steam sites (data/re/fo3/steam-vaultmp-
+        // twins.md, objdump-validated 27/27) so a mistyped constant or a
+        // stray edit is caught. Values are the validated addresses.
+        use fo3_steam_17_vaultmp as s;
+        assert_eq!(s::AI_FIX2, 0x007D_0AA6);
+        assert_eq!(s::AI_FIX3, 0x007D_0AD5);
+        assert_eq!(s::AI_PREDICATE, 0x007D_0A50);
+        assert_eq!(s::DELEGATOR_SRC, 0x009B_3EF6);
+        assert_eq!(s::DELEGATOR_DEST, 0x0040_5E69);
+        assert_eq!(s::DELEGATOR_CALL_SRC, 0x0040_5E6A);
+        assert_eq!(s::PLAY_IDLE_FIX_SRC, 0x0079_DA88);
+        assert_eq!(s::FIRE_FIX_JMP, 0x008D_A397);
+        assert_eq!(s::FIRE_FIX_PATCH, 0x008D_A3CE);
+        assert_eq!(s::PLACE_AT_ME_JMP, 0x0079_E556);
+        assert_eq!(s::PLACE_AT_ME_CALL, 0x0070_4480);
+        assert_eq!(s::PLACE_AT_ME_FIX, 0x009C_BCAF);
+        assert_eq!(s::PLACE_AT_ME_FIX_DEST, 0x009C_BF97);
+        assert_eq!(s::MATCH_RACE_NOP1, 0x006F_71FA);
+        assert_eq!(s::MATCH_RACE_NOP2, 0x006F_720E);
+        assert_eq!(s::MATCH_RACE_PATCH, 0x006F_7220);
+        #[cfg(target_arch = "x86")]
+        assert_eq!(super::STEAM_AI_PREDICATE, 0x007D_0A50);
     }
 
     #[test]

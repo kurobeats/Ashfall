@@ -878,3 +878,53 @@ likely classic 0x1EC (Steam 0x244) — needs live OP_PROBE_FORM before wiring.**
 
 Next: live-verify 0x7D0A50 fire-rate (re-wired 2026-08-17) + OP_PROBE_FORM the anim-data slot
 (0x1EC/0x244) on the game host.
+
+## Session 2026-08-17c — static follow-up: Steam command table + FNV signatures (no game)
+
+Follow-up campaign (data/re lanes c1–c4, battlecruiser objdump + r2, all
+static — no game sessions). See data/re/sessions/2026-08-17-c*.md.
+
+**Steam FO3 command table FOUND** (the vaultmp-site unlock):
+- Base **0x110B388**, 569 entries, stride 0x28, classic-FO3 format A
+  ({name@+0, short@+4, opcode@+8, help@+0xC, flags@+0x10, params@+0x14,
+  handler@+0x18, exec@+0x1C} + 8B tail) — NOT the FNV 0x1190950 layout.
+- Handlers → engine fns: GetLocked 0x795450, GetActorValue 0x793080
+  (avOwner path), PlayGroup 0x79EE20 (resolver 0x7D9E50 = classic 0x54B820
+  twin), PlaceAtMe 0x79DDF0 → spawn 0x79DE90, PlaySound 0x79F9B0,
+  Lock/UnLock 0x798AB0/0x7AF800 (vtable+0xC8), KillActor 0x798800 → engine
+  Kill **0x7F3200** → death 0x7D4F40, ResurrectActor 0x7A1280 → 0x8C2B30,
+  MoveToMarker 0x79BA90 → 0x79BC20, ForceActorValue 0x792770 → avOwner+0x9C
+  slot 3 → SetAV 0x3A0 (confirms the bridge's FO3 path).
+
+**FNV engine signatures pinned (c3, handler push-order + callee frame):**
+- Kill 0x8B86E0(actor, killer, limb byte, isPlayer byte) — DIFFERS from
+  FO3 0x71AC50(actor, killer, 0.0f); **wired into kill_actor** (was no-op).
+- Resurrect 0x89D900(actor, killer, 0.0f), death-restore 0x8B51B0(3 args),
+  GetActorValue 0x573170(actor, av_id, 0, 0, 1), MoveTo engine 0x79BC20.
+
+**Wired 2026-08-17c:**
+- `apply_steam_vaultmp()` — ai_fix2 0x7D0AA6, ai_fix3 0x7D0AD5, delegator
+  chain (0x9B3EF6 relcall → stub 0x405E69), place_at_me (0x79E556
+  reljumphook, 0x9CBCAF→0x9CBF97 fix), fire_weapon_jmp 0x7DF3F7 (E8
+  rel32 → 0x770880 statically confirmed; RelJumpHook-over-E8 like classic).
+- FNV `kill_actor` (0x8B86E0, 4-arg signature above).
+
+**NOT wired (safe-guard):** Steam kill_actor (engine Kill 0x7F3200 mid-arg
+[ebp+0xC] unmapped + death-processor arg order not handler-derived),
+fire_fix relay stub (needs Steam register-alloc re-derivation), match_race
+recipe bytes, play_idle twin choice (no E8 callers — vtable-only refs),
+play_group (candidate dispatcher 0x580BD0 but entry-JE byte unpinnable),
+play_group_fix_src (source fn inlined — 0 TLS-pattern hits), FNV
+GetFullName + FNV lock getter (0x57B410 slot 0xB8 not fully confirmed).
+
+**vtable map STATIC-EXHAUSTED (c4):** 89 byte-matches + 4 pinned groups;
+call-graph/size/vector semantic fingerprints add 0 translations. Remaining
+~310 Steam slots need OP_PROBE_FORM (confirmed statically underivable).
+Re-confirmed: AV getters NOT vtable-dispatched, GetFullName non-virtual,
+anim-state fields read raw off the +0x244 getter.
+
+Next: live session (cyborg.wg) — verify 0x7D0A50 discovery fire-rate,
+OP_PROBE_FORM the ~310 unmatched Steam vtable slots + 0x244/0x248 anim
+pins, OP_PROBE_CODE the Steam kill death-path (0x7F3200 mid-arg +
+0x7D4F40 arg order) to finish kill_actor, re-derive fire_fix relay stub +
+match_race bytes from live disasm.

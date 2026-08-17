@@ -147,6 +147,12 @@ pub fn install() {
     unsafe {
         vaultmp::apply_classic_vaultmp();
     }
+    // Steam/Anniversary vaultmp behavior patches solved by the 2026-08-17
+    // data/re campaign (ai_fix2/3, delegator chain, place_at_me). Byte-
+    // guarded — no-op on classic/FNV (guards differ).
+    unsafe {
+        vaultmp::apply_steam_vaultmp();
+    }
     // Actor-discovery detour (classic FO3: 0x6FAE90 AI predicate, verified
     // 2026-08-13 — the engine's per-actor processing gate). Byte-guarded —
     // no-op on Steam until the Steam AI-pause address is re-derived
@@ -739,34 +745,60 @@ pub fn kill_actor(ref_id: u32, killer_id: u32, limb: i8, cause: i8) {
     // then death processing 0x71C280(actor, cause, limb, killer) (arg
     // order from the handler's push sequence; KillActor signature =
     // (Killer, DismemberLimb, CauseOfDeath)).
-    // FNV: re-derived 2026-08-17 (data/re lane b1) — KillActor handler
-    // 0x5C7F10 (opcode 0x108B) → engine Kill 0x8B86E0(actor, killer,
-    // limb, isPlayer?) + death helpers 0x8B8290/0x8B8580; death-state
-    // +0xFC writes at 0x45F492/0x8D5FCA/0xA28F07. PENDING-LIVE: arg
-    // order/signature differs from FO3 (3 args vs 2+float), needs a live
-    // probe before wiring — no-op on FNV for now.
-    if crate::hooks::is_fnv() {
-        return;
-    }
+    // FNV: 2026-08-17 lanes b1+c3 — KillActor handler 0x5C7F10 → engine
+    // Kill 0x8B86E0(actor, killer, limb byte, isPlayer byte) (push order
+    // verified: isPlayer, [ebp-0x4], [ebp-0x10]; callee [ebp+0x8]=killer,
+    // [ebp+0xC]=limb, [ebp+0x10]=isPlayer). DIFFERS from FO3 (no float,
+    // extra bytes) — byte-guarded call below.
+    // Steam/Anniversary: 2026-08-17 lane c1 — KillActor handler 0x798800
+    // → engine Kill 0x7F3200 (killer [ebp+8], ? [ebp+0xC], limb
+    // [ebp+0x10]) → death processor 0x7D4F40 (cause-of-death switch).
+    // The [ebp+0xC] arg is UNMAPPED and the death-processor arg order is
+    // not handler-derived — NOT wired (documented, needs live probe).
     unsafe {
         let actor = crate::hooks::vtable::lookup_form_by_id(ref_id);
         if actor.is_null() {
             return;
         }
         let killer = crate::hooks::vtable::lookup_form_by_id(killer_id);
-        let _: u32 = crate::hooks::address::call_thiscall_2::<usize, f32, u32>(
-            0x71AC50,
-            actor,
-            killer as usize,
-            0.0,
-        );
-        let _: u32 = crate::hooks::address::call_thiscall_3::<u32, u32, u32, u32>(
-            0x71C280,
-            actor,
-            cause as u32,
-            limb as u32,
-            killer as u32,
-        );
+        // FNV: engine Kill 0x8B86E0 (55 8b ec 83 ec 08 prologue guard).
+        if crate::hooks::is_fnv()
+            && crate::hooks::read_bytes(0x008B_86E0, 6) == [0x55, 0x8B, 0xEC, 0x83, 0xEC, 0x08]
+        {
+            let _: u32 = crate::hooks::address::call_thiscall_3::<u32, u32, u32, u32>(
+                0x8B86E0,
+                actor,
+                killer as u32,
+                limb as u32,
+                0, // isPlayer (0 = NPC target)
+            );
+            return;
+        }
+        // Steam build: engine Kill 0x7F3200 exists (55 8b ec 51 guard) but
+        // its [ebp+0xC] middle arg is UNMAPPED and the death processor
+        // arg order is not handler-derived — NOT wired (documented in
+        // data/re, needs live probe before calling).
+        if crate::hooks::read_bytes(0x007F_3200, 3) == [0x55, 0x8B, 0xEC] && !crate::hooks::is_fnv()
+        {
+            return;
+        }
+        // Classic/GOG: engine Kill 0x71AC50(actor, killer, 0.0), then
+        // death processing 0x71C280(actor, cause, limb, killer).
+        if crate::hooks::read_bytes(0x0071_AC50, 3) == [0x55, 0x8B, 0xEC] {
+            let _: u32 = crate::hooks::address::call_thiscall_2::<usize, f32, u32>(
+                0x71AC50,
+                actor,
+                killer as usize,
+                0.0,
+            );
+            let _: u32 = crate::hooks::address::call_thiscall_3::<u32, u32, u32, u32>(
+                0x71C280,
+                actor,
+                cause as u32,
+                limb as u32,
+                killer as u32,
+            );
+        }
     }
 }
 
