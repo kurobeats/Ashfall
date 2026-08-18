@@ -182,12 +182,18 @@ lives in [docs/impl-plan.md](./docs/impl-plan.md). Recent highlights:
   found the **Steam FO3 command table** (0x110B388, 569 entries) → 13
   handlers → engine fns; wired `apply_steam_vaultmp()` (ai_fix2/3,
   delegator chain, place_at_me, fire_weapon 0x7DF3F7) + FNV kill_actor
-  (0x8B86E0, signature pinned). vtable map static-exhausted (89
-  byte-matches; ~310 slots need live OP_PROBE_FORM). Still pending-live:
-  Steam kill death-path (0x7F3200 mid-arg), fire_fix relay stub, match_race
-  recipe bytes, play_idle twin choice, play_group entry, ai_fix4, FNV
-  GetFullName + FNV lock getter. Steam PC vtable base found (0xF938FC);
-  GET_LOCKED slot re-derived (GOG +0xA0 → Steam +0xFC) and wired.
+  (0x8B86E0, signature pinned). **2026-08-18 Ghidra campaign**: Steam
+  kill_actor wired (0x7F3200 = GOG 0x71C280 twin, args resolved) + Steam
+  match_race wired (jne NOP @ 0x6F722C); vtable map RECOVERED via
+  decompile-twinning (147 GOG↔Steam pairs + 113 position-identified,
+  0 true unknowns — the old "~310 slots need live OP_PROBE_FORM" claim is
+  obsolete, see scripts/re/ghidra/vtable_twins.txt). Still pending-live:
+  fire_fix relay stub (code-cave + re-entry), play_group delegator flow,
+  play_idle_fix wiring (twin chosen: handler site 0x79F2BB), ai_fix4,
+  FNV lock setter (getter 0x57B410 confirmed), OP_SET_NAME/PLAY_SOUND
+  engine hooks (FNV name-setter 0x489100 found). Steam PC vtable base
+  found (0xF938FC); GOG base corrected to 0xE18110; GET_LOCKED slot
+  re-derived (GOG +0xA0 → Steam +0xFC) and wired.
   get_activate fully solved (jmp 0x8D3BC8 + ret 0x8D3CB8). The 8 vaultmp
   hooks are implemented (EVENT_ACTIVATE/EVENT_FIRE relay) and the
   activate/fire/cell/enabled/move/scale/lock/sound relay paths are complete
