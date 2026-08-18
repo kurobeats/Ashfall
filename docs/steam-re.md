@@ -1240,3 +1240,25 @@ restructured past recognition (as documented). Pinning the Steam site
 needs the vaultmp SEMANTIC (why the spawn-init call was disabled) first —
 source archaeology, not a Ghidra question. Classic bridge keeps applying
 the 11B NOP (recipe fidelity).
+
+## Session 2026-08-18g — play_group flow mapped; anim-sync redundancy conclusion
+
+**Steam PlayGroup handler 0x79EE20 decompiled:** command handler (EXTRACT
+_ARGS 0x787530, SEH cookie) → [actor vtable +0x48] state-check → +0x1E4
+anim-data → +0x100 → +0x1D0 → FUN_0058E170 (NiControllerManager resolve
+via string 0x132720C) → play. The classic GOG implementation is a
+DIFFERENT fn (FUN_0045F400, thiscall(actor, group, seq, flags), anim-slot
+dedup at +0x118/+0x11C/+0x120/+0x124). vaultmp's play_group fix (the
+15-byte block @ 0x49DCF1 + je→jmp @ 0x45F704 + reljump 0x49DD8E) is
+AUTHORED relay logic routing PlayGroup through the bethesda_delegator —
+the Steam flow differs structurally, so the fix doesn't transfer 1:1.
+
+**Conclusion — play_group fix is redundant with Ashfall's state-based anim
+sync:** the bridge already relays anim state via ActorStateDelta's idle
+field (sampled per-frame, applied remotely), and the delegator
+(bethesda_delegator hook + EVENT relay) exists for script-command
+forwarding. The vaultmp play_group fix was event-based anim forwarding —
+superseded by state sampling. Deferred: play_group wiring (needs re-
+authored relay + live validation), same bucket as fire_fix. All remaining
+RE items are now either resolved, documented as redundant/vaultmp-legacy,
+or gated on the live session.
