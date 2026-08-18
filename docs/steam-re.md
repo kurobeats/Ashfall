@@ -1294,3 +1294,31 @@ anything is exercised. Then, in order:
    if EVENT_FIRE arrives twice per shot, fire_fix must stay unwired (the
    stub recipe is ready in Session 2026-08-18f but wiring is gated on
    this exact observation).
+
+## Session 2026-08-18h — OP_SET_NAME (FNV) wired; FO3/Steam setters identified
+
+**OP_SET_NAME wired for FNV** (was a stub): FNV SetActorFullName handler
+0x5D1890 → engine SetFullName **0x489100**(thiscall: base_form+0x18, name)
+→ 0x4037F0(base_form+0x1C, name, 0), the game-heap string assigner
+(FORM_HEAP_ALLOCATE/FREE 0x401000/0x401030) writing exactly the field the
+bridge's field-based get_name reads. The bridge passes a bridge-static
+name buffer (the DLL's memory is game-addressable; the assigner copies it
+into the game heap and adopts it). Guard `55 8b ec`.
+
+**FO3/Steam setters identified (not wired — live probe needed):**
+- GOG SetActorFullName handler 0x539D20 → string-assigner **0x4019C0**
+  (writes [this], alloc via 0x86B930). Handler asm: `mov ecx,[esi+0x1C];
+  add ecx,0xD4; call 0x4019C0(..., name, 0)` — the field address lands at
+  base_form+0xD4, which conflicts with the bridge's get_name read
+  (base_form+0x1C via +0x18+0x04); the +0x1C read at 0x539D84 feeds the
+  empty-string fallback. Needs live observation of a name change to
+  reconcile the field.
+- Steam SetActorFullName handler 0x7A2650 → string-assigner **0x57D590**
+  (writes [this], alloc via 0x9D9E20). Handler passes `[name_form+0x1C]`
+  with a multi-branch flow (actor vs cell vs leveled types, each with a
+  vtable+0x48 refresh) — same live-probe requirement.
+
+Both assigners are byte-verified; the handlers' field-address resolution
+is convoluted and GOG's analysis doesn't bound 0x539D20 (table-referenced
+only). FNV is the clean path (consistent with get_name), so OP_SET_NAME
+is FNV-only until a live session reconciles the FO3/Steam fields.

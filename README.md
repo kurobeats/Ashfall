@@ -5,7 +5,7 @@ mod for the classic Bethesda games — host a server, connect with your crew,
 and explore the wasteland together. Built from scratch in Rust, inspired by
 the old vaultmp project and its successors.
 
-[![Tests](https://img.shields.io/badge/tests-601%20passed-brightgreen)](#status)
+[![Tests](https://img.shields.io/badge/tests-605%20passed-brightgreen)](#status)
 [![License](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
 [![Status](https://img.shields.io/badge/status-co-op%20MVP%20in%20progress-orange)](#status)
 
@@ -134,7 +134,7 @@ Full architecture: [docs/architecture.md](./docs/architecture.md)
 
 ## Status & roadmap
 
-**Phases 1–10 complete, 601 tests, zero warnings.** The phase-by-phase record
+**Phases 1–10 complete, 605 tests, zero warnings.** The phase-by-phase record
 lives in [docs/impl-plan.md](./docs/impl-plan.md). Recent highlights:
 
 - Ownership transfer, string compression, and differential state sync
@@ -253,7 +253,7 @@ engineering, all fair game. One hard rule:
 > you can exercise the whole client+server stack without the game running.
 
 ```bash
-cargo test --workspace   # 601 tests
+cargo test --workspace   # 605 tests
 cargo clippy -- -D warnings
 cargo fmt -- --check
 ```
