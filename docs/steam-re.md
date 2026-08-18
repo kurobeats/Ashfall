@@ -434,7 +434,11 @@ vtable. Static work this session (`scripts/re/vtable_steam.py`):
   and `mov eax,[rsi]; ... call [rax+0x22c]` derefs the same vtable.
 - Death-handler slot +0x23C → **0x8CA490** (in the 0x8C9xxx region).
 
-**GOG PC vtable base = 0xE16B10** (death-handler method 0x788350 @ +0x2FC).
+**GOG PC vtable base = 0xE18110** (corrected 2026-08-18 Ghidra validation:
+0xE16B10 is a different class's vtable — the true Actor vtable base, found
+by scanning .rdata for the vtable whose +0x214/0x22C/0x230/0x234 hold the
+AI-predicate dispatch targets 0x6F9EA0/0x787580/0x70C940/0x70C970; all
+slots match incl. death-handler 0x788350 @ +0x2FC).
 
 **Slot translation via byte-identical method matching**: 41 slots matched,
 59% fit a **+0x58 shift** exactly (the recompile inserted 0x58/4 = 22 vtable
@@ -674,10 +678,14 @@ Steam +0xFC in that family is `xor eax,eax; ret` (0x579C40). Fixed:
 `get_lock_from_obj` uses +0xA0 and byte-guards the getter signature.
 
 **get_actor_value/get_actor_base_value — removed (returned garbage /
-corrupted flags).** The documented "GOG PC vtable 0xE16B10 / Steam
-0xF938FC" bases are vtable-RUN-START artifacts: neither contains the death
-handler (0x788350 sits at 0xE1840C, slot ~1599 of a contiguous run) nor
-the lock getter (0x4017F0 is NOT in 0xE16B10 at all). At +0x68:
+corrupted flags).** The old "GOG PC vtable 0xE16B10" base was a vtable-
+RUN-START artifact of a different class — CORRECTED 2026-08-18: the true
+GOG Actor vtable is 0xE18110, which DOES contain the death handler
+(0x788350 @ +0x2FC = 0xE1840C — the old "slot ~1599 of a contiguous run"
+observation was this exact slot, mislabeled) and the lock/AV getters
+(0x4017F0 @ +0xA0, 0x4017E0 @ +0x9C). Steam actor vtable 0xF938FC holds
+the lock pair at +0xF8/+0xF4 (0x57C780/0x57C770 — the +0x58 region shift);
+the REFR-family vtables carry them at +0x9C/+0xA0. At +0x68:
 0xE16B10 has a flag-setter (`orb $8,[ecx+0x30]`), the dominant family has
 a `ret 4` stub, the GECK-RTTI Actor vtable (0xD592DC ↔ game 0xE1C8F4
 family) has a Process/Update method (0x4F0E00). **FNV is structurally
@@ -855,7 +863,8 @@ cmp 5/3, player singleton, 12 callers: 0x7e928f, 0x7ed315, 0x7efc0c,
 unverified** — if the 2 surviving callers aren't per-actor, fall back to the
 HighProcess twin.
 
-**vtable slot map (classic 0xE16B10 vs Steam 0xF938FC):**
+**vtable slot map (classic 0xE18110 vs Steam 0xF938FC — base corrected
+2026-08-18; slot values all verified):**
 - The AI-predicate slots **did NOT shift**: +0x214/0x22C/0x230/0x234 hold
   recompiled twins at the SAME byte offsets (0x6F9EA0→0x75C6B0,
   0x787580→0x8B8AF0, 0x70C940→0x75DC50, 0x70C970→0x8992A0).
@@ -932,3 +941,107 @@ OP_PROBE_FORM the ~310 unmatched Steam vtable slots + 0x244/0x248 anim
 pins, OP_PROBE_CODE the Steam kill death-path (0x7F3200 mid-arg +
 0x7D4F40 arg order) to finish kill_actor, re-derive fire_fix relay stub +
 match_race bytes from live disasm.
+
+## Session 2026-08-18 — Ghidra headless validation of every address table (no game)
+
+Ghidra 12.1.2 headless on battlecruiser (`/tmp/ghidra_12.1.2_PUBLIC`,
+wrapper `/tmp/ghidra-headless.sh`). Tooling: `scripts/re/ghidra/VerifyRE.java`
+(Ghidra 12 dropped Jython — Java post-script, Gson spec JSON) +
+`scripts/re/ghidra/spec_{gog,steam,fnv}.json`. Imported GOG `Fallout3.exe`
+(PE), Steam `steam-fo3.bin` (RawBinaryLoader, base 0x400000 — flat, no
++0xC00 shift), FNV `gog-fnv.exe` (PE). Steam raw-dump analysis is slow
+(~1h for 17MB); the cmdtable/vtable/byte checks were re-verified directly
+against the raw dump bytes (identical results, instant).
+
+**Confirmed exact (all PASS, byte-level):**
+- GOG: LookupFormByID 0x455190 (880 Ghidra refs vs doc 884 — count method
+  differs, claim solid), AI predicate 0x6FAE90 (11 refs — EXACT), all
+  engine fns + prologues, frame hook `e8 0c 53 ff ff`, respawn site
+  0x6D5965 `75 03`, lock_fix `74 02 88 08`, ai_fix1/2/3, plugins ".txt"
+  @ 0xE10FF1, anim getters (0x76CD00 slot 0x1EC, 0x76FED0 slot 0x1F0,
+  0x76FE20 at 0x1E4 = FPU math as documented), avOwner 0x4017E0 (slot
+  +0x9C), lock getter 0x4017F0 (slot +0xA0, `8a 41 0a 24 01 c3`), and
+  every classic vaultmp recipe site (play_group je→jmp site, delegator
+  call → 0x6EDBE0, place_at_me_jmp E8 → 0x43DEF0, fire_weapon_jmp E8 →
+  0x4BE1A0, SEH prologues/epilogues, vtable +0x224 dispatch shapes).
+- Steam: 13/13 command-table handlers at 0x110B388 (GetLocked 0x795450,
+  GetActorValue 0x793080, PlayGroup 0x79EE20, PlaceAtMe 0x79DDF0,
+  PlaySound 0x79F9B0, Lock 0x798AB0, UnLock 0x7AF800, KillActor 0x798800,
+  ResurrectActor 0x7A1280, MoveToMarker 0x79BA90, ForceActorValue
+  0x792770, SetRestrained 0x7A6670, SetOwnership 0x7A5C20 — the last two
+  confirm opcode.rs); AI predicate 0x7D0A50 `56 8b f1` + **exactly 12 E8
+  callers** (doc claim EXACT); LookupFormByID 0x711EF0 = 895 E8 calls
+  (doc "880+" ✓); all vaultmp site guards (ai_fix2 `74 2a 83 f8 03 74`
+  @0x7D0AA5, ai_fix3 cc×6, delegator `8b 0d d4 c5 23 01` + 0x405E69 pad,
+  place_at_me `e8 25 5f f6 ff` → 0x704480 + fix `0f 84 e2 02 00 00`,
+  fire_weapon `e8 84 14 f9 ff` → 0x770880, get_activate
+  `0f 84 dd 00 00 00 8b 06 8b ce`, play_idle call `c7 81 14 04 00 00 00
+  00 00 00 c3` (mov dword[ecx+0x414],0; ret), play_idle_fix twins
+  `68 80 00 00 00 8b 01 ff 90 0c`, lock_fix, ai_fix1 `74 1e` (Steam form
+  of the classic `74 15`), play_group pad, frame hook `ff 15 e4 41 f2 00`,
+  respawn A `75 03` / B `0f 85 77 00 00 00` / B2 `c6 40 02 01`, kill guard
+  `55 8b ec 51`); all 13 command handlers + engine fns + steam main
+  0x9B31A0 + MoveTo engine 0x79BC20 (`53 8b dc` prologue — REAL fn on
+  Steam).
+- FNV: Kill 0x8B86E0 `55 8b ec 83 ec 08`, Resurrect 0x89D900, death-
+  restore 0x8B51B0, frame hook `e8 25 11 bd ff` → 0x43C4B0 (3 refs),
+  EXTRACT 0x5ACCB0 (called by ForceActorValue handler — seen in disasm),
+  CREATE 0x465110, CONSOLE 0x71B160, GET_FORM 0x483A00, APM count
+  0x977540, lock-getter candidate 0x57B410, ActorProcessManager
+  0x11E0E80; **FNV command table 0x1190950 fully mapped (569 entries,
+  saved to data/re/fnv_cmdtable_0x1190950.txt)** — KillActor idx 137 →
+  0x5C7F10 ✓, ForceActorValue idx 268 → 0x5CD910 ✓, ModPCSkill idx 269 →
+  0x5BE190 ✓ (both doc corrections confirmed), GetActorValue idx 12 →
+  0x5B59F0, GetLocked idx 3 → 0x5C03D0, SetActorValue idx 13 → 0x5BD8A0,
+  PlaceAtMe idx 35 → 0x5C4240, MoveToMarker idx 156 → 0x5CCAF0.
+- FO3 SetAV path verified END-TO-END: ForceAV handler 0x521F20 gets the
+  current value via avOwner (Actor+0x9C) vtable slot 3, then dispatches
+  **Actor vtable +0x3A0 → 0x76E350** as thiscall(actor, index, delta, 0).
+  The bridge's `set_actor_value` mirrors this exactly. (The doc label
+  "SetAV = 0x521F20" is the command handler, not the setter.)
+
+**Errors found + corrected (docs-only; bridge code is byte-guarded and
+already safe):**
+1. **GOG Actor vtable base is 0xE18110, NOT 0xE16B10** (0x1600 apart —
+   0xE16B10 is a different class's vtable; no constructor references it).
+   Correct base found by scanning .rdata for the vtable whose
+   +0x214/0x22C/0x230/0x234 hold the AI-predicate dispatch targets
+   (0x6F9EA0/0x787580/0x70C940/0x70C970) — all 4 + anim + AV + lock slots
+   match on 0xE18110. All slot VALUES in steam-re.md were correct; only
+   the base was wrong.
+2. **Steam respawn "flag write @ 0x8CA8EB" is wrong** — that address is
+   SSE math (`0f 5c 4d fc` movss sub), not `c6 40 02 01`. The real Steam
+   flag writes are 0x8C9D52 (wired, verified) + 0x8C9D52's twin; GOG
+   twin is 0x78B2B2 `c6 41 02 01` (docs said 0x78B2AE, off-by-4, and
+   ecx-form not eax-form).
+3. **FNV "MoveTo engine 0x79BC20" is wrong** (that's Steam's — on FNV
+   0x79BC20 is int3 padding after a fn ending 0x79BC1D; candidate real
+   fn = 0x79BC50 `55 8b ec 51`, pushed by the caller). FNV MoveToMarker
+   handler = 0x5CCAF0 (table idx 156), not 0x79BA90 (Steam's). Bridge
+   doesn't call FNV MoveTo engine (OP_MOVE_TO is a field write) — no code
+   impact.
+4. **Command-table name fields are POINTERS, not inline strings, in all
+   three builds** (Steam/GOG classic-FO3 format A: name_ptr@+0, handler@
+   +0x18; FNV format B: name_ptr@+0x10, 3 handler slots @+0/+4/+8). The
+   steam-re.md "name@+0" wording implied inline.
+5. **Steam "+0x9C/+0xA0 = 0x57C770/0x57C780 in both builds"** — TRUE for
+   the TESObjectREFR family (hundreds of subclass vtables share them:
+   0x57C770 = `8b 41 08 c1 e8 06`, 0x57C780 = `8a 41 0a 24 01 c3`), but
+   the **Actor vtable 0xF938FC overrides both** (+0x9C → 0x759580,
+   +0xA0 → 0x765910). The bridge's get_locked byte-guards the slot
+   signature before calling (returns 0 on the Actor vtable instead of
+   calling garbage) — safe, but lock reads on Steam actors return 0.
+6. ai_fix1 Steam guard is `74 1e` (classic twin `74 15`) — matches the
+   vcdiff note; the bridge's classic ai_fix1 (0x72051E `74 15`) is
+   classic-only, Steam ai_fix1 is documented but NOT patched (no
+   apply_steam site) — consistent.
+
+**Bridge impact: NONE** — every byte-guard in apply_steam_respawn /
+apply_steam_vaultmp / apply_classic_vaultmp matched the verified bytes;
+the FO3 SetAV path is engine-identical. The doc errors above are now
+corrected here; the vtable-base fix (0xE18110) matters for future Steam
+vtable slot work (the +0x58 region-shift map in steam-re.md stays valid —
+slot VALUES were all confirmed).
+
+Next: live session (cyborg.wg) — unchanged from 2026-08-17c, plus
+OP_PROBE_FORM the corrected GOG actor vtable 0xE18110 slots.

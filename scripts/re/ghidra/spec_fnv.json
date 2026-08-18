@@ -1,0 +1,29 @@
+{
+  "checks": [
+    { "type": "fn", "name": "fnv_kill", "addr": "0x8B86E0" },
+    { "type": "byte", "name": "fnv_kill_prologue", "addr": "0x8B86E0", "bytes": "558bec83ec08" },
+    { "type": "fn", "name": "fnv_resurrect", "addr": "0x89D900" },
+    { "type": "fn", "name": "fnv_death_restore", "addr": "0x8B51B0" },
+    { "type": "fn", "name": "fnv_getav", "addr": "0x573170" },
+    { "type": "fn", "name": "fnv_moveto", "addr": "0x79BC20" },
+    { "type": "byte", "name": "fnv_frame_hook_site", "addr": "0x86B386", "bytes": "e82511bdff" },
+    { "type": "fn", "name": "fnv_frame_orig", "addr": "0x43C4B0" },
+    { "type": "fn", "name": "fnv_extract_args", "addr": "0x5ACCB0" },
+    { "type": "fn", "name": "fnv_create_form", "addr": "0x465110" },
+    { "type": "fn", "name": "fnv_console_mgr", "addr": "0x71B160" },
+    { "type": "fn", "name": "fnv_get_form_by_id", "addr": "0x483A00" },
+    { "type": "fn", "name": "fnv_apm_count", "addr": "0x977540" },
+    { "type": "fn", "name": "fnv_lock_getter_cand", "addr": "0x57B410" },
+    { "type": "ptr", "name": "fnv_form_map", "addr": "0x11C54C0" },
+    { "type": "ptr", "name": "fnv_echo_console", "addr": "0x11F158C" },
+    { "type": "ptr", "name": "fnv_actor_process_mgr", "addr": "0x11E0E80" },
+    { "type": "cmdtable", "name": "fnv_cmdtable_0x1190950", "base": "0x1190950", "stride": 40, "count": 569, "entries": [
+      { "name": "KillActor", "handler": "0x5C7F10" },
+      { "name": "GetActorValue", "handler": "0" },
+      { "name": "GetFullName", "handler": "0" },
+      { "name": "PlaceAtMe", "handler": "0" },
+      { "name": "GetLocked", "handler": "0" }
+    ]},
+    { "type": "xref", "name": "fnv_frame_hook_refs", "addr": "0x86B386", "min": 1 }
+  ]
+}

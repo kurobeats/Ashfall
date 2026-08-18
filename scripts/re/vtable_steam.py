@@ -17,7 +17,7 @@ from collections import Counter
 g = open("/tmp/Fallout3.exe", "rb").read()
 dump = open("/tmp/steam-fo3.bin", "rb").read()
 
-GOG_VT = 0xE16B10          # GOG PlayerCharacter vtable (death-handler 0x788350 @ +0x2FC)
+GOG_VT = 0xE18110          # GOG PlayerCharacter vtable (death-handler 0x788350 @ +0x2FC; corrected 2026-08-18 from 0xE16B10)
 STEAM_VT = 0xF938FC        # Steam PlayerCharacter vtable (AI-pred +0x22C -> 0x8B8AF0)
 GOG_RD = 0x999A00
 

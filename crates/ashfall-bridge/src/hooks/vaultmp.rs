@@ -277,7 +277,8 @@ pub mod fo3_steam_17_vaultmp {
 /// Steam FO3 (post-2023) respawn-disable sites — re-derived 2026-08-08 by
 /// side-by-side disassembly vs GOG (see docs/steam-re.md). Same semantics as
 /// vaultmp's ToggleRespawn disable: NOP the site-A predicate JNE + jump the
-/// site-B guard over the respawn-flag write (`mov byte [eax+2],1` @ 0x8CA8EB).
+/// site-B guard over the respawn-flag write (`mov byte [eax+2],1` @ 0x8C9D52,
+/// verified 2026-08-18 — the earlier 0x8CA8EB note was SSE math).
 pub mod fo3_steam_17_respawn {
     /// Site A: `jne +3` inside the respawn predicate fn (GOG fcn.006D5960
     /// twin at 0x9C43A0, structurally byte-identical). NOP -> always false.
@@ -324,7 +325,7 @@ pub unsafe fn apply_steam_respawn() -> Option<Vec<crate::hooks::memory::Patch>> 
     let a = memory::Patch::new(s::SITE_A_JNE as *const u8, &[0x90, 0x90]);
     a.apply();
     out.push(a);
-    // Site B: unconditional JMP over the respawn-flag write (0x8CA8EB).
+    // Site B: unconditional JMP over the respawn-flag write (0x8C9D52).
     memory::write_rel_jump(s::SITE_B_JNE, s::SITE_B_SKIP);
     // Tail byte of the 6-byte JNE left after the 5-byte JMP.
     let t = memory::Patch::new(s::SITE_B_TAIL as *const u8, &[0x90]);

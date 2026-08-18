@@ -667,16 +667,19 @@ pub unsafe fn set_actor_value(ref_id: u32, index: u8, value: f32) {
         return;
     }
     // Replicate the engine's ForceActorValue handler for each build
-    // (FO3 0x521F20 / FNV 0x5CD910): current = GetActorValueF via the
-    // avOwner vtable slot 3, then apply the delta via Actor vtbl[0]
-    // slot +0x3A0 (FO3) / +0x3A4 (FNV), thiscall args index, delta, 0.
-    // (2026-08-17 data/re lane b1: FNV ForceActorValue handler is 0x5CD910,
-    // opcode 0x110E — the earlier 0x5BE190 was ModPCSkill. The avOwner
-    // member at +0xA4 / slot 3 / SetAV +0x3A4 path is confirmed correct.)
+    // (FO3 0x521F20 / FNV 0x5CD910 — both command-table-verified 2026-08-18):
+    // current = GetActorValueF via the avOwner vtable slot 3, then apply
+    // the delta via Actor vtbl[0] slot +0x3A0 (FO3) / +0x3A4 (FNV), thiscall
+    // args index, delta, 0. (Ghidra-verified 2026-08-18: the FO3 handler
+    // 0x521F20 does exactly this — avOwner (Actor+0x9C) vtable slot 3 getter
+    // + Actor vtable +0x3A0 = 0x76E350 thiscall(actor, index, delta, 0);
+    // 0x521F20 is the command handler, the vtable-dispatched setter is
+    // 0x76E350. 2026-08-17 data/re lane b1: FNV ForceActorValue handler is
+    // 0x5CD910, opcode 0x110E — the earlier 0x5BE190 was ModPCSkill.)
     let (av_off, setter_slot) = if crate::hooks::is_fnv() {
         (0xA4usize, 0x3A4usize) // FNV: avOwner member, setter slot confirmed 0x3A4
     } else {
-        (0x9Cusize, 0x3A0usize) // FO3: avOwner base sub-object, setter confirmed 0x521F20
+        (0x9Cusize, 0x3A0usize) // FO3: avOwner base sub-object, setter via Actor vtable +0x3A0 = 0x76E350
     };
     let av = obj.add(av_off);
     let vt = read_field::<usize>(av, 0);
