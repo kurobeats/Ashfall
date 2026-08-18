@@ -1114,3 +1114,34 @@ name @+0x10 (FNV).
 (-process needs the saved program; the first run was killed before save).
 xrefs on the analyzed project: LookupFormByID 894 refs, AI predicate
 exactly 12 — matching the python E8-count (895/12).
+
+## Session 2026-08-18c — vtable slots: NOT underivable after all (Ghidra decompile-twinning)
+
+The "~310 unmatched Steam vtable slots need live OP_PROBE_FORM" claim is
+**obsolete**. Ghidra recovered the map statically (scripts/re/ghidra/
+VTableSlots.java + vtable_{gog,steam}.txt[.lines] + vtable_twins.txt):
+
+- Every slot's fn was decompiled; each decompile normalized (addresses,
+  fn/label names, numeric literals, local names stripped → structure kept)
+  and fingerprinted (SHA1 of the sorted code-line set + line-set Jaccard).
+- **147/260 Steam real fns have a decompile-matched GOG twin** (70 with
+  Jaccard ≥ 0.7, incl. 50 at J=1.00; 77 moderate 0.4–0.7). Byte-matching
+  found only 89 — decompile-similarity survives the recompile register
+  re-alloc that byte-identity doesn't.
+- **The remaining 113 all have a GOG fn at the SAME vtable offset** —
+  restructured methods, position-identified (the AI-predicate slots
+  +0x214/+0x22C/+0x230/+0x234 are exactly this: same slot + same caller
+  context in both builds, different code). **0 true unknowns.**
+- The +0x58 region shift confirmed by hash-identity on the tiny-getter
+  pairs: +0x9C→+0xF4, +0xA0→+0xF8, +0x1E8→+0x240 (all IDENTICAL
+  normalized decompiles); the AI-pred slots did NOT shift (same offset).
+  The docs' "59% of 41 translated slots" was byte-matching's floor, not
+  the real recovery rate.
+- Dispatch-site xrefs are partial on the raw dump (only constructor
+  vtable-copy sites get refs; `call [reg+0xNNN]` sites don't) — for the
+  restructured methods, method identity = slot position + the documented
+  caller map (AI predicate, kill chain, frame hook, command handlers).
+
+Live OP_PROBE_FORM is now needed only to CONFIRM semantics of the 113
+restructured methods (not to identify them), and even that can be deferred
+until a specific slot is needed by the bridge.
