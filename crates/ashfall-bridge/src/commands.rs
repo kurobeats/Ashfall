@@ -260,10 +260,12 @@ pub fn execute(func: u32, params: &[u8]) -> Vec<u8> {
                 return vec![];
             }
             let ref_id = u32::from_le_bytes([params[0], params[1], params[2], params[3]]);
-            // params[4..] = UTF-8 name bytes
-            // ponytail: no set_name hook yet; stub success
-            let _ = (ref_id, &params[4..]);
-            vec![1]
+            // params[4..] = UTF-8 name bytes. FNV wired (engine SetFullName
+            // 0x489100, decompile-derived 2026-08-18); GOG/Steam stub no-op
+            // (assigners identified, field resolution needs live probe).
+            crate::hooks::set_name(ref_id, &params[4..])
+                .to_le_bytes()
+                .to_vec()
         }
 
         // ── Enabled ──

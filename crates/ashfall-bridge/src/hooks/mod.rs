@@ -554,6 +554,54 @@ pub fn play_sound(ref_id: u32, sound_id: u32) -> u32 {
     }
 }
 
+/// Set a reference's display name (remote name sync).
+///
+/// FNV (2026-08-18, Ghidra decompile): engine SetFullName = 0x489100
+/// (thiscall: base_form+0x18, name) → 0x4037F0(base_form+0x18+0x4, name, 0),
+/// the game-heap string assigner (FORM_HEAP_ALLOCATE/FREE 0x401000/0x401030)
+/// writing exactly the field get_name reads ([base_form+0x18+0x04]). The
+/// name buffer is a bridge-static (the DLL's memory is game-addressable);
+/// the assigner copies it into the game heap and adopts it. GOG/Steam:
+/// the engine assigners are identified (0x4019C0 GOG / 0x57D590 Steam) but
+/// the command handlers' field-address resolution is multi-branch — needs
+/// live validation; stub no-op until then.
+pub fn set_name(ref_id: u32, name: &[u8]) -> u32 {
+    #[cfg(target_arch = "x86")]
+    unsafe {
+        if !crate::hooks::is_fnv() {
+            return 0; // GOG/Steam path not derived (see steam-re.md 18h)
+        }
+        if crate::hooks::read_bytes(0x0048_9100, 3) != [0x55, 0x8B, 0xEC] {
+            return 0;
+        }
+        let obj = crate::hooks::vtable::lookup_form_by_id(ref_id);
+        if obj.is_null() {
+            return 0;
+        }
+        let base_form = crate::hooks::vtable::read_field::<usize>(obj, 0x1C) as *mut u8;
+        if base_form.is_null() {
+            return 0;
+        }
+        // bridge-static name buffer — the assigner copies it into the game
+        // heap (0x401000) and frees the old; the static stays (harmless).
+        static mut NAME_BUF: [u8; 256] = [0u8; 256];
+        let n = name.len().min(255);
+        NAME_BUF[..n].copy_from_slice(&name[..n]);
+        NAME_BUF[n] = 0;
+        let _: u32 = crate::hooks::address::call_thiscall_1::<u32, u32>(
+            0x489100,
+            base_form.add(0x18),
+            NAME_BUF.as_ptr() as u32,
+        );
+        1
+    }
+    #[cfg(not(target_arch = "x86"))]
+    {
+        let _ = (ref_id, name);
+        1 // test hosts / x64 — no engine; report success
+    }
+}
+
 /// Read the enabled state of a reference (VTable/field read, FO3/FNV aware).
 #[inline]
 pub fn get_enabled(ref_id: u32) -> bool {

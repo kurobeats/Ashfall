@@ -760,3 +760,66 @@ fn test_on_actor_punch_dispatched() {
     engine.notify_punch(7, true);
     assert!(state.quests.get_flag(88), "on_actor_punch fired (flag 88)");
 }
+
+// ═══════════════════════════════════════════════════════════════
+// Shared-quest mode — real built WASM (skips when not compiled)
+// ═══════════════════════════════════════════════════════════════
+
+#[test]
+fn test_shared_quest_mode_real_wasm() {
+    // Built with `cargo build --target wasm32-unknown-unknown --release`
+    // in scripts/shared-quest. Skips (not fails) when the wasm is absent so
+    // the default workspace test run stays hermetic.
+    let wasm_path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../scripts/shared-quest/target/wasm32-unknown-unknown/release/ashfall_shared_quest.wasm"
+    );
+    let bytes = match std::fs::read(wasm_path) {
+        Ok(b) => b,
+        Err(_) => {
+            eprintln!("skipping test_shared_quest_mode_real_wasm: wasm not built");
+            return;
+        }
+    };
+    let state = new_state();
+    let mut engine = ScriptEngine::new().expect("engine init");
+    engine
+        .load_module_bytes("shared-quest", &bytes)
+        .expect("module loads");
+    engine
+        .instantiate_all(state.clone())
+        .expect("instantiation");
+
+    // Register a player so the mode's per-player broadcasts have a target.
+    engine.notify_spawn(0x14);
+    engine.drain_effects(); // welcome message
+
+    // 3 NPC kills → stage 1 (3 kills) completes → advance to stage 2.
+    engine.notify_actor_death(0x100, 0x14, 0, 0);
+    engine.notify_actor_death(0x101, 0x14, 0, 0);
+    engine.notify_actor_death(0x102, 0x14, 0, 0);
+    let effects = engine.drain_effects();
+    let chat: Vec<String> = effects
+        .iter()
+        .filter_map(|e| match e {
+            ScriptEffect::PrivateChat { message, .. } => Some(message.clone()),
+            _ => None,
+        })
+        .collect();
+    assert!(
+        chat.iter().any(|m| m.contains("Stage complete")),
+        "stage-1 completion announced: {chat:?}"
+    );
+    assert!(
+        chat.iter().any(|m| m.contains("Stage 2/3")),
+        "stage-2 announcement: {chat:?}"
+    );
+
+    // Player deaths don't count toward the shared quest.
+    engine.drain_effects();
+    engine.notify_actor_death(0x14, 0x101, 0, 0); // the player dies
+    assert!(
+        engine.drain_effects().is_empty(),
+        "no quest progress on player death"
+    );
+}

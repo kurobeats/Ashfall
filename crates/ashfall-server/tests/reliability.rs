@@ -8,6 +8,7 @@ use ashfall_core::protocol::transport::{
     decode_ctrl_frame, decode_varint_seq, encode_ctrl_ack, CtrlFrame, CHANNEL_RELIABLE_FLAG,
 };
 use ashfall_core::protocol::Packet;
+use ashfall_core::string_cache::CachedString;
 use ashfall_server::network::NetworkManager;
 use std::time::Duration;
 use tokio::net::UdpSocket;
@@ -302,5 +303,131 @@ async fn test_first_contact_bootstraps_reliable_channel() {
     assert_eq!(
         postcard::from_bytes::<Packet>(payload).unwrap(),
         chat("welcome")
+    );
+}
+
+/// Send-window throttle: MAX_INFLIGHT (32) unacked reliable packets fills
+/// the window; the next send errors instead of unbounded buffering.
+#[tokio::test]
+async fn test_send_window_full_blocks_sender() {
+    let mut server = NetworkManager::bind("127.0.0.1:0".parse().unwrap())
+        .await
+        .unwrap();
+    let server_addr = server.socket().local_addr().unwrap();
+    let client = UdpSocket::bind("127.0.0.1:0").await.unwrap();
+    let client_addr = client.local_addr().unwrap();
+    client.connect(server_addr).await.unwrap();
+
+    // Bootstrap the reliable channel (first contact).
+    let auth = Packet::GameAuth {
+        name: "w".into(),
+        password: String::new(),
+        version: ashfall_core::constants::DEDICATED_VERSION.into(),
+    };
+    let payload = postcard::to_stdvec(&auth).unwrap();
+    client
+        .send(&encode_reliable_frame(0, &payload))
+        .await
+        .unwrap();
+    let mut buf = vec![0u8; 2048];
+    let (len, _) = server.recv_raw(&mut buf).await.unwrap();
+    assert!(server.try_recv(client_addr, &buf[..len]).is_some());
+
+    // Fill the window without ACKing anything.
+    let mut full = false;
+    for _ in 0..64 {
+        if server.send_reliable(client_addr, &chat("x")).await.is_err() {
+            full = true;
+            break;
+        }
+    }
+    assert!(full, "send window must refuse to exceed MAX_INFLIGHT");
+}
+
+/// Near-MAX_PACKET_SIZE payloads survive the reliable roundtrip intact.
+#[tokio::test]
+async fn test_large_payload_roundtrip() {
+    let mut server = NetworkManager::bind("127.0.0.1:0".parse().unwrap())
+        .await
+        .unwrap();
+    let server_addr = server.socket().local_addr().unwrap();
+    let client = UdpSocket::bind("127.0.0.1:0").await.unwrap();
+    let client_addr = client.local_addr().unwrap();
+    client.connect(server_addr).await.unwrap();
+
+    let big = "X".repeat(1000);
+    let payload = postcard::to_stdvec(&chat(&big)).unwrap();
+    client
+        .send(&encode_reliable_frame(0, &payload))
+        .await
+        .unwrap();
+    let mut buf = vec![0u8; 2048];
+    let (len, _) = server.recv_raw(&mut buf).await.unwrap();
+    let pkt = server.try_recv(client_addr, &buf[..len]).unwrap();
+    assert_eq!(pkt, chat(&big), "large reliable payload delivered intact");
+}
+
+/// Reliable and unreliable packets interleave on one session without
+/// corrupting each other's framing.
+#[tokio::test]
+async fn test_reliable_unreliable_interleave() {
+    let mut server = NetworkManager::bind("127.0.0.1:0".parse().unwrap())
+        .await
+        .unwrap();
+    let server_addr = server.socket().local_addr().unwrap();
+    let client = UdpSocket::bind("127.0.0.1:0").await.unwrap();
+    let client_addr = client.local_addr().unwrap();
+    client.connect(server_addr).await.unwrap();
+
+    let auth = Packet::GameAuth {
+        name: "i".into(),
+        password: String::new(),
+        version: ashfall_core::constants::DEDICATED_VERSION.into(),
+    };
+    let payload = postcard::to_stdvec(&auth).unwrap();
+    client
+        .send(&encode_reliable_frame(0, &payload))
+        .await
+        .unwrap();
+    let mut buf = vec![0u8; 2048];
+    let (len, _) = server.recv_raw(&mut buf).await.unwrap();
+    assert!(server.try_recv(client_addr, &buf[..len]).is_some());
+
+    // Interleave: reliable, unreliable, reliable.
+    let r1 = postcard::to_stdvec(&chat("r1")).unwrap();
+    let u1 = postcard::to_stdvec(&chat("u1")).unwrap();
+    client.send(&encode_reliable_frame(1, &r1)).await.unwrap();
+    // Unreliable frame: [len:2][channel:0][payload] — no reliable flag.
+    let mut u1_frame = Vec::new();
+    u1_frame.extend_from_slice(&(u1.len() as u16).to_le_bytes());
+    u1_frame.push(0);
+    u1_frame.extend_from_slice(&u1);
+    client.send(&u1_frame).await.unwrap();
+    let r2 = postcard::to_stdvec(&chat("r2")).unwrap();
+    client.send(&encode_reliable_frame(2, &r2)).await.unwrap();
+
+    let mut saw_r1 = false;
+    let mut saw_u1 = false;
+    let mut saw_r2 = false;
+    for _ in 0..4 {
+        let (len, _) = server.recv_raw(&mut buf).await.unwrap();
+        if let Some(Packet::GameChat {
+            message: CachedString::Plain(m),
+        }) = server.try_recv(client_addr, &buf[..len])
+        {
+            match m.as_str() {
+                "r1" => saw_r1 = true,
+                "u1" => saw_u1 = true,
+                "r2" => saw_r2 = true,
+                _ => {}
+            }
+        }
+        if saw_r1 && saw_u1 && saw_r2 {
+            break;
+        }
+    }
+    assert!(
+        saw_r1 && saw_u1 && saw_r2,
+        "interleaved channels all delivered"
     );
 }

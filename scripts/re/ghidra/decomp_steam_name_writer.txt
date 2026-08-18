@@ -1,0 +1,101 @@
+/* ===== gog_name_writer @ 0x4019c0 ===== */
+// containing fn: FUN_004019a0 @ 004019a0
+
+int FUN_004019a0(int *param_1)
+
+{
+  int iVar1;
+  
+  iVar1 = (*DAT_00f240f0)(param_1 + 4);
+  if ((iVar1 == 0) && (param_1 != (int *)0x0)) {
+    (**(code **)(*param_1 + 0x1c))(1);
+  }
+  return iVar1;
+}
+
+
+/* ===== steam_name_writer @ 0x57d590 ===== */
+// containing fn: FUN_0057d590 @ 0057d590
+
+undefined4 __thiscall FUN_0057d590(int *param_1,char *param_2,uint param_3)
+
+{
+  char cVar1;
+  int iVar2;
+  undefined2 uVar3;
+  uint uVar4;
+  undefined1 *puVar5;
+  char *pcVar6;
+  uint uVar7;
+  int *unaff_FS_OFFSET;
+  int local_10;
+  undefined1 *puStack_c;
+  undefined4 local_8;
+  
+  local_8 = 0xffffffff;
+  puStack_c = &LAB_00da8c40;
+  local_10 = *unaff_FS_OFFSET;
+  uVar4 = DAT_01202954 ^ (uint)&stack0xfffffffc;
+  *unaff_FS_OFFSET = (int)&local_10;
+  if (param_2 == (char *)0x0) {
+    uVar7 = 0;
+  }
+  else {
+    pcVar6 = param_2;
+    do {
+      cVar1 = *pcVar6;
+      pcVar6 = pcVar6 + 1;
+    } while (cVar1 != '\0');
+    uVar7 = (int)pcVar6 - (int)(param_2 + 1);
+  }
+  if (param_3 < uVar7) {
+    param_3 = uVar7;
+  }
+  if (*(ushort *)((int)param_1 + 6) < param_3) {
+    iVar2 = *param_1;
+    puVar5 = (undefined1 *)FUN_009d9e20(param_3 + 1);
+    *param_1 = (int)puVar5;
+    if (param_2 == (char *)0x0) {
+      *puVar5 = 0;
+    }
+    else {
+      FUN_00d7b890(puVar5,param_2,uVar7 + 1);
+    }
+    if (iVar2 != 0) {
+      local_8 = 1;
+      FUN_009d9f40(iVar2);
+    }
+    uVar3 = (undefined2)param_3;
+    if (0xffff < param_3) {
+      uVar3 = 0xffff;
+    }
+  }
+  else {
+    if (param_3 != 0) {
+      if (param_2 == (char *)0x0) {
+        *(undefined1 *)*param_1 = 0;
+      }
+      else {
+        FUN_00d7b890((undefined1 *)*param_1,param_2,uVar7 + 1,uVar4);
+      }
+      goto LAB_0057d680;
+    }
+    if (*param_1 != 0) {
+      local_8 = 0;
+      FUN_009d9f40(*param_1);
+    }
+    *param_1 = 0;
+    uVar3 = 0;
+  }
+  *(undefined2 *)((int)param_1 + 6) = uVar3;
+LAB_0057d680:
+  uVar4 = uVar7 & 0xffff;
+  if (0xffff < uVar7) {
+    uVar4 = 0xffff;
+  }
+  *(short *)(param_1 + 1) = (short)uVar4;
+  *unaff_FS_OFFSET = local_10;
+  return CONCAT31((int3)(uVar4 >> 8),uVar7 != 0);
+}
+
+
