@@ -1145,3 +1145,41 @@ VTableSlots.java + vtable_{gog,steam}.txt[.lines] + vtable_twins.txt):
 Live OP_PROBE_FORM is now needed only to CONFIRM semantics of the 113
 restructured methods (not to identify them), and even that can be deferred
 until a specific slot is needed by the bridge.
+
+## Session 2026-08-18d — FNV lock WIRED + naming/fire paths resolved (Ghidra)
+
+**FNV lock relay WIRED (was no-op since 2026-08-17):** decompiled the FNV
+Lock/UnLock command handlers (cmdtable idx 112/113 → 0x5C7280/0x5CBF80) →
+both call the state setter **0x60CA30** (thiscall: ref, bool). Asm-verified:
+Lock = `or byte [ecx+0x3C], 2`, UnLock = `and byte [ecx+0x3C], ~2` (+ a
+vtable+0x48 refresh call). So **FNV lock state = [obj+0x3C] bit 1 (0x02)** —
+not the FO3/Steam +0xA-bit-0 layout (the old docs' "FNV lock = +0x20 →
+TESObjectLOCK vtable slot 0xB8" was the GetLocked command's internal path:
+0x57B410 at +0xB8 of the REFR-family vtables = `[this+0x20] → vtable 0xB8`
+wrapper, and `0x7AF430` = `[this+0x20]`). Bridge `set_lock_flags` +
+`get_lock_from_obj` now branch on FNV to read/write `[obj+0x3C]` bit 1
+(field ops, no vtable — mirrors the engine setter's raw write; the +0x48
+refresh call is skipped, same trade-off as FO3/Steam).
+
+**OP_SET_NAME (FNV) fully resolved (plumbing deferred):** SetActorFullName
+handler 0x5D1890 asm: `ecx = form; add ecx,0x18; call 0x408DA0` (get) then
+`push eax; ecx = form2; add ecx,0x18; call 0x489100` (set). So
+**SetFullName = 0x489100(thiscall: form+0x18, name)** → wraps
+**0x4037F0(form+0x18+0x4, name, 0)** = the game-heap string assigner
+(FORM_HEAP_ALLOCATE 0x401000 / FREE 0x401030) writing the name char* into
+TESFullName+4 — exactly the field the bridge's field-based get_name reads
+(base_form+0x18+0x04). GetFullName = 0x408DA0(form+0x18). Wiring OP_SET_NAME
+needs a game-heap name buffer in the bridge (plumbing), deferred until the
+naming-sync feature is exercised.
+
+**FNV AV getter path re-confirmed:** SetActorValue handler 0x5BD8A0 →
+0x59C4F0 → reads via `[actor+0xA4] vtable slot 3` (the "GetActorValue: %s
+>> %0.2f" print helper) — the avOwner +0xA4 / slot-3 claim holds.
+
+**fire_fix clarified (deprioritized further):** the Steam site 0x8DA397's
+enclosing fn 0x8DA370 is a per-actor fire-dispatch loop (list @ +8, flags
+test 0x200820, vtable +0x224 fire dispatch, +0x220/+0x314 fallbacks) — the
+NPC/projectile path. The player weapon-fire EVENT is already relayed by the
+wired fire_weapon hook (0x7DF3F7 → 0x770880). fire_fix wiring would relay
+the NPC-side dispatch — not core sync (owned-NPC simulation handles it) —
+kept pending-live, lowest priority.

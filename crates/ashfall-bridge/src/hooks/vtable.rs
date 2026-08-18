@@ -796,18 +796,27 @@ pub unsafe fn set_lock(ref_id: u32, locked: bool) {
     set_lock_flags(obj, locked);
 }
 
-/// Set the lock byte on an already-resolved object pointer (+0xA bit 0).
+/// Set the lock byte on an already-resolved object pointer.
 ///
-/// FO3/Steam only (2026-08-17 data/re campaign lane b2): the +0xA-bit-0
-/// lock byte is the FO3/GOG + Steam layout (verified getter
-/// `mov al,[ecx+0xa]; and al,1; ret`, GOG 0x4017F0 / Steam 0x57C780). FNV's
-/// lock is a DIFFERENT mechanism — the getter signature has zero hits in
-/// gog-fnv.exe; FNV lock = pointer at +0x20 → TESObjectLOCK vtable slot
-/// 0xB8 (fn 0x57B410). Writing +0xA on FNV would corrupt an unrelated
-/// byte, so this no-ops on FNV until the FNV path is re-derived + live-
-/// probed.
+/// FO3/Steam: +0xA bit 0 (verified getter `mov al,[ecx+0xa]; and al,1; ret`,
+/// GOG 0x4017F0 / Steam 0x57C780). FNV (2026-08-18, Ghidra decompile): the
+/// lock flag is **+0x3C bit 1 (0x02)** — the exact byte the engine's
+/// Lock/UnLock handlers maintain via the setter 0x60CA30 (Lock: `or 2,
+/// [ecx+0x3C]`, UnLock: `and ~2`; handlers 0x5C7280/0x5CBF80, cmdtable idx
+/// 112/113). Raw field write mirrors the engine setter; the engine's extra
+/// vtable+0x48 refresh call is skipped (same trade-off as FO3/Steam +0xA).
 pub unsafe fn set_lock_flags(obj: *mut u8, locked: bool) {
-    if obj.is_null() || crate::hooks::is_fnv() {
+    if obj.is_null() {
+        return;
+    }
+    if crate::hooks::is_fnv() {
+        let mut byte = read_field::<u8>(obj, 0x3C);
+        if locked {
+            byte |= 0x02;
+        } else {
+            byte &= !0x02;
+        }
+        write_field::<u8>(obj, 0x3C, byte);
         return;
     }
     let mut byte = read_field::<u8>(obj, 0x0A);
@@ -823,6 +832,12 @@ pub unsafe fn set_lock_flags(obj: *mut u8, locked: bool) {
 pub unsafe fn get_lock_from_obj(obj: *mut u8) -> u32 {
     if obj.is_null() {
         return 0;
+    }
+    // FNV (2026-08-18, Ghidra decompile): lock flag = [obj+0x3C] bit 1 —
+    // the byte the engine Lock/UnLock setter 0x60CA30 maintains (matches
+    // set_lock_flags). Field read, no vtable.
+    if crate::hooks::is_fnv() {
+        return (read_field::<u8>(obj, 0x3C) & 0x02) as u32;
     }
     // Lock-state getter (`mov al,[ecx+0xa]; and al,1; ret`) is at vtable
     // slot +0xA0 in BOTH the GOG (0x4017F0) and Steam (0x57C780) builds —
