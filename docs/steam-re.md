@@ -1460,6 +1460,8 @@ tetsuo, Steam build confirmed by family match). Results:
    get_name returned "unnamed" (bridge read +0x1C). The engine's name
    writes (GOG 0x539D20) go to +0xD4; the 18h ambiguity is settled.
    get_name fixed: +0xD4 FO3/Steam, +0x1C FNV. OP_SET_NAME stays FNV-only.
+   **Live-verified later the same session**: OP_GET_NAME returns "Anthony"
+   (player) + "Nathan" (NPC 0x3b57) on the fixed build — was "unnamed".
 
 ### New bugs found live (all fixed in code, some pending redeploy)
 
