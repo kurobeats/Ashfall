@@ -162,17 +162,21 @@ Recently completed:
 
 ### What's left
 
-- **Live verification on a real game host** — the one remaining
-  bottleneck. The bridge, hooks, and a verification tool are ready; the
-  next step is a single session on the game machine to confirm the wired
-  patches behave in the running game (the plan is pre-written in
-  [docs/steam-re.md](./docs/steam-re.md)).
+- **Engine-call relay (kill + sound)** — the two remaining Steam engine
+  calls. Direct calls are proven dead ends (the kill handler is a
+  multi-call flow with a limb-bit-dispatched death processor; the sound
+  entry needs a 12-byte out-buffer + an unresolved play call). The path:
+  the vaultmp delegator relay — dispatch the KillActor (op 0x108B) /
+  PlaySound (op 0x1026) commands through the engine's command executor
+  on the game thread. All conventions mapped in
+  [docs/steam-re.md](./docs/steam-re.md) (sessions 18k/18l); the
+  game-thread queue is already in the bridge.
 - **Windows-native client** — cross-compiles and has a CI job; the runtime
   still needs a Windows host to verify.
 - **Content work** — more game modes, client UI polish, and shared quests
   on top of the working script stack.
-- **One suspected bug** — the engine's name field for FO3/Steam may differ
-  from what the client reads; noted in [docs/steam-re.md](./docs/steam-re.md).
+- **Frame hook 0x9B3D77** — installed but emits zero player-state events;
+  open item (see steam-re.md 18l).
 
 ---
 
