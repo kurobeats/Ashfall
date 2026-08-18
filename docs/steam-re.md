@@ -1266,36 +1266,40 @@ authored relay + live validation), same bucket as fire_fix. All remaining
 RE items are now either resolved, documented as redundant/vaultmp-legacy,
 or gated on the live session.
 
-## Next live session (cyborg.wg) — pre-planned, probe-ready
+## Next live session (cyborg.wg) — the definitive checklist
 
-`bridge_probe.py --action verify` (new, 2026-08-18) byte-checks all 24
-wired patch sites in one shot (OP_PROBE_PTR reads; PASS = guard holds) and
-auto-identifies the build (gog_/steam_/fnv_ family match). This is the
-FIRST step — it proves the running build matches the tables before
-anything is exercised. Then, in order:
+Everything below is pre-scripted; the session is an execution + log-
+reading run, not a debugging session. Order matters (verify first).
 
-1. **verify** — guards + build auto-detect (kills the old
-   "which build am I on" dance; the respawn action already covers the
-   death-path state).
-2. **0x7D0A50 fire-rate** — observe the NPC discovery event rate in the
-   server/client logs (the detour fires per processed actor per frame;
-   the collector → diff → spawn/remove event cadence in a populated cell
-   is the signal). The 2026-08-17 re-wire is untested live.
-3. **Steam kill (0x7F3200)** — issue a kill on a test NPC (server command
-   → OP_KILL) → remote death applies. The args (actor, cause, limb,
-   killer) are decompile-derived; this confirms the call shape live.
+1. **`bridge_probe.py --action verify`** — byte-checks all 25 wired patch
+   sites (guards from the bridge's own code) + build auto-detect. Any
+   FAIL = stop (the loaded build doesn't match the tables). Also run
+   `--action respawn` for the death-path state.
+2. **0x7D0A50 fire-rate** — watch the server/client logs for NPC
+   discovery events (spawn/remove) in a populated cell. Expected: events
+   stream continuously (the predicate fires per-frame per-actor — 11 of
+   12 callers are per-frame processing fns). If zero events: the detour
+   install path needs a live look (OP_PROBE_CODE at 0x7D0A50 already
+   covered by verify).
+3. **Steam kill (0x7F3200)** — server kill command on a test NPC →
+   remote death applies (the decompile-derived 4-arg call shape).
 4. **match_race (0x6F722C NOP)** — spawn actors, watch body-type
-   consistency (SameRace path forced). Cosmetic — low risk.
+   consistency. Cosmetic; low risk.
 5. **FNV lock (+0x3C bit 1)** — lock/unlock a door → state relays
-   (UpdateLock). Only on an FNV session.
+   (UpdateLock). FNV session only.
 6. **play_sound (0x9CC980 / 0xBCFBB0 / 0x5C4B30)** — trigger a remote
-   sound → it plays (UpdateSound relay).
-7. **fire_fix** — RESOLVED 2026-08-18i (do not wire): the call graph
-   proves the delegator reaches both the dispatch loop and the wired
-   per-frame executor — fire_fix would double-report command fires.
-8. **ai_fix4** — verify the new 0x63FB36 NOP (13-byte block) applies on
-   the running build (the `verify` action includes it once the guard is
-   added to VERIFY_SITES).
+   sound → it plays. Confirms the per-build arg layouts.
+7. **Name-field reconciliation (the OP_SET_NAME FO3/Steam question)** —
+   run `SetActorFullName` in-game, then read `[base_form+0x1C]` and
+   `[base_form+0xD4]` via `bridge_probe.py --action ptr`. Whichever
+   changed settles the +0x1C-vs-+0xD4 conflict and validates (or
+   corrects) the bridge's get_name field.
+8. **ai_fix4** — covered by verify (guard in VERIFY_SITES). No separate
+   step.
+
+Fire_fix: NOT wired (proven redundant 2026-08-18i — the delegator
+reaches both fire paths; wiring would double-report). play_group/
+play_idle delegator relays: vaultmp-legacy, deferred (low priority).
 
 ## Session 2026-08-18h — OP_SET_NAME (FNV) wired; FO3/Steam setters identified
 
