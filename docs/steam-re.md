@@ -1576,6 +1576,12 @@ a resolved 0x9CC220 contract.
   DAT_00f24118) — NOT the delegator. The 18k crash chain fell into the
   wrong fn. The relay re-wire (cave relocation) must call 0x9B0740.
 
+### match_race — behavioral PASS (18l live)
+
+`player.placeatme 00000A60` (Lucas Simms) spawned with correct body/scale —
+the SameRace forced path (0x6F722C NOP) holds. (Vanilla placeatme quirk:
+console-spawned NPCs lack equipment; not a bridge issue.)
+
 ### Frame-hook mystery (0x9B3D77)
 
 Decompiled the containing fn 0x9B31A0 — large main-loop-ish function; the
