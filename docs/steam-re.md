@@ -1198,3 +1198,45 @@ remote sound relay complete. FNV PlaySound path not derived (no-op).
 OP_PLACE_AT_ME remains an unused stub (documented); OP_SET_NAME's FNV
 engine path is resolved (0x489100, this=form+0x18) but the game-heap name
 buffer plumbing is deferred until naming sync has a caller.
+
+## Session 2026-08-18f — FNV play_sound wired; fire_fix recipe complete; ai_fix4 shape
+
+**FNV play_sound WIRED** (was no-op): FNV PlaySound handler 0x5C4A70 →
+engine entry **0x5C4B30** = cdecl `(target_obj, sound_form, loop,
+pos_override, type, volume)` — arg order differs from FO3/Steam's
+`(sound_form, refID, flags)`. Bridge `play_sound` now picks per build by
+prologue (Steam 0x9CC980 `55 8b ec 6a` / FNV 0x5C4B30 `53 8b dc` / GOG
+0xBCFBB0 `6a ff 68`) and calls with the right layout (FNV: 0,0,0,1.0).
+OP_PLAY_SOUND now works on all three builds.
+
+**fire_fix — COMPLETE ready-to-wire recipe (wiring gated on live overlap
+check):** the site 0x8DA397 = `mov eax,[eax+0x224]; call eax` (8B) inside
+the pending-fire-action loop 0x8DA370 (list @ +8, flags test 0x200820).
+The +0x224 slot = 0x8BC750 (the weapon-fire executor: SEH, weapon resolve
+0x622290, 0x61B270 calls) — a DIFFERENT layer from the wired fire_weapon
+hook's fn 0x7DF210 (the per-frame fire executor, its 0x770880 call at
+0x7DF3F7). The other direct 0x770880 callers: 0x79266D (the FireWeapon
+command handler 0x792600) + 0x9CB367 (fire-cancel cleanup 0x9CB270).
+Whether the 0x8DA370 path's shots ALSO pass the wired hook is only
+observable live (indirect-call gap: 0x8BC750 → 0x61B270 does not reach
+0x770880 directly) — wiring fire_fix risks double EVENT_FIRE. Recipe when
+wiring:
+  - cave: 48B int3 pad @ 0x9DCB50 (after `ret 8` @ 0x9DCB4E)
+  - E9 rel32 @ 0x8DA397 → cave (guard `8b 80 24 02 00 00 ff d0`)
+  - stub (24B): `push esi; call ashfall_hook_fire; add esp,4; mov eax,
+    [esi]; mov eax,[eax+0x224]; call eax; jmp 0x8DA39F`
+  - re-entry is clean: 0x8DA39F reloads edx/ecx (`mov edx,[esi]; mov
+    ecx,esi`) and reads only eax (the dispatch result → test al,al).
+
+**ai_fix4 — GOG shape documented, Steam twin unpinned:** the NOP'd 11B
+@ 0x42FBDC = `push 0; push edi; push edx; mov ecx,ebx; call 0x559740`
+inside the object-creation fn FUN_0042FB60 (TLS 0x298 save, [obj+0x28]
+vtable +0x1E8 dispatch, create helpers 0x556050/0x559740, construction
+0x4715F0/0x429410). 0x559740 = the actor **spawn-init** (AI/combat-target
+setup, [actor+0x60] sub-object +0x464 call, player-singleton checks) —
+vaultmp disabled it on creation. Steam twin search via the +0x1E8
+dispatch fingerprint (61 sites) maxes at J=0.11 — the creation fn was
+restructured past recognition (as documented). Pinning the Steam site
+needs the vaultmp SEMANTIC (why the spawn-init call was disabled) first —
+source archaeology, not a Ghidra question. Classic bridge keeps applying
+the 11B NOP (recipe fidelity).

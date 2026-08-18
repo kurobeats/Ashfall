@@ -1,0 +1,60 @@
+/* ===== steam_firecaller_792600 @ 0x792600 ===== */
+// containing fn: FUN_00792600 @ 00792600
+
+undefined1
+FUN_00792600(undefined4 param_1,undefined4 param_2,int param_3,undefined4 param_4,int *param_5,
+            undefined4 param_6,undefined4 param_7,undefined4 param_8)
+
+{
+  int iVar1;
+  char cVar2;
+  undefined4 uVar3;
+  int local_8;
+  
+  local_8 = 0;
+  cVar2 = FUN_00787530(param_1,param_2,param_8,param_3,param_4,param_5,param_6,&local_8);
+  iVar1 = local_8;
+  if (cVar2 == '\0') {
+    return 0;
+  }
+  if (param_3 != 0) {
+    if ((local_8 != 0) && (*(char *)(local_8 + 4) == '(')) {
+      cVar2 = FUN_007ffaf0();
+      if (cVar2 != '\0') {
+        FUN_009cb200(iVar1,param_3);
+        return 1;
+      }
+      FUN_00770880(param_3);
+      return 1;
+    }
+    uVar3 = (**(code **)(*param_5 + 0x130))();
+    FUN_00401b90(s_SCRIPTS__FireWeapon_in_script____00f7f150,uVar3);
+  }
+  return 1;
+}
+
+
+/* ===== steam_firecaller_9CB270 @ 0x9cb270 ===== */
+// containing fn: FUN_009cb270 @ 009cb270
+
+void FUN_009cb270(void)
+
+{
+  int *unaff_FS_OFFSET;
+  int local_10;
+  undefined1 *puStack_c;
+  undefined4 local_8;
+  
+  puStack_c = &LAB_00da8ad0;
+  local_10 = *unaff_FS_OFFSET;
+  *unaff_FS_OFFSET = (int)&local_10;
+  if (DAT_0123cde8 != 0) {
+    local_8 = 0;
+    FUN_009d9f40(DAT_0123cde8);
+  }
+  DAT_0123cde8 = 0;
+  *unaff_FS_OFFSET = local_10;
+  return;
+}
+
+

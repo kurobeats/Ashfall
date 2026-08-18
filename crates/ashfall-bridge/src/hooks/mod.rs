@@ -514,11 +514,12 @@ pub fn fire_weapon(shooter_ref: u32, _weapon: u32) -> u32 {
 
 /// Play a sound at a reference (remote sound relay).
 /// Steam: 0x9CC980(sound_form, refID, flags); GOG: 0xBCFBB0(sound_form,
-/// refID, flags) — both cdecl, derived from the PlaySound command handlers
-/// (Steam 0x79F9B0 / GOG 0x523590, Ghidra-decompiled 2026-08-18; the
-/// handlers pass the resolved sound form, the target refID ([obj+0xC]), and
-/// flags 0x40000101 default / 0x121 looped). Byte-guarded per build; no-op
-/// on FNV (FNV PlaySound path not derived).
+/// refID, flags) — cdecl, derived from the PlaySound command handlers
+/// (Steam 0x79F9B0 / GOG 0x523590, Ghidra-decompiled 2026-08-18; handlers
+/// pass resolved sound form, target refID ([obj+0xC]), flags 0x40000101
+/// default / 0x121 looped). FNV (2026-08-18): 0x5C4B30(target_obj,
+/// sound_form, loop, pos_override, type, volume) — different arg order,
+/// from the FNV PlaySound handler 0x5C4A70. Byte-guarded per build.
 pub fn play_sound(ref_id: u32, sound_id: u32) -> u32 {
     #[cfg(target_arch = "x86")]
     unsafe {
@@ -528,15 +529,23 @@ pub fn play_sound(ref_id: u32, sound_id: u32) -> u32 {
             return 0;
         }
         const FLAGS: u32 = 0x4000_0101;
-        let addr = if crate::hooks::read_bytes(0x009C_C980, 4) == [0x55, 0x8B, 0xEC, 0x6A] {
-            0x009C_C980 // Steam (SEH prologue, ebp-framed)
+        if crate::hooks::read_bytes(0x009C_C980, 4) == [0x55, 0x8B, 0xEC, 0x6A] {
+            // Steam (SEH prologue, ebp-framed).
+            let f: unsafe extern "C" fn(u32, u32, u32) -> u32 = std::mem::transmute(0x009C_C980);
+            f(snd as u32, ref_id, FLAGS)
+        } else if crate::hooks::read_bytes(0x005C_4B30, 3) == [0x53, 0x8B, 0xDC] {
+            // FNV: (target, sound, loop, pos_override, type, volume 1.0).
+            let f: unsafe extern "C" fn(u32, u32, u32, u32, u32, f32) =
+                std::mem::transmute(0x005C_4B30);
+            f(obj as u32, snd as u32, 0, 0, 0, 1.0);
+            1
         } else if crate::hooks::read_bytes(0x00BC_FBB0, 4) == [0x6A, 0xFF, 0x68, 0x68] {
-            0x00BC_FBB0 // GOG classic (frameless SEH)
+            // GOG classic (frameless SEH).
+            let f: unsafe extern "C" fn(u32, u32, u32) -> u32 = std::mem::transmute(0x00BC_FBB0);
+            f(snd as u32, ref_id, FLAGS)
         } else {
-            return 0; // FNV or unknown build — not derived
-        };
-        let f: unsafe extern "C" fn(u32, u32, u32) -> u32 = std::mem::transmute(addr);
-        f(snd as u32, ref_id, FLAGS)
+            0 // unknown build
+        }
     }
     #[cfg(not(target_arch = "x86"))]
     {

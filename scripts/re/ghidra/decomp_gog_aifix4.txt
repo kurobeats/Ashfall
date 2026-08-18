@@ -1,0 +1,76 @@
+/* ===== gog_aifix4_callee @ 0x559740 ===== */
+// containing fn: FUN_00559740 @ 00559740
+
+void __thiscall FUN_00559740(int param_1,int param_2,int param_3,char param_4)
+
+{
+  char cVar1;
+  uint uVar2;
+  int iVar3;
+  int iVar4;
+  int *piVar5;
+  
+  if (param_3 != 0) {
+    if (param_4 == '\0') {
+      uVar2 = 0;
+      piVar5 = (int *)(param_3 + 0x16c);
+      do {
+        if (*piVar5 != 0) {
+          return;
+        }
+        uVar2 = uVar2 + 1;
+        piVar5 = piVar5 + 4;
+      } while (uVar2 < 0x14);
+    }
+    FUN_00472f70(*(undefined4 *)(param_1 + 0x110),*(uint *)(param_1 + 0x34) & 1);
+  }
+  iVar3 = FUN_00c0050a(param_2,0,&TESObjectREFR::RTTI_Type_Descriptor,&Actor::RTTI_Type_Descriptor,0
+                      );
+  if ((iVar3 != 0) && (*(int **)(iVar3 + 0x60) != (int *)0x0)) {
+    (**(code **)(**(int **)(iVar3 + 0x60) + 0x464))(1);
+  }
+  iVar3 = *(int *)((int)ThreadLocalStoragePointer + _tls_index * 4);
+  if (param_2 == *(int *)(iVar3 + 0x24c)) {
+    iVar3 = *(int *)(iVar3 + 0x248);
+  }
+  else if (*(int *)(param_2 + 0x5c) == 0) {
+    iVar3 = 0;
+  }
+  else {
+    iVar3 = *(int *)(*(int *)(param_2 + 0x5c) + 0x14);
+  }
+  if ((iVar3 == 0) || (param_4 != '\0')) {
+    cVar1 = FUN_0054ad30(param_2);
+    if ((param_1 == *(int *)(DAT_0107a104 + 0x1c)) && (iVar3 = FUN_0047e090(param_2), iVar3 != 0)) {
+      iVar3 = 0;
+      do {
+        iVar4 = FUN_00483eb0(iVar3,0);
+        if (iVar4 != 0) {
+          FUN_0047fd30();
+                    /* WARNING: Subroutine does not return */
+          FUN_0086ba60(iVar4);
+        }
+        iVar3 = iVar3 + 1;
+      } while (iVar3 < 0x14);
+    }
+    if (cVar1 != '\0' || param_4 != '\0') {
+      _param_4 = 1;
+      iVar3 = FUN_00766020();
+      if ((iVar3 != 0) && ((*(uint *)(iVar3 + 0x1c) >> 0x15 & 1) != 0)) {
+        _param_4 = 0;
+      }
+      FUN_00555db0(param_2,1,_param_4,0,0);
+    }
+  }
+  if ((DAT_01073a30 == '\0') || (DAT_01073a60 == '\0')) {
+    FUN_00558640(param_2,param_3);
+  }
+  FUN_00557bc0(param_2,param_3);
+  iVar3 = FUN_0076cd20(1);
+  if (param_3 != iVar3) {
+    FUN_00556210(param_2,0);
+  }
+  return;
+}
+
+
