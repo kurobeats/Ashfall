@@ -156,7 +156,16 @@ lives in [docs/impl-plan.md](./docs/impl-plan.md). Recent highlights:
   corrected to 0x7D0A50; `apply_steam_vaultmp()` wires ai_fix2/3,
   delegator, place_at_me, fire_weapon on Steam; FNV kill_actor wired
   (0x8B86E0, 4-arg signature); FNV command table (0x1190950) + class
-  vtables mapped; vtable map static-exhausted (89 byte-matches)
+  vtables mapped
+- Ghidra campaign 2026-08-18 (headless, battlecruiser — no game): every
+  address table byte-validated (GOG/Steam/FNV, 601→ all guards held);
+  Steam kill_actor wired (0x7F3200, twin of GOG 0x71C280); Steam
+  match_race wired (jne NOP @ 0x6F722C); GOG Actor vtable base corrected
+  to 0xE18110; **Steam vtable slot map recovered by decompile-twinning**
+  (147 GOG↔Steam pairs + 113 position-identified, 0 true unknowns — the
+  old "~310 slots need live probing" claim is obsolete); full cmdtable
+  dumps (GOG 810 / Steam 569 / FNV 569); FNV lock getter + name-setter
+  engine fns confirmed
 - Verified ESM import for both games + all DLC (real GOG binaries)
 - Live Proton testing: Steam respawn-disable patch applied and verified on
   the game host

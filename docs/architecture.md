@@ -1471,6 +1471,18 @@ have 1,400+ hits, /GS frame sizes changed). New confirmed globals: Steam
 Ashfall only; ButcherPeteFOSE is classic FOSE source). Remaining work =
 live probe on the game host (hooks::vaultmp recipes) — see docs/steam-re.md.
 
+**2026-08-18 — Ghidra campaign supersedes the "static-exhausted" note:**
+Ghidra 12.1.2 headless validated every bridge address table (all byte-
+guards held) and decompile-twinning recovered the Steam vtable slot map
+(147 GOG↔Steam pairs + 113 position-identified, 0 true unknowns —
+scripts/re/ghidra/vtable_twins.txt). Two items previously "pending-live"
+were wired statically: Steam kill_actor (0x7F3200, twin of GOG 0x71C280,
+args resolved via decompile) and Steam match_race (jne NOP @ 0x6F722C).
+GOG Actor vtable base corrected to 0xE18110. Remaining live-host work is
+narrow: fire_fix relay stub, play_group delegator flow, play_idle_fix
+wiring, ai_fix4, FNV lock setter, and the OP_SET_NAME/OP_PLAY_SOUND engine
+hooks (see steam-re.md sessions 2026-08-18b/c).
+
 ---
 
 ## 12. Design Decisions Summary

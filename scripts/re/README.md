@@ -237,12 +237,16 @@ unpacker section. **fnv_14 table applies to Steam unchanged.**
 
 `vtable_steam.py` — Steam PlayerCharacter vtable RE. Steam PC vtable base
 0xF938FC (verified: AI-pred slot +0x22C → 0x8B8AF0, death-handler +0x23C →
-0x8CA490); GOG base 0xE16B10. Builds the GOG→Steam slot translation by
-byte-identical method matching: 41 slots, 59% fit a +0x58 shift; the early
+0x8CA490); GOG base 0xE18110 (CORRECTED 2026-08-18 — the old 0xE16B10 was
+a different class's vtable run-start). Builds the GOG→Steam slot translation
+by byte-identical method matching: 41 slots, 59% fit a +0x58 shift; the early
 region (+0x00..0x68) was REORDERED (GetActorValue/BaseValue/AnimData need
-live probing). GET_LOCKED confirmed: GOG +0xA0 → Steam +0xFC (byte-identical
-`8a 41 0a 24 01 c3`). Wired in the bridge as `fo3_steam_vtable` +
-`steam_slot_for()` (get_lock uses Steam slot +0xFC when detected).
+live probing — largely superseded 2026-08-18 by Ghidra decompile-twinning,
+scripts/re/ghidra/VTableSlots.java + vtable_twins.txt: 147 twins + 113
+position-identified, 0 true unknowns). GET_LOCKED confirmed: GOG +0xA0 →
+Steam +0xFC (byte-identical `8a 41 0a 24 01 c3`). Wired in the bridge as
+`fo3_steam_vtable` + `steam_slot_for()` (get_lock uses Steam slot +0xFC when
+detected).
 
 ## 2026-08-14h — gh-crawl validation (Project Crossroads catalog)
 
