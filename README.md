@@ -1,9 +1,9 @@
 # ☢️ Ashfall
 
-**Play Fallout 3 / Fallout: New Vegas with your friends.** A co-op multiplayer
-mod for the classic Bethesda games — host a server, connect with your crew,
-and explore the wasteland together. Built from scratch in Rust, inspired by
-the old vaultmp project and its successors.
+**Play Fallout 3 / Fallout: New Vegas with your friends.** A co-op
+multiplayer mod for the classic Bethesda games — host a server, connect
+with your crew, and explore the wasteland together. Built from scratch in
+Rust, inspired by the old vaultmp project and its successors.
 
 [![Tests](https://img.shields.io/badge/tests-605%20passed-brightgreen)](#status)
 [![License](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
@@ -13,34 +13,34 @@ the old vaultmp project and its successors.
 
 ## What is this?
 
-Ashfall is a **server-authoritative multiplayer mod** — a dedicated server
-owns the world, and players connect to it. Your game still runs the real
-Fallout 3/NV on your machine (through Steam/GOG); Ashfall syncs players,
-position, combat, chat, and world state between them. Think
-Skyrim Together, but for the Capital Wasteland and the Mojave.
+Ashfall is a **server-authoritative multiplayer mod**. A dedicated server
+owns the world; players connect to it and play the real game together —
+your Fallout 3/NV still runs on your machine, Ashfall keeps everyone's
+world in sync. Think Skyrim Together, but for the Capital Wasteland and
+the Mojave.
 
-**The stack, in one line:** Rust server (UDP + SQLite + WASM scripting),
-a native Linux client with a server browser, and a small DLL injected into
-the game that lets it talk to the client.
+**The pieces:** a Rust server (with SQLite storage and WASM scripting for
+custom game modes), a small client app with a server browser, and a tiny
+DLL injected into the game that lets it talk to the client.
 
 ---
 
 ## What works right now
 
-This is an honest status. The plumbing is done; the polish is coming.
+An honest status. The plumbing is done; the polish is coming.
 
 | Area | Status |
 |------|--------|
-| **Connect & play together** | ✅ Two players can connect, authenticate, see each other, and sync position/state over the network (real, tested) |
-| **Dedicated server** | ✅ Run your own — UDP reliability layer, sessions, anti-cheat validation, persistence, master-server browser listing |
+| **Play together** | ✅ Connect, authenticate, see each other, sync position and state |
+| **Dedicated server** | ✅ Run your own — sessions, persistence, anti-cheat, server browser listing |
 | **Chat** | ✅ In-game chat relayed by the server |
-| **Server-side rules** | ✅ PvP on/off, game clock (time of day syncs to players), load-order check, player limits |
-| **Owned NPC simulation** | ✅ Ownership protocol — whoever's near an NPC simulates it, handoff on disconnect. The bridge's NPC discovery (detours the engine's actor-processing gate, GOG-verified) + owned-NPC state reporting are built and tested |
-| **Mod support** | ✅ Full ESM/ESP import → server database (both games + all DLC verified); optional load-order verification |
-| **Scripted game modes** | ✅ WASM scripting — servers can run custom game modes written in Rust/WASM |
+| **Server-side rules** | ✅ PvP on/off, game clock, load-order check, player limits |
+| **Owned NPC simulation** | ✅ Whoever's near an NPC simulates it; ownership hands off cleanly on disconnect |
+| **Mod support** | ✅ Import your ESM/ESP mods into the server database (both games + all DLC verified) |
+| **Scripted game modes** | ✅ Custom game modes in Rust/WASM — see [scripts/](./scripts/README.md) |
 | **Combat** | ✅ Server-authoritative damage with Fallout's DR/DT formula |
-| **GUI** | ✅ Client has a server browser + chat + top-down world view (health bars, player names, server GUI). The game window is the 3D view — a separate 3D renderer is out of scope. |
-| **NPC sync in-game** | 🚧 Fully wired client/server/bridge — discovery (classic + Steam re-derived + FNV ActorProcessManager), ownership, state sampling, remote application all built + tested. Needs live verification on the game host (see [What's Left](#whats-left)) |
+| **GUI** | ✅ Server browser, chat, top-down world view with health bars and player names. (The game window is the 3D view — a separate 3D renderer is out of scope.) |
+| **NPC sync in-game** | 🚧 Fully built and tested end-to-end; needs live verification on a real game host (see [What's left](#whats-left)) |
 
 **The goal:** vanilla co-op — your group playing the actual game together,
 no mods required, on either Fallout 3 or New Vegas.
@@ -117,16 +117,16 @@ DLL and where saves live.
 - **Server-authoritative** — the server owns all game state; clients send
   input, the server validates and broadcasts. No trust-the-client.
 - **Custom UDP reliability layer** — ACK/NACK, retransmission, send window,
-  rate limiting (RakNet semantics, no RakNet). 3 ordered channels + 1
-  fire-and-forget for positions.
+  rate limiting (RakNet semantics, no RakNet). Ordered channels for
+  gameplay state + a fire-and-forget lane for positions.
 - **SQLite persistence** — the full game world (records, NPCs, weapons,
   quests, factions) imported natively from your ESM/ESP files.
 - **WASM game modes** — sandboxed scripts drive server rules (auth gates,
   spawn logic, chat commands, custom quests).
 - **Real Fallout engine hooks** — a small DLL (injected via dinput8 proxy)
-  reads/writes the live game: positions, actor state, combat, respawn
-  behavior. The Steam-build reverse engineering lives in
-  [docs/steam-re.md](./docs/steam-re.md).
+  reads and writes the live game: positions, actor state, combat, respawn
+  behavior. All three builds are supported: Fallout 3 GOG/classic, Fallout
+  3 Steam (post-2023), and New Vegas.
 
 Full architecture: [docs/architecture.md](./docs/architecture.md)
 
@@ -134,113 +134,45 @@ Full architecture: [docs/architecture.md](./docs/architecture.md)
 
 ## Status & roadmap
 
-**Phases 1–10 complete, 605 tests, zero warnings.** The phase-by-phase record
-lives in [docs/impl-plan.md](./docs/impl-plan.md). Recent highlights:
+**Phases 1–10 complete, 605 tests, zero warnings.** The phase-by-phase
+record lives in [docs/impl-plan.md](./docs/impl-plan.md); the reverse-
+engineering deep-dive lives in [docs/steam-re.md](./docs/steam-re.md).
 
-- Ownership transfer, string compression, and differential state sync
-  (ported from Skyrim Together Reborn)
-- Game clock sync, PvP enforcement, entity streaming, mod policy
-- A working bridge→client event pipeline (the co-op loop's transport)
-- NPC discovery via the engine's actor-processing gate + owned-NPC state
-  reporting + remote-NPC application (the full sync loop, GOG-mapped)
-- Actor-value getters/setters wired for both games (2026-08-14) — the
-  engine's command-table handlers revealed the real AV access (FO3
-  ActorValueOwner at +0x9C, FNV at +0xA4, vtable slot 3 GetActorValueF;
-  SetActorValue delta via Actor vtable +0x3A0/+0x3A4), so health/DR/DT
-  now read and set for real; the client world view shows health bars +
-  player names from that data
-- Kill relay wired (FO3 engine Kill 0x71AC50 + death processing
-  0x71C280) — remote deaths apply locally
-- Static RE campaign 2026-08-17 (docs/steam-re.md + data/re): Steam FO3
-  command table found (0x110B388) → 13 handlers; Steam AI predicate
-  corrected to 0x7D0A50; `apply_steam_vaultmp()` wires ai_fix2/3,
-  delegator, place_at_me, fire_weapon on Steam; FNV kill_actor wired
-  (0x8B86E0, 4-arg signature); FNV command table (0x1190950) + class
-  vtables mapped
-- Ghidra campaign 2026-08-18 (headless, battlecruiser — no game): every
-  address table byte-validated (GOG/Steam/FNV, 601→ all guards held);
-  Steam kill_actor wired (0x7F3200, twin of GOG 0x71C280); Steam
-  match_race wired (jne NOP @ 0x6F722C); GOG Actor vtable base corrected
-  to 0xE18110; **Steam vtable slot map recovered by decompile-twinning**
-  (147 GOG↔Steam pairs + 113 position-identified, 0 true unknowns — the
-  old "~310 slots need live probing" claim is obsolete); full cmdtable
-  dumps (GOG 810 / Steam 569 / FNV 569); FNV lock getter + name-setter
-  engine fns confirmed
-- Verified ESM import for both games + all DLC (real GOG binaries)
-- Live Proton testing: Steam respawn-disable patch applied and verified on
-  the game host
-- Live session 2026-08-15 (game host tetsuo.chaotic.lan): fixed the i686
-  bridge build (global_asm underscore + thiscall/vcall register pressure)
-  and a TCP server bug that dropped clients after 50ms idle; live-verified
-  fire_weapon 0x770880, get_activate 0x8D3BC8/0x8D3CB8, ai_fix1 0x5E99E2,
-  play_idle/play_group/delegator sites. Found the Steam discovery detour
-  (0x7F9B70 — false-positive, re-derived to 0x7D0A50 2026-08-17) and frame
-  hook (0x9B3D77 — root cause: wrong anim-data slot, corrected 0x1EC/0x244)
-  (see [docs/steam-re.md](./docs/steam-re.md))
+### Where the project is
+
+The full co-op pipeline is **built and tested**: players connect, the
+server owns the world, NPCs are simulated by whoever's near them, and
+state (position, health, combat, chat, clock) syncs between clients. The
+engine-side work covers both Fallout 3 builds and New Vegas — position
+sync, actor values (health/DR/DT), death/kill relay, locks, sounds, names,
+and respawn behavior. Every one of the engine addresses is byte-verified
+against the real binaries; a Ghidra-based campaign recovered the full
+vtable maps and validated every hook site without running the game.
+
+Recently completed:
+
+- **Two-player co-op loop end-to-end** — engine events flow through the
+  bridge to the server and back to other clients
+- **NPC sync fully wired** — discovery, ownership, state sampling, remote
+  application (GOG + Steam + FNV)
+- **Shared-quest demo game mode** — see [scripts/shared-quest](./scripts/)
+- **Full reverse-engineering validation** — every address table verified
+  against real binaries, vtable slot maps recovered, several previously
+  "stuck" hooks solved statically
 
 ### What's left
 
-- **NPC sync live** — the full loop is built and tested (discovery detours
-  on both the classic and Steam builds; ownership, state sampling, remote
-  application all wired). Two Steam AI-predicate sites were prologue
-  false-positives (0x7F9B70, then 0x7DAF80 — both install but ~never fire);
-  **re-derived 2026-08-17: 0x7D0A50** (1:1 structural twin of classic
-  0x6FAE90, byte-verified) and wired into `STEAM_AI_PREDICATE`. Fire-rate
-  still unverified live. See [docs/steam-re.md](./docs/steam-re.md)
-- **Remaining Steam patch sites** — 2026-08-17 static campaign (data/re):
-  found the **Steam FO3 command table** (0x110B388, 569 entries) → 13
-  handlers → engine fns; wired `apply_steam_vaultmp()` (ai_fix2/3,
-  delegator chain, place_at_me, fire_weapon 0x7DF3F7) + FNV kill_actor
-  (0x8B86E0, signature pinned). **2026-08-18 Ghidra campaign**: Steam
-  kill_actor wired (0x7F3200 = GOG 0x71C280 twin, args resolved) + Steam
-  match_race wired (jne NOP @ 0x6F722C); vtable map RECOVERED via
-  decompile-twinning (147 GOG↔Steam pairs + 113 position-identified,
-  0 true unknowns — the old "~310 slots need live OP_PROBE_FORM" claim is
-  obsolete, see scripts/re/ghidra/vtable_twins.txt). Still pending-live:
-  fire_fix relay stub (code-cave + re-entry), play_group delegator flow,
-  play_idle_fix wiring (twin chosen: handler site 0x79F2BB), ai_fix4,
-  FNV lock setter (getter 0x57B410 confirmed), OP_SET_NAME/PLAY_SOUND
-  engine hooks (FNV name-setter 0x489100 found). Steam PC vtable base
-  found (0xF938FC); GOG base corrected to 0xE18110; GET_LOCKED slot
-  re-derived (GOG +0xA0 → Steam +0xFC) and wired.
-  get_activate fully solved (jmp 0x8D3BC8 + ret 0x8D3CB8). The 8 vaultmp
-  hooks are implemented (EVENT_ACTIVATE/EVENT_FIRE relay) and the
-  activate/fire/cell/enabled/move/scale/lock/sound relay paths are complete
-  end-to-end (field writes, Steam-safe); get_scale/set_scale + is_dead are
-  field-based (no vtable);
-  alerted/sneaking call the classic engine getters (byte-guarded). A gh
-  crawl found Project Crossroads' Anniversary-Patcher catalog — the full
-  vaultmp site table byte-verified, independently confirming our classic
-  table (see docs/steam-re.md Session 2026-08-14h). **2026-08-14i:** a
-  full static pass (semantic fingerprints + fresh gh re-crawl) confirmed
-  the remaining sites — fire_fix, match_race, place_at_me, ai_fix2/3/4,
-  play_idle_fix, play_group, delegator_src — plus the AV/anim vtable
-  slots (GetActorValue/State/is_moving) are all statically underivable
-  (recompile restructured every target function); they need live probe
-  (OP_PROBE_CODE/OP_PROBE_FORM). New confirmed: Steam `__security_cookie`
-  0x1202954 (canary XOR now `ebp`, not `esp`) + delegator fn 0x405E70.
-  **Live 2026-08-15:** fire_weapon 0x770880, get_activate 0x8D3BC8/0x8D3CB8,
-  ai_fix1 0x5E99E2, play_idle_fix (4 cands), play_group_fix 0x4350F9,
-  delegator pad 0x405E69 all byte-confirmed on the running build. Still
-  underivable: fire_fix, match_race, place_at_me, ai_fix2/3/4. Remaining
-  engine-bound OP stubs: SET_NAME, PLAY_SOUND's engine call, PLACE_AT_ME.
-- **Per-frame player hook** — wired for all three builds: FNV
-  (0x86B386), FO3 classic (0x6EEB2F), and Steam/Anniversary (0x9B3D77,
-  re-derived 2026-08-14 via the respawn-struct frame-body twin; the hook
-  derefs the SteamStub IAT slot so it's ASLR-safe). **Static 2026-08-15:**
-  0x9B3D77 is confirmed inside the Steam `main()` (0x9B31A0, called from CRT
-  startup) — the hook DOES fire; the zero player-state events were
-  `get_actor_state` faulting on the unverified anim-data slot (0x1E4). A
-  pointer guard now lets the event through (pos/angle/health correct, anim
-  zero) until the real slot (classic 0x1EC / Steam 0x244) is pinned.
-- ~~**3D client view**~~ — explicitly out of scope: the game window IS the
-  view (the client's top-down projection + health bars/names + server GUI
-  are the companion HUD)
-- **Windows-native client** — cross-compiles for x86_64-pc-windows-gnu
-  (TCP IPC; Unix mode cfg-gated) with a CI job; runtime still needs a
-  Windows host to verify
-- **Co-op game modes** — the script stack works; actual game modes (shared
-  quests, custom rules) are content work on top of it
+- **Live verification on a real game host** — the one remaining
+  bottleneck. The bridge, hooks, and a verification tool are ready; the
+  next step is a single session on the game machine to confirm the wired
+  patches behave in the running game (the plan is pre-written in
+  [docs/steam-re.md](./docs/steam-re.md)).
+- **Windows-native client** — cross-compiles and has a CI job; the runtime
+  still needs a Windows host to verify.
+- **Content work** — more game modes, client UI polish, and shared quests
+  on top of the working script stack.
+- **One suspected bug** — the engine's name field for FO3/Steam may differ
+  from what the client reads; noted in [docs/steam-re.md](./docs/steam-re.md).
 
 ---
 
@@ -271,7 +203,8 @@ hook work — see [docs/steam-re.md](./docs/steam-re.md) for the handoff notes.
 | [architecture.md](./docs/architecture.md) | Full design: crates, protocol, reliability, server/client/bridge |
 | [impl-plan.md](./docs/impl-plan.md) | Phase-by-phase record + what's left |
 | [proton-setup.md](./docs/proton-setup.md) | Building + injecting the bridge, running under Proton |
-| [steam-re.md](./docs/steam-re.md) | Steam-build reverse-engineering notes + next-session handoff |
+| [steam-re.md](./docs/steam-re.md) | Engine reverse-engineering notes + next-session handoff |
+| [scripts/](./scripts/README.md) | WASM game modes: build, deploy, write your own |
 | [geck/](./docs/geck/) | 2,580-function GECK/NVSE script index |
 
 ## License

@@ -1479,9 +1479,13 @@ scripts/re/ghidra/vtable_twins.txt). Two items previously "pending-live"
 were wired statically: Steam kill_actor (0x7F3200, twin of GOG 0x71C280,
 args resolved via decompile) and Steam match_race (jne NOP @ 0x6F722C).
 GOG Actor vtable base corrected to 0xE18110. Remaining live-host work is
-narrow: fire_fix relay stub, play_group delegator flow, play_idle_fix
-wiring, ai_fix4, FNV lock setter, and the OP_SET_NAME/OP_PLAY_SOUND engine
-hooks (see steam-re.md sessions 2026-08-18b/c).
+narrow (see steam-re.md sessions 2026-08-18b–i): live-verify the wired
+patches (Steam kill/match_race/ai_fix4, FNV lock, play_sound), confirm
+the 0x7D0A50 discovery fire-rate (structurally high), reconcile the
+FO3/Steam name field (+0xD4 vs +0x1C), and the play_group/play_idle
+delegator relays (vaultmp-legacy, low priority). fire_fix was proven
+redundant (the delegator reaches both fire paths — wiring would
+double-report) and stays unwired.
 
 ---
 

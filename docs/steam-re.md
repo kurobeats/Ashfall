@@ -1290,10 +1290,12 @@ anything is exercised. Then, in order:
    (UpdateLock). Only on an FNV session.
 6. **play_sound (0x9CC980 / 0xBCFBB0 / 0x5C4B30)** — trigger a remote
    sound → it plays (UpdateSound relay).
-7. **fire_fix overlap** — exercise a fire while watching the event log:
-   if EVENT_FIRE arrives twice per shot, fire_fix must stay unwired (the
-   stub recipe is ready in Session 2026-08-18f but wiring is gated on
-   this exact observation).
+7. **fire_fix** — RESOLVED 2026-08-18i (do not wire): the call graph
+   proves the delegator reaches both the dispatch loop and the wired
+   per-frame executor — fire_fix would double-report command fires.
+8. **ai_fix4** — verify the new 0x63FB36 NOP (13-byte block) applies on
+   the running build (the `verify` action includes it once the guard is
+   added to VERIFY_SITES).
 
 ## Session 2026-08-18h — OP_SET_NAME (FNV) wired; FO3/Steam setters identified
 

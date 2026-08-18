@@ -161,6 +161,8 @@ VERIFY_SITES = [
     ("fnv_lock_setter_0x60CA30", 0x60CA30, "558bec51"),
     ("fnv_lock_handler_0x5C7280", 0x5C7280, "558bec83"),
     ("fnv_play_sound_0x5C4B30", 0x5C4B30, "538bdc83"),
+    # wired 2026-08-18i (ai_fix4 — spawn-init NOP in the creation fn):
+    ("steam_aifix4_0x63FB36", 0x63FB36, "6a0050ff73288bcfe8ed4d0f00"),
 ]
 
 
