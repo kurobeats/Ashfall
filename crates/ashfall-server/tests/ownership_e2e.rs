@@ -157,6 +157,27 @@ fn actor_new_packet(id: u64, ref_id: u32) -> Packet {
     }
 }
 
+// Time-bounded wait for a packet matching `predicate`. The fixed-window
+// `for _ in 0..N` pattern flaked under parallel load: recv_packet's 400ms
+// timeout + control-frame skips could exhaust the window before the
+// server's (delayed) reply arrived.
+async fn wait_for<F>(sock: &TestClient, predicate: F) -> bool
+where
+    F: Fn(&Packet) -> bool,
+{
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
+    loop {
+        if tokio::time::Instant::now() >= deadline {
+            return false;
+        }
+        if let Some(pkt) = sock.recv_packet().await {
+            if predicate(&pkt) {
+                return true;
+            }
+        }
+    }
+}
+
 async fn authenticate(sock: &mut TestClient, name: &str) {
     sock.send_reliable(&Packet::GameAuth {
         name: name.into(),
@@ -310,14 +331,10 @@ async fn test_mod_policy_rejects_mismatch() {
             mods: vec![("Oblivion.esm".into(), 0xC092218B)],
         })
         .await;
-        let mut saw_end = false;
-        for _ in 0..8 {
-            if let Some(Packet::GameEnd { .. }) = sock.recv_packet().await {
-                saw_end = true;
-                break;
-            }
-        }
-        assert!(saw_end, "mod mismatch → GameEnd + disconnect");
+        assert!(
+            wait_for(&sock, |p| matches!(p, Packet::GameEnd { .. })).await,
+            "mod mismatch → GameEnd + disconnect"
+        );
 
         // Matching load order → accepted (GameLoad arrives).
         let mut sock2 = TestClient::connect(port).await;
@@ -327,16 +344,10 @@ async fn test_mod_policy_rejects_mismatch() {
                 mods: vec![("Fallout3.esm".into(), 0xC092218B)],
             })
             .await;
-        let mut saw_load = false;
-        for _ in 0..12 {
-            if let Some(pkt) = sock2.recv_packet().await {
-                if matches!(pkt, Packet::GameLoad) {
-                    saw_load = true;
-                    break;
-                }
-            }
-        }
-        assert!(saw_load, "matching load order accepted → GameLoad");
+        assert!(
+            wait_for(&sock2, |p| matches!(p, Packet::GameLoad)).await,
+            "matching load order accepted → GameLoad"
+        );
     };
 
     run_with(server, client).await;

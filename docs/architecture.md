@@ -1372,7 +1372,7 @@ pub struct MasterServer {
 ## 11. Implementation Phases
 
 > The living phase-by-phase record is [docs/impl-plan.md](./impl-plan.md) —
-> phases 1–10 done + post-phase-10 ingestion and STR-reuse work, 600 tests.
+> phases 1–10 done + post-phase-10 ingestion and STR-reuse work, 601 tests.
 > The plan below is the original design sketch, kept for history.
 
 ### Phase 1: Core Protocol
