@@ -132,10 +132,37 @@ pub fn reset_tracked() {
     TRACKED_ACTORS.lock().unwrap().clear();
 }
 
+/// Engine calls that must run on the game thread (vaultmp's "the pipe
+/// thread cannot call the engine directly" rule — verified live 2026-08-18k:
+/// calling 0x7F3200 from the TCP server thread applied no death and killed
+/// the server thread). The per-frame game-loop hook drains this queue on the
+/// game thread; `enqueue_engine_call` returns immediately.
+static PENDING_ENGINE_CALLS: LazyLock<Mutex<Vec<Box<dyn FnOnce() + Send>>>> =
+    LazyLock::new(|| Mutex::new(Vec::new()));
+
+/// Queue a closure to run on the game thread (next frame).
+pub fn enqueue_engine_call(f: Box<dyn FnOnce() + Send>) {
+    PENDING_ENGINE_CALLS.lock().unwrap().push(f);
+}
+
+/// Run every queued engine call on the calling (game) thread. Called from
+/// the per-actor discovery detour each frame — the only game-thread hook
+/// proven to fire live (frame hook 0x9B3D77 never emitted; direct calls
+/// from the TCP thread killed it).
+pub fn drain_engine_calls() {
+    let pending = std::mem::take(&mut *PENDING_ENGINE_CALLS.lock().unwrap());
+    for f in pending {
+        f();
+    }
+}
+
 /// Sample the player at most every 100ms (10 Hz). Returns the event frame
 /// when a sample was due, None otherwise. The future per-frame game-loop
 /// hook calls this every frame and sends whatever comes back.
 pub fn report_player_state_due() -> Option<Vec<u8>> {
+    // Drain game-thread engine calls first (every frame, before throttling
+    // skips the player sample).
+    drain_engine_calls();
     let mut last = LAST_REPORT.lock().unwrap();
     let now = std::time::Instant::now();
     if let Some(prev) = *last {
@@ -225,7 +252,12 @@ pub fn run_server(addr: &str) {
         }
         match stream {
             Ok(stream) => {
-                handle_client(stream);
+                // Server resilience: a panicking client handler must not take
+                // down the accept loop (live session 2026-08-18k: an engine
+                // call from the server thread killed the whole TCP thread).
+                let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    handle_client(stream);
+                }));
             }
             Err(_) => continue,
         }

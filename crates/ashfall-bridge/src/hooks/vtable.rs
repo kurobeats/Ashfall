@@ -932,15 +932,26 @@ pub unsafe fn get_name_from_obj(obj: *mut u8) -> String {
     if base_form.is_null() {
         return "unnamed".into();
     }
-    // TESFullName inline at +0x18: verify it looks like a component (its
-    // first field is a .rdata vtable pointer), then read the BSString
-    // m_data at +0x04.
-    let full_name = base_form.add(0x18);
-    let vt = read_field::<usize>(full_name, 0);
-    if !(0x400000..0x1200000).contains(&vt) {
-        return "unnamed".into();
-    }
-    let name_ptr = read_field::<usize>(full_name, 0x04) as *const u8;
+    // Name field is per-build (live-verified 2026-08-18k on Steam: the
+    // actual player name "Anthony" lived at [base_form+0xD4]; +0x1C was
+    // garbage and get_name returned "unnamed"). FNV is internally
+    // consistent (+0x1C write = +0x1C read, session 18h); FO3/Steam
+    // engines write [base_form+0xD4] (GOG SetActorFullName 0x539D20).
+    let name_ptr: *const u8 = if crate::hooks::is_fnv() {
+        // TESFullName inline at +0x18: verify it looks like a component (its
+        // first field is a .rdata vtable pointer), then read the BSString
+        // m_data at +0x04.
+        let full_name = base_form.add(0x18);
+        let vt = read_field::<usize>(full_name, 0);
+        if !(0x400000..0x1200000).contains(&vt) {
+            return "unnamed".into();
+        }
+        read_field::<usize>(full_name, 0x04) as *const u8
+    } else {
+        // FO3 classic + Steam: the engine's name writes target
+        // [base_form+0xD4] directly (BSString data pointer).
+        read_field::<usize>(base_form, 0xD4) as *const u8
+    };
     if name_ptr.is_null() {
         return "unnamed".into();
     }

@@ -1252,53 +1252,32 @@ pub unsafe fn apply_steam_vaultmp() -> bool {
         p.apply();
         applied = true;
     }
-    // Delegator chain (classic 0x6EEC86/0x6EDBD9/0x6EDBDA twin):
-    //   - stub pad 0x405E69 gets PUSH ECX (0x51), call_src+5 gets POP ECX
-    //   - delegator_src 0x9B3EF6 relcalls the stub
-    //   - bethesda_delegator hook wired at delegator_call_src
-    if read_bytes(s::DELEGATOR_SRC, 6) == [0x8B, 0x0D, 0xD4, 0xC5, 0x23, 0x01] {
-        memory::write_rel_call(s::DELEGATOR_SRC, s::DELEGATOR_DEST);
-        applied = true;
-    }
-    if read_bytes(s::DELEGATOR_DEST, 3) == [0xCC, 0xCC, 0xCC] {
-        let push_ecx = memory::Patch::new(s::DELEGATOR_DEST as *const u8, &[0x51]);
-        push_ecx.apply();
-        let pop_ecx = memory::Patch::new((s::DELEGATOR_CALL_SRC + 5) as *const u8, &[0x59]);
-        pop_ecx.apply();
-        if let Some(hook) = hooks::resolve("bethesda_delegator") {
-            memory::write_rel_call(s::DELEGATOR_CALL_SRC, hook);
-        }
-        applied = true;
-    }
-    // place_at_me_jmp: reljumphook at the spawn call site 0x79E556.
-    // Guard = the unique call bytes themselves (`e8 25 5f f6 ff` →
-    // 0x704480, objdump-validated, 1 hit in the dump). The campaign's
-    // "3-zero push" note described the enclosing fn, not the immediate
-    // prefix — the site prefix is `50 ff b5 80 fe ff ff` (push eax;
-    // push [ebp-0x180]).
-    if read_bytes(s::PLACE_AT_ME_JMP, 5) == [0xE8, 0x25, 0x5F, 0xF6, 0xFF] {
-        if let Some(hook) = hooks::resolve("place_at_me") {
-            memory::write_rel_jump(s::PLACE_AT_ME_JMP, hook);
-            applied = true;
-        }
-    }
-    // place_at_me_fix: force-skip the +0x2A8 spawn. Guard `0f 84 e2 02 00 00`.
-    if read_bytes(s::PLACE_AT_ME_FIX, 6) == [0x0F, 0x84, 0xE2, 0x02, 0x00, 0x00] {
-        memory::write_rel_jump(s::PLACE_AT_ME_FIX, s::PLACE_AT_ME_FIX_DEST);
-        let nop = memory::Patch::new((s::PLACE_AT_ME_FIX + 5) as *const u8, &[0x90]);
-        nop.apply();
-        applied = true;
-    }
-    // fire_weapon_jmp: RelJumpHook at the fire call site. Guard = the
-    // unique E8 rel32 (→0x770880, objdump-verified; same E9-over-E8 pattern
-    // vaultmp uses on classic 0x71F05F, live-verified there). The thunk
-    // reports the FIRE event and `ret`s to site+5.
-    if read_bytes(s::FIRE_WEAPON_JMP, 5) == [0xE8, 0x84, 0x14, 0xF9, 0xFF] {
-        if let Some(hook) = hooks::resolve("fire_weapon") {
-            memory::write_rel_jump(s::FIRE_WEAPON_JMP, hook);
-            applied = true;
-        }
-    }
+    // Delegator chain: NOT wired — live session 2026-08-18k proved the
+    // Steam site 0x9B3EF6 is an 11-byte span (`mov ecx,[0x123c5d4]` 6B +
+    // `call 0x9B0740` 5B), but the recipe's 5-byte relcall covers only the
+    // mov. The delegator then returns into the leftover call bytes
+    // (executed as garbage) → ACCESS_VIOLATION at 0x9B3F09, crash 6s after
+    // launch. The fed hook (ashfall_hook_delegator) is a no-op stub
+    // anyway (relay deferred). Re-wire when the relay lands: relocate the
+    // full 11B site to a code cave (mov ecx; call 0x405E69 stub; jmp
+    // 0x9B3F01) + NOP the leftover 6B — the classic 0x6EEC86 site shows
+    // the same mid-instruction relcall shape, so it likely needs the same
+    // treatment before any classic runtime session.
+    // place_at_me_jmp + place_at_me_fix + fire_weapon_jmp: NOT wired.
+    // Live session 2026-08-18k proved the reljumphooks are unvalidated and
+    // broken on Steam:
+    //   - fire_weapon (0x7DF3F7): hook reads [eax+0xC] with garbage eax →
+    //     ACCESS_VIOLATION on ANY weapon fire (player or NPC) — crash
+    //     reproduced live (fault inside ashfall_hook_fire, bridge+0x42A1).
+    //     The relay is redundant anyway (2026-08-18i: delegator reaches
+    //     both fire paths — wiring double-reports).
+    //   - place_at_me (0x79E556): the RelJumpHook thunk calls the no-op
+    //     anim hook and rets — the original spawn call never runs, so
+    //     PlaceAtMe silently does nothing in-game.
+    //   - place_at_me_fix (0x9CBCAF): would alter spawn behavior while the
+    //     main interception is off — keep vanilla.
+    // All three revert to the vanilla engine path until a proper
+    // game-thread relay + site semantics are re-derived.
     // match_race: force the same-race path in the Steam race-matching fn
     // 0x6F71E0 (Ghidra-decompiled 2026-08-18 — the +0x110 race-id compare
     // replaced classic's +0x218 vtable helper call). NOP the `jne +0x0c`

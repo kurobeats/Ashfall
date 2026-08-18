@@ -530,9 +530,11 @@ pub fn play_sound(ref_id: u32, sound_id: u32) -> u32 {
         }
         const FLAGS: u32 = 0x4000_0101;
         if crate::hooks::read_bytes(0x009C_C980, 4) == [0x55, 0x8B, 0xEC, 0x6A] {
-            // Steam (SEH prologue, ebp-framed).
-            let f: unsafe extern "C" fn(u32, u32, u32) -> u32 = std::mem::transmute(0x009C_C980);
-            f(snd as u32, ref_id, FLAGS)
+            // Steam: NOT wired — live session 2026-08-18k: 0x9CC980(snd,
+            // ref, flags) faults the engine on both the TCP thread (whole-
+            // game crash) and the game-thread queue (crash on drain). The
+            // session-18e derivation is wrong; re-derive statically.
+            0
         } else if crate::hooks::read_bytes(0x005C_4B30, 3) == [0x53, 0x8B, 0xDC] {
             // FNV: (target, sound, loop, pos_override, type, volume 1.0).
             let f: unsafe extern "C" fn(u32, u32, u32, u32, u32, f32) =
@@ -872,15 +874,23 @@ pub fn kill_actor(ref_id: u32, killer_id: u32, limb: i8, cause: i8) {
         }
         // Steam: engine Kill 0x7F3200 (twin of GOG 0x71C280).
         // 55 8b ec 51 guard (verified 2026-08-18, Ghidra decompile).
+        // Runs on the GAME THREAD via the per-frame hook queue — live
+        // session 2026-08-18k: direct call from the TCP thread applied no
+        // death and killed the server thread (engine calls must run on the
+        // main thread, vaultmp's delegate model).
         if crate::hooks::read_bytes(0x007F_3200, 3) == [0x55, 0x8B, 0xEC] && !crate::hooks::is_fnv()
         {
-            let _: u32 = crate::hooks::address::call_thiscall_3::<u32, u32, u32, u32>(
-                0x7F3200,
-                actor,
-                cause as u32,
-                limb as u32,
-                killer as u32,
-            );
+            let actor = actor as usize;
+            let killer = killer as u32; // engine takes the killer pointer as an opaque u32
+            crate::network::enqueue_engine_call(Box::new(move || {
+                let _: u32 = crate::hooks::address::call_thiscall_3::<u32, u32, u32, u32>(
+                    0x7F3200,
+                    actor as *mut u8,
+                    cause as u32,
+                    limb as u32,
+                    killer as u32,
+                );
+            }));
             return;
         }
         // Classic/GOG: engine Kill 0x71AC50(actor, killer, 0.0), then

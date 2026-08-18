@@ -1429,3 +1429,68 @@ engine's script-command dispatch so remote commands inject in-thread.
 The "vaultmp-legacy semantics needed first" deferrals are closed — every
 legacy item is either wired, proven redundant, or documented with its
 original rationale.
+
+## Session 2026-08-18k — live session #2 (tetsuo): the 7-test checklist, first real results
+
+Full checklist execution (bridge built fresh, deployed as dinput8.dll on
+tetsuo, Steam build confirmed by family match). Results:
+
+1. **verify** — all 25 wired sites byte-checked. Steam family 11/11 PASS;
+   the wired sites show patched bytes (E9 detours, NOPs) exactly per the
+   recipes. Respawn FAILs are the already-applied patches (expected).
+2. **0x7D0A50 discovery fire-rate** — **PASS, the big one.** 14 NPC_SPAWN +
+   11 NPC_REMOVE in 40s, 11 distinct refs (Megaton bases 0x000a64-71).
+   The re-derived predicate detour (2026-08-17) is the real per-actor gate
+   — the earlier 0x7F9B70/0x7DAF80 false positives are fully buried.
+3. **Steam kill 0x7F3200** — **FAIL (needs static re-derivation).** OP_KILL
+   executes (0x01) but no death with any (cause, limb) combo. Direct call
+   from the TCP thread applied nothing AND killed the server thread; the
+   new game-thread queue (drained in the discovery detour) survives but
+   still no death. The Ghidra param mapping (cause, limb, killer) doesn't
+   match live behavior — handler push order (killer, ?, limb) says
+   otherwise. Next: re-decompile 0x798800's push sequence.
+4. **match_race** — NOP applied (verify); behavior untested (spawning was
+   broken by the place_at_me hook, now removed).
+5. **FNV lock** — skipped (FO3 session).
+6. **play_sound 0x9CC980** — **FAIL (needs static re-derivation).** The
+   18e derivation crashes the engine: direct TCP-thread call = whole-game
+   crash; queued game-thread call = crash on drain. Steam branch disabled.
+7. **name-field** — **RESOLVED: FO3/Steam name field = base+0xD4.**
+   Live-probed the player: "Anthony" at [base_form+0xD4], +0x1C garbage,
+   get_name returned "unnamed" (bridge read +0x1C). The engine's name
+   writes (GOG 0x539D20) go to +0xD4; the 18h ambiguity is settled.
+   get_name fixed: +0xD4 FO3/Steam, +0x1C FNV. OP_SET_NAME stays FNV-only.
+
+### New bugs found live (all fixed in code, some pending redeploy)
+
+- **Delegator chain crashed the game at startup** (AV 0x9B3F09, 6s after
+  Play): Steam delegator_src 0x9B3EF6 is an 11-byte span
+  (`mov ecx,[0x123c5d4]` 6B + `call 0x9B0740` 5B) but the recipe wrote a
+  5-byte relcall — the delegator returned into the leftover call bytes.
+  Classic 0x6EEC86 shows the same mid-instruction relcall shape. Chain
+  unwired; re-wire via a code-cave relocation when the relay lands.
+- **fire_weapon reljumphook crashed the game on ANY gunshot** (fault in
+  ashfall_hook_fire, bridge+0x42A1 = `push 0xc(%eax)` with garbage eax at
+  the Steam site 0x7DF3F7). The hook was wired in the 17-18 campaign and
+  never live-exercised. Removed — the relay is redundant anyway (18i).
+- **place_at_me reljumphook silently no-oped PlaceAtMe** (thunk calls the
+  no-op anim hook and rets — the original spawn call never ran). Removed;
+  vanilla spawning restored.
+- **Server-thread engine calls are fatal**: any engine CALL (kill,
+  play_sound) from the TCP thread kills the thread (SEH-contained) or the
+  whole game. Field reads (pos/dead/probe) are fine. Added
+  `catch_unwind` around client handling + a game-thread engine-call queue
+  (`network::enqueue_engine_call`), drained in the discovery collector —
+  the only per-frame game-thread hook proven to fire (the frame hook
+  ​0x9B3D77 still emits ZERO player-state events despite install + the
+  0x244 fix).
+- **OP_GET_DEAD garbage response** when event frames interleave into the
+  command response stream — probe clients must re-sync; not a bridge bug.
+
+### Follow-up (static, battlecruiser, no game)
+
+1. Re-decompile Steam KillActor handler 0x798800 push order → fix kill args.
+2. Re-derive Steam play_sound entry (0x9CC980 is wrong — crashes).
+3. Frame hook 0x9B3D77: why zero player-state events despite the 0x244
+   correction.
+4. Delegator re-wire via cave relocation (mov ecx; call stub; jmp back).

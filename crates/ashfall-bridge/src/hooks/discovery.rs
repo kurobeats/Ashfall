@@ -149,6 +149,11 @@ pub unsafe fn collect_actor_ptr(actor: usize) {
         return;
     }
     CURRENT.lock().unwrap().insert(ref_id);
+    // Drain game-thread engine calls — this detour fires per-actor per-frame
+    // on the game thread (the only per-frame game-thread hook proven live;
+    // the frame hook 0x9B3D77 never emitted, and direct engine calls from
+    // the TCP thread killed it — see network.rs).
+    crate::network::drain_engine_calls();
 }
 
 /// Diff CURRENT against the last snapshot and emit spawn/remove event frames.
