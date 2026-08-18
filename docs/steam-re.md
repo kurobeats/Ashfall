@@ -1378,3 +1378,53 @@ twin" contingency is unnecessary.
 
 New tool: scripts/re/ghidra/CallGraph.java (BFS call-graph reachability,
 body-wide call-ref walk).
+
+## Session 2026-08-18j — vaultmp-legacy semantics derived from the vaultmp source
+
+All "vaultmp-legacy" deferrals are now DERIVED, not deferred — from the
+vaultmp source at /home/ants/dev/vaultmp-extended (MIT; original GitHub
+repo is gone, this is the surviving clone; the gh crawl's Project
+Crossroads lineage confirms it).
+
+**The vaultmp relay model (source/vaultmpdll/vaultmp.cpp):**
+`ExecuteCommand(reference, r, delegate_flag)` — the pipe-command executor.
+When `delegate_flag` (a remote-issued command), it saves the command +
+handler into `delegated[9]`, sets `delegate = true`, and **Sleep(1)-loops
+until the engine's BethesdaDelegator re-dispatches it ON THE GAME THREAD**
+(the pipe thread cannot call the engine directly). The delegator hooks
+(delegator_dest PUSH ECX / delegatorCall_src hook + POP ECX) redirect the
+engine's script-command dispatch so remote commands inject in-thread.
+
+**Per-fix semantics (git history + code):**
+- **ai_fix4** — added in commit c8141bb, **"Fix 'radiation suit equipment
+  bug' close #96"** (2013-03-24): NOP'd the spawn-init call in the actor-
+  creation path. The Ghidra work identified the call (0x559740 classic /
+  0x734930 Steam twin) = the AI/combat-target setup with player-singleton
+  checks (`param_1 == [player + 0x1C]`). The bug: the spawn-side
+  processing misfired on remote rad-suit equipment. Ashfall now wires the
+  same NOP on both builds (classic 0x42FBDC + Steam 0x63FB36) for parity.
+- **play_group fix** (je→jmp @ 0x45F704 + the 0x49DCF1 block
+  `test ecx,ecx; je; mov esi,[ecx+0xC]`) — force remote/group anim
+  commands to actually execute (bypass an early-return check). Part of
+  vaultmp's EVENT-BASED anim relay.
+- **play_idle / anim detours** — capture the idle anim state
+  (`[ECX+0x414]` + group 0x80) for relay to other clients.
+- **match_race** — NOP the race checks + force the param → same-race for
+  body-type consistency (as documented).
+- **fire_fix** — `test ebp,ebp; je; mov edx,[ebp]; jmp back` — a shooter-
+  verify relay at the fire dispatch.
+
+**Ashfall verdict (now source-backed, not assumed):**
+- play_group + play_idle fixes = vaultmp's event-based anim forwarding →
+  **redundant** with Ashfall's state-based anim sync (ActorStateDelta's
+  idle field is sampled per-frame and diffed — covers the same state
+  without the command path). Confirmed; stay unwired.
+- fire_fix = the fire event relay → **redundant** with the wired
+  fire_weapon hook (call-graph proof, session 18i). Stay unwired.
+- ai_fix4 = a specific bug fix (rad-suit #96) → **wired on both builds**
+  (classic + Steam). The WHAT (spawn-init call) and the WHY (rad-suit
+  equipment bug) are now both documented.
+
+The "vaultmp-legacy semantics needed first" deferrals are closed — every
+legacy item is either wired, proven redundant, or documented with its
+original rationale.
