@@ -18,7 +18,7 @@ SITES = {
     # already solved (sanity anchors)
     "respawn_siteA": (0x6D5965, 24),
     "respawn_siteB": (0x78B230, 24),
-    "ai_predicate":  (0x6FAE90, 40),   # classic entry, Steam twin known 0x7F9B70
+    "ai_predicate":  (0x6FAE90, 40),   # classic entry, Steam twin 0x7D0A50 (corrected 2026-08-17)
     # remaining groups
     "ai_fix1":       (0x72051E, 24),
     "ai_fix2":       (0x6FAEE8, 32),

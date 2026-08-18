@@ -119,8 +119,8 @@ pub mod delegated_opcodes {
     // Actor state ops
     pub const SET_AV: u16 = 0x110E; // ForceActorValue
     pub const KILL: u16 = 0x108B; // KillActor
-    // 2026-08-17: verified against the Steam FO3 command table 0x110B388
-    // (name 'SetRestrained', handler 0x7A6670).
+                                  // 2026-08-17: verified against the Steam FO3 command table 0x110B388
+                                  // (name 'SetRestrained', handler 0x7A6670).
     pub const SET_RESTRAINED: u16 = 0x10F3;
     pub const PLAY_GROUP: u16 = 0x1013;
 

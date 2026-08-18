@@ -220,7 +220,8 @@ Everything client/server/bridge-side is built and tested. On the host:
    (AI predicate 0x6FAE90, byte-guarded) emits EVENT_NPC_SPAWN frames, then
    OP_TRACK_ACTOR → EVENT_NPC_STATE samples, and remote NPCs move via
    OP_SET_POS/OP_SET_ACTOR_VALUE.
-2. **Steam build**: the AI-predicate twin is ALREADY re-derived (0x7F9B70,
+2. **Steam build**: the AI-predicate twin is ALREADY re-derived (0x7D0A50,
+   corrected 2026-08-17 after two false positives: 0x7F9B70 and 0x7DAF80),
    steam-re.md) — live-probe it (OP_PROBE_CODE, FLAT/+0xC00 trap) then the
    detour applies as-is. Remaining: the frame-function address for the
    continuous player-state hook (`report_player_state_due`).
@@ -261,9 +262,13 @@ Live results:
 - **Discovery detour 0x7F9B70 — does NOT fire.** Installs byte-perfect (full
   thunk+trampoline chain verified live) but the site is a prologue
   false-positive, not the per-actor gate: 3 NPC events over 120s of combat.
-  Re-derive.
+  Re-derive. **Re-derived 2026-08-17 to 0x7D0A50** (see steam-re.md; was
+  re-derived to 0x7DAF80 2026-08-15b but that was also a false-positive).
 - **Steam frame hook 0x9B3D77 — does NOT fire.** Zero player-state events,
-  alive or dead. Re-derive a real per-frame site.
+  alive or dead. **Root cause found 2026-08-15b:** the hook DOES fire (site
+  inside Steam main loop confirmed); zero events were `get_actor_state`
+  faulting on wrong anim-data slot (0x1E4 = FPU math, NOT the anim getter).
+  Corrected to 0x1EC (Steam 0x244) 2026-08-17.
 - Event pipeline itself works (NPC spawn/remove frames flow when collection
   happens); pipe round-trip + OP_GET_DEAD/GET_POS/PROBE_* all live.
 

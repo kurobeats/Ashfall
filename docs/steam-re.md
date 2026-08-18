@@ -57,13 +57,16 @@ and a 10 Hz flush thread emits EVENT_NPC_SPAWN / EVENT_NPC_REMOVE frames
 `hooks::install()` (DllMain-safe: memory writes only; the flush thread
 starts from the TCP server thread).
 
-**Steam re-derivation: DONE (2026-08-13)** — Steam twin found at **0x7F9B70**
-(`cmp [reg+0xFC],5/3` fingerprint on the flat dump, prologue `55 8B EC 51 57
-8B F9`, structurally identical to classic — same `[edi+0xF8]`/`[edi+0xFC]`
-checks, player compare vs Steam singleton 0x123C674, shared vtable slot
-+0x22C). `ai_predicate_site()` picks classic vs Steam by prologue signature;
-same detour + collector, no other changes. Details in the Solved table above.
-The vaultmp AI-pause recipe twins (ai_fix1..4) are derivable from it once
+**Steam re-derivation: DONE (2026-08-17)** — Steam twin found at **0x7D0A50**
+(1:1 structural twin of classic 0x6FAE90: same vtable slot order
++0x234/0x22C/0x3E0/0x230/0x214, death-state cmp 5/3, player singleton
+0x123C674, 12 callers). Two earlier derivations were false positives:
+0x7F9B70 (`55 8B EC 51 57 8B F9` prologue — structurally different)
+and 0x7DAF80 (different slot order, no death-state cmp). See Session
+2026-08-15b + data/re lane A1 for the correction. `ai_predicate_site()`
+picks classic vs Steam by prologue signature (both `56 8B F1`). Details in
+the Solved table above. The vaultmp AI-pause recipe twins (ai_fix1..3)
+were derivable from it and are now wired in `apply_steam_vaultmp()`.
 live-probed.
 
 ## Open: vaultmp behavior-patch sites
@@ -75,7 +78,7 @@ Per-site semantic identification is required. **Progress 2026-08-14:**
 respawn + AI predicate + play_idle_call_src + lock_fix + fire_weapon +
 plugins_vmp are SOLVED (see Solved table + session notes below); get_activate
 candidates found (needs live probe). Remaining: AI pause (ai_fix1/4, ai_fix2/3
-inside the known Steam AI predicate 0x7F9B70), fire_fix, match_race,
+inside the known Steam AI predicate 0x7D0A50), fire_fix, match_race,
 place_at_me, delegators.
 
 **Respawn (highest value) — SOLVED for Steam (2026-08-08)** — GOG anatomy:
@@ -304,8 +307,9 @@ survived the recompile. Workflow:
    verifies: 63,616 byte-identical runs (classic bytes == steam bytes).
 4. Only runs that EXACTLY COVER a site are trustworthy. Gap-based
 translations (nearest run + delta) are GARBAGE for rewritten code — proven:
-   ai_predicate gap says 0x7DAF5E but the real site is 0x7F9B70
-   (prologue-verified). Generic SEH prologues (`6a ff 68`) also produce
+   ai_predicate gap says 0x7DAF5E but the real site is 0x7D0A50
+   (prologue-verified, corrected 2026-08-17; 0x7F9B70 was a false-positive).
+   Generic SEH prologues (`6a ff 68`) also produce
    false EXACT covers (fire_weapon_call → 0x403E50 was a prologue
    coincidence, not the 4346B function).
 
@@ -557,7 +561,7 @@ OP_PROBE_FORM) can settle them. Two new confirmed globals/functions below.
 | match_race | +0x218 vtable ×2, +0x110 race field, +0x4c8 list | +0x218 slot gone (0 hits for `8b 82 18 02 00 00`); +0x4c8 field survives (4 hits) but the function was restructured; the vcdiff island 0x52F4E5→0x60E4F6 (`ff d0 84 c0 0f 84 a6`) is a cross-function coincidence |
 | play_group | `cmp eax,1; je; mov edx,[esi+4]; cmp edx,[PC]` | `cmp edx,[0x123c674]` has 6 hits, none matches the structure; PC singleton has 1,424 `mov ecx,[…]` refs (no discriminator) |
 | place_at_me internal (0x43DEF0) | SEH frame 0x30 + cookie + `mov edx,[esp+0x60]; xor esi; xor ebp` | body pattern 0 hits; `lea eax,[esp+0x44]; mov fs:[0]` (frame 0x30) 0 hits — frame size + body both changed |
-| ai_fix2/3 | `cmp [esi+0xFC],5; je; cmp …,3; je` in predicate 0x6FAE90 | Steam predicate 0x7F9B70 restructured: `cmp [edi+0xFC],5` @ 0x7F9C23 + `cmp [esi+0xFC],3` @ 0x7F9C76, different regs/targets — no 1:1 byte map |
+| ai_fix2/3 | `cmp [esi+0xFC],5; je; cmp …,3; je` in predicate 0x6FAE90 | Steam predicate 0x7D0A50 (corrected 2026-08-17) — same slot order + death-state cmp 5/3 as classic; ai_fix2 = 0x7D0AA6 (write 0x2E), ai_fix3 = 0x7D0AD5 (85 FF 74 CE EB F6), both solved-static |
 | fire_fix | vtable +0x224/+0x220 + helper 0x7CB510 | slots shifted, helper gone (re-confirmed) |
 | frame hook target (0x6E3E40) | `mov eax,[0x10769b0]; … mov al,[eax+0x49]` | +0x49 field gone, menu global 0x10769B0 gone |
 | delegator_src (0x6EEC86) | `mov ecx,[0x107a0d4]; call 0x6edbe0` | Steam `mov ecx,[0x123c5d4]; call` resolves to 0x9AE410/0x9B19E0 etc. — the delegator is now reached via those, not a direct E8 to 0x405E70 (only 1 direct call, local at 0x405F35) |

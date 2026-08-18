@@ -165,8 +165,9 @@ lives in [docs/impl-plan.md](./docs/impl-plan.md). Recent highlights:
   and a TCP server bug that dropped clients after 50ms idle; live-verified
   fire_weapon 0x770880, get_activate 0x8D3BC8/0x8D3CB8, ai_fix1 0x5E99E2,
   play_idle/play_group/delegator sites. Found the Steam discovery detour
-  (0x7F9B70) and frame hook (0x9B3D77) install but ~never fire — both need
-  re-derivation (see [docs/steam-re.md](./docs/steam-re.md) Session 2026-08-15)
+  (0x7F9B70 — false-positive, re-derived to 0x7D0A50 2026-08-17) and frame
+  hook (0x9B3D77 — root cause: wrong anim-data slot, corrected 0x1EC/0x244)
+  (see [docs/steam-re.md](./docs/steam-re.md))
 
 ### What's left
 

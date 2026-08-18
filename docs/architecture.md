@@ -1194,10 +1194,11 @@ round-trips and `sync.rs` maps:
 Wired into the client poll loop; stub IPC mode fails fast instead of hanging.
 The remaining game-side triggers: the per-frame player-state hook (frame-
 function RE) and live verification of the detours. The actor-discovery
-detour covers both builds — GOG 0x6FAE90 and Steam 0x7F9B70 (re-derived
-2026-08-13 from the flat dump via the `[reg+0xFC]` state-check fingerprint;
-`ai_predicate_site()` picks by prologue signature). See
-`docs/steam-re.md` for both.
+detour covers both builds — GOG 0x6FAE90 and Steam 0x7D0A50 (re-derived
+2026-08-17; two earlier false positives 0x7F9B70 and 0x7DAF80 never fired
+live — see steam-re.md AI predicate section). `ai_predicate_site()` picks by
+prologue signature (both `56 8B F1`). See
+`docs/steam-re.md` for full derivation history.
 
 ---
 
