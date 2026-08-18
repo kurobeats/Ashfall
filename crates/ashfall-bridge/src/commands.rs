@@ -341,9 +341,12 @@ pub fn execute(func: u32, params: &[u8]) -> Vec<u8> {
             }
             let ref_id = u32::from_le_bytes([params[0], params[1], params[2], params[3]]);
             let sound = u32::from_le_bytes([params[4], params[5], params[6], params[7]]);
-            // ponytail: no play_sound hook yet; stub success
-            let _ = (ref_id, sound);
-            vec![1]
+            // Remote sound relay: call the engine PlaySound entry
+            // (wired 2026-08-18 — Steam 0x9CC980 / GOG 0xBCFBB0,
+            // cdecl(sound_form, refID, flags)). FNV no-ops (not derived).
+            crate::hooks::play_sound(ref_id, sound)
+                .to_le_bytes()
+                .to_vec()
         }
 
         // ── Place At Me ──

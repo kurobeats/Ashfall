@@ -512,6 +512,39 @@ pub fn fire_weapon(shooter_ref: u32, _weapon: u32) -> u32 {
     }
 }
 
+/// Play a sound at a reference (remote sound relay).
+/// Steam: 0x9CC980(sound_form, refID, flags); GOG: 0xBCFBB0(sound_form,
+/// refID, flags) — both cdecl, derived from the PlaySound command handlers
+/// (Steam 0x79F9B0 / GOG 0x523590, Ghidra-decompiled 2026-08-18; the
+/// handlers pass the resolved sound form, the target refID ([obj+0xC]), and
+/// flags 0x40000101 default / 0x121 looped). Byte-guarded per build; no-op
+/// on FNV (FNV PlaySound path not derived).
+pub fn play_sound(ref_id: u32, sound_id: u32) -> u32 {
+    #[cfg(target_arch = "x86")]
+    unsafe {
+        let obj = crate::hooks::vtable::lookup_form_by_id(ref_id);
+        let snd = crate::hooks::vtable::lookup_form_by_id(sound_id);
+        if obj.is_null() || snd.is_null() {
+            return 0;
+        }
+        const FLAGS: u32 = 0x4000_0101;
+        let addr = if crate::hooks::read_bytes(0x009C_C980, 4) == [0x55, 0x8B, 0xEC, 0x6A] {
+            0x009C_C980 // Steam (SEH prologue, ebp-framed)
+        } else if crate::hooks::read_bytes(0x00BC_FBB0, 4) == [0x6A, 0xFF, 0x68, 0x68] {
+            0x00BC_FBB0 // GOG classic (frameless SEH)
+        } else {
+            return 0; // FNV or unknown build — not derived
+        };
+        let f: unsafe extern "C" fn(u32, u32, u32) -> u32 = std::mem::transmute(addr);
+        f(snd as u32, ref_id, FLAGS)
+    }
+    #[cfg(not(target_arch = "x86"))]
+    {
+        let _ = (ref_id, sound_id);
+        1 // test hosts / x64 — no engine; report success
+    }
+}
+
 /// Read the enabled state of a reference (VTable/field read, FO3/FNV aware).
 #[inline]
 pub fn get_enabled(ref_id: u32) -> bool {

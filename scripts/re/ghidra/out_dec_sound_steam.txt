@@ -1,0 +1,114 @@
+/* ===== steam_playsound_handler @ 0x79f9b0 ===== */
+// containing fn: FUN_0079f9b0 @ 0079f9b0
+
+undefined4
+FUN_0079f9b0(undefined4 param_1,undefined4 param_2,undefined4 param_3,undefined4 param_4,
+            undefined4 param_5,undefined4 param_6,undefined4 param_7,undefined4 param_8)
+
+{
+  char cVar1;
+  undefined4 uVar2;
+  undefined4 *puVar3;
+  undefined1 local_24 [12];
+  undefined4 local_18;
+  undefined1 local_14;
+  undefined4 local_10;
+  int local_c;
+  int local_8;
+  
+  local_c = 0;
+  local_8 = 0;
+  cVar1 = FUN_00787530(param_1,param_2,param_8,param_3,param_4,param_5,param_6,&local_c,&local_8);
+  if (cVar1 != '\0') {
+    uVar2 = 0x40000101;
+    if (0 < local_8) {
+      uVar2 = 0x121;
+    }
+    puVar3 = (undefined4 *)FUN_009cc980(local_24,*(undefined4 *)(local_c + 0xc),uVar2);
+    local_18 = *puVar3;
+    local_14 = *(undefined1 *)(puVar3 + 1);
+    local_10 = puVar3[2];
+    FUN_009cc220(0);
+  }
+  return 1;
+}
+
+
+/* ===== steam_playsound3d_handler @ 0x79f8b0 ===== */
+// containing fn: FUN_0079f8b0 @ 0079f8b0
+
+undefined4
+FUN_0079f8b0(undefined4 param_1,undefined4 param_2,int *param_3,undefined4 param_4,
+            undefined4 param_5,undefined4 param_6,undefined4 param_7,undefined4 param_8)
+
+{
+  undefined8 uVar1;
+  undefined4 uVar2;
+  char cVar3;
+  int iVar4;
+  undefined4 *puVar5;
+  undefined8 *puVar6;
+  undefined4 uVar7;
+  undefined8 local_20;
+  undefined4 local_18;
+  undefined4 local_14;
+  undefined1 local_10;
+  undefined4 local_c;
+  int local_8;
+  
+  local_8 = 0;
+  cVar3 = FUN_00787530(param_1,param_2,param_8,param_3,param_4,param_5,param_6,&local_8);
+  if (cVar3 != '\0') {
+    if (param_3 != (int *)0x0) {
+      iVar4 = (**(code **)(*param_3 + 0x1d0))();
+      if (iVar4 != 0) {
+        puVar5 = (undefined4 *)FUN_009cc980(&local_20,*(undefined4 *)(local_8 + 0xc),0x102);
+        local_14 = *puVar5;
+        local_10 = *(undefined1 *)(puVar5 + 1);
+        local_c = puVar5[2];
+        puVar6 = (undefined8 *)(**(code **)(*param_3 + 500))();
+        uVar1 = *puVar6;
+        local_18 = *(undefined4 *)(puVar6 + 1);
+        local_20._4_4_ = (undefined4)((ulonglong)uVar1 >> 0x20);
+        uVar7 = local_20._4_4_;
+        local_20._0_4_ = (undefined4)uVar1;
+        uVar2 = (undefined4)local_20;
+        local_20 = uVar1;
+        FUN_009cc460(uVar2,uVar7,local_18);
+        uVar7 = (**(code **)(*param_3 + 0x1d0))();
+        FUN_009cc420(uVar7);
+        FUN_009cc220(0);
+      }
+    }
+    return 1;
+  }
+  return 0;
+}
+
+
+/* ===== gog_playsound_handler @ 0x523590 ===== */
+// containing fn: FUN_00523560 @ 00523560
+
+void FUN_00523560(void)
+
+{
+  uint uVar1;
+  int *piVar2;
+  int *unaff_FS_OFFSET;
+  int local_10;
+  undefined1 *puStack_c;
+  undefined4 local_8;
+  
+  puStack_c = &LAB_00dd18bf;
+  local_10 = *unaff_FS_OFFSET;
+  uVar1 = DAT_01202954 ^ (uint)&stack0xfffffffc;
+  *unaff_FS_OFFSET = (int)&local_10;
+  local_8 = 0;
+  piVar2 = (int *)FUN_0057ae90(uVar1);
+  (**(code **)(*piVar2 + 4))(&PTR_PTR_011031dc);
+  _atexit(FUN_00eeacc0);
+  *unaff_FS_OFFSET = local_10;
+  return;
+}
+
+
