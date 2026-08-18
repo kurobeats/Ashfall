@@ -1,0 +1,12 @@
+{
+  "fns": [
+    { "addr": "0x798800", "name": "steam_kill_handler" },
+    { "addr": "0x7EFAF0", "name": "steam_kill_preecall" },
+    { "addr": "0x78BA20", "name": "steam_cmd_exec" },
+    { "addr": "0x79F9B0", "name": "steam_playsound_handler" },
+    { "addr": "0x9B3D77", "name": "steam_frame_hook_site_fn" },
+    { "addr": "0x9B0740", "name": "steam_delegator_9b0740" },
+    { "addr": "0x405E70", "name": "steam_delegator_405e70" },
+    { "addr": "0x7D4F40", "name": "steam_death_processor" }
+  ]
+}

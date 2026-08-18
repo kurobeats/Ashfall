@@ -530,10 +530,14 @@ pub fn play_sound(ref_id: u32, sound_id: u32) -> u32 {
         }
         const FLAGS: u32 = 0x4000_0101;
         if crate::hooks::read_bytes(0x009C_C980, 4) == [0x55, 0x8B, 0xEC, 0x6A] {
-            // Steam: NOT wired — live session 2026-08-18k: 0x9CC980(snd,
-            // ref, flags) faults the engine on both the TCP thread (whole-
-            // game crash) and the game-thread queue (crash on drain). The
-            // session-18e derivation is wrong; re-derive statically.
+            // Steam: NOT wired (live session 2026-08-18l). Decompiled the
+            // PlaySound handler 0x79F9B0: 0x9CC980(out_buffer_12B,
+            // sound_ref_id, flags) + a play call (0x9CC220) — the 18e
+            // cdecl(snd_obj, ref, flags) derivation corrupted memory (crash
+            // reproduced twice), and the out-buffer correction still
+            // crashes on the play call (0x9CC220 thiscall semantics /
+            // sound-object lifetime unresolved). Re-derive with the
+            // delegator relay.
             0
         } else if crate::hooks::read_bytes(0x005C_4B30, 3) == [0x53, 0x8B, 0xDC] {
             // FNV: (target, sound, loop, pos_override, type, volume 1.0).
@@ -872,25 +876,18 @@ pub fn kill_actor(ref_id: u32, killer_id: u32, limb: i8, cause: i8) {
             );
             return;
         }
-        // Steam: engine Kill 0x7F3200 (twin of GOG 0x71C280).
-        // 55 8b ec 51 guard (verified 2026-08-18, Ghidra decompile).
-        // Runs on the GAME THREAD via the per-frame hook queue — live
-        // session 2026-08-18k: direct call from the TCP thread applied no
-        // death and killed the server thread (engine calls must run on the
-        // main thread, vaultmp's delegate model).
+        // Steam: engine Kill NOT wired (live session 2026-08-18l). The
+        // KillActor handler 0x798800 decompile proved the direct-call dead
+        // end: the death processor 0x7D4F40 dispatches on the limb-BIT
+        // (0x19-0x1F = sync dismembered death; other values = an async
+        // death-request queue via vtable+0x48(0x20000) that never processes
+        // from bridge-made records), and the handler's death-setup fn
+        // 0x7E53D0 crashes outside the command context. Right path: the
+        // vaultmp delegator relay — dispatch the KillActor command
+        // (op 0x108B) through the engine on the game thread.
         if crate::hooks::read_bytes(0x007F_3200, 3) == [0x55, 0x8B, 0xEC] && !crate::hooks::is_fnv()
         {
-            let actor = actor as usize;
-            let killer = killer as u32; // engine takes the killer pointer as an opaque u32
-            crate::network::enqueue_engine_call(Box::new(move || {
-                let _: u32 = crate::hooks::address::call_thiscall_3::<u32, u32, u32, u32>(
-                    0x7F3200,
-                    actor as *mut u8,
-                    cause as u32,
-                    limb as u32,
-                    killer as u32,
-                );
-            }));
+            let _ = (actor, cause, limb, killer);
             return;
         }
         // Classic/GOG: engine Kill 0x71AC50(actor, killer, 0.0), then

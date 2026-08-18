@@ -1505,3 +1505,85 @@ tetsuo, Steam build confirmed by family match). Results:
 3. Frame hook 0x9B3D77: why zero player-state events despite the 0x244
    correction.
 4. Delegator re-wire via cave relocation (mov ecx; call stub; jmp back).
+
+## Session 2026-08-18l — Ghidra kill/play_sound deep-dive (battlecruiser) + live attempts (tetsuo)
+
+Decompiled the full Steam kill + sound paths (scripts/re/ghidra/dec_kill_relay*.txt).
+Both direct-call approaches are PROVEN dead ends; the delegator relay is the
+only correct path.
+
+### Kill — why every direct call failed (definitive)
+
+KillActor handler 0x798800 (decompiled):
+```
+FUN_00787530(...)          // ExtractArgs -> local_c=killer, local_8=limb, local_10=cause
+piVar2 = FUN_00d7b79b(param_3, ...)   // resolve target ref -> actor
+FUN_007ffaf0()             // death-state check (cVar1)
+if (piVar2[0x3f] == 6) FUN_007f4060(0);
+if (cVar1 == 0) {
+  FUN_007e53d0(local_c, 0);        // full death-setup flow (huge: limb queues,
+                                   // death camera, loot) — CRASHES from the
+                                   // bridge (live-verified: game died on drain)
+  if (local_8 != -1)               // limb != -1 gate
+    FUN_007f3200(local_10, local_8, local_c);  // thiscall(actor, cause, limb, killer)
+}
+```
+0x7F3200 (death processing) gate chain:
+- vtable+0x1D0 lookup first: `0x8B8AF0` (live-probed via player obj → vtable
+  0xF93958 → +0x1D0; the RTTI twin heuristics 0x76C080/0x76FAF0 were BOTH
+  wrong — the vtable_twins slot map does not transfer for this slot). Reads
+  [actor+0x5F0] combat target; fallback = [base_form+0x14] (non-zero for
+  idle NPCs — the precondition alone does NOT block idle kills).
+- Death processor 0x7D4F40 dispatches on the LIMB-BIT (not the limb):
+  - 0x19..0x1F (25-31): synchronous dismembered death path
+  - default: async death-request queue — `FUN_0076b260(actor, -1, cause, 0, 0)`
+    builds a record + flags vtable+0x48(0x20000); the engine's frame
+    processing never acts on bridge-made records (live: no death with any
+    limb/cause combo, incl. limb=31 → sync path check FUN_0075c310(0) etc.).
+- The handler's death-setup 0x7E53D0 (needed before 0x7F3200 for a real
+  death) = the full death flow: crashes outside the command context
+  (live-verified, game died).
+
+Verdict: direct engine-call kill is not viable on Steam. The relay must
+dispatch the KillActor COMMAND (op 0x108B, handler 0x798800, exec 0x78BA20)
+through the engine's command executor on the game thread — vaultmp's
+delegator model, with the game-thread queue from session 18k as transport.
+
+### PlaySound — why the calls crashed (definitive)
+
+PlaySound handler 0x79F9B0 (decompiled):
+```
+FUN_00787530(...)         // ExtractArgs -> local_c (sound form object), local_8
+uVar2 = (0 < local_8) ? 0x121 : 0x40000101;      // flags
+puVar3 = FUN_009cc980(local_24 /*12-byte out buffer*/, *(local_c + 0xC) /*sound ref id*/, uVar2);
+// copies the 12-byte sound struct out of the buffer, then plays:
+FUN_009cc220(...)         // play — thiscall semantics not fully resolved
+```
+- 0x9CC980 = SEH wrapper: (out_buffer_12B, sound_ref_id, flags) → calls
+  0x9D2D70 + 0x9CF370, returns the out buffer. NOT cdecl(snd_obj, ref,
+  flags) as 18e assumed — passing the sound object as the out buffer
+  corrupted the form → crash (reproduced twice live).
+- The out-buffer correction (session 18l live test) STILL crashed on the
+  play call (0x9CC220 thiscall / sound-object lifetime unresolved).
+
+Verdict: same as kill — needs the relay (dispatch PlaySound op 0x1026) or
+a resolved 0x9CC220 contract.
+
+### Delegator identity corrected
+
+- 0x9B0740 (the delegator_src site's ACTUAL callee) = the real delegator.
+- 0x405E70 = a one-time INIT helper (checks [this+0x80], calls DAT_00f240fc /
+  DAT_00f24118) — NOT the delegator. The 18k crash chain fell into the
+  wrong fn. The relay re-wire (cave relocation) must call 0x9B0740.
+
+### Frame-hook mystery (0x9B3D77)
+
+Decompiled the containing fn 0x9B31A0 — large main-loop-ish function; the
+hook still emits zero player-state events. Open item; needs a closer look
+at what 0x9B31A0 actually is (pending).
+
+### Bridge state after 18l
+
+Kill (Steam) and play_sound (Steam) both reverted to safe no-ops. Stable
+build deployed. get_name fix (base+0xD4) live-verified. The game-thread
+queue + discovery drain (18k) remain — the transport for the relay work.
