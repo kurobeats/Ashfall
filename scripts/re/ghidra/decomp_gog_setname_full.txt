@@ -1,0 +1,76 @@
+/* ===== gog_setactorfullname @ 0x539d20 ===== */
+// containing fn: FUN_00539d20 @ 00539d20
+
+undefined1
+FUN_00539d20(undefined4 param_1,undefined4 param_2,int *param_3,undefined4 param_4,
+            undefined4 param_5,undefined4 param_6,undefined4 param_7,undefined4 param_8)
+
+{
+  int *piVar1;
+  char cVar2;
+  undefined **ppuVar3;
+  int iStack_4;
+  
+  iStack_4 = 0;
+  if (param_3 != (int *)0x0) {
+    cVar2 = FUN_00517950(param_1,param_2,param_8,param_3,param_4,param_5,param_6,&iStack_4);
+    if (cVar2 == '\0') {
+      return 0;
+    }
+    if (iStack_4 != 0) {
+      cVar2 = (**(code **)(*param_3 + 0x100))();
+      if (cVar2 != '\0') {
+        ppuVar3 = *(undefined ***)(iStack_4 + 0x1c);
+        if (ppuVar3 == (undefined **)0x0) {
+          ppuVar3 = &PTR_00db3438;
+        }
+        FUN_004019c0(ppuVar3,0);
+        (**(code **)(*(int *)param_3[7] + 0x48))(0x20);
+        return 1;
+      }
+      piVar1 = (int *)param_3[7];
+      if ((char)piVar1[1] == '\x16') {
+        ppuVar3 = *(undefined ***)(iStack_4 + 0x1c);
+        if (ppuVar3 == (undefined **)0x0) {
+          ppuVar3 = &PTR_00db3438;
+        }
+        FUN_004019c0(ppuVar3,0);
+        (**(code **)(*piVar1 + 0x48))(4);
+      }
+    }
+  }
+  return 1;
+}
+
+
+/* ===== gog_setcellfullname @ 0x539c90 ===== */
+// containing fn: FUN_00539c90 @ 00539c90
+
+undefined1
+FUN_00539c90(undefined4 param_1,undefined4 param_2,undefined4 param_3,undefined4 param_4,
+            undefined4 param_5,undefined4 param_6,undefined4 param_7,undefined4 param_8)
+
+{
+  char cVar1;
+  undefined **ppuVar2;
+  int *local_8;
+  int local_4;
+  
+  local_8 = (int *)0x0;
+  local_4 = 0;
+  cVar1 = FUN_00517950(param_1,param_2,param_8,param_3,param_4,param_5,param_6,&local_8,&local_4);
+  if (cVar1 == '\0') {
+    return 0;
+  }
+  if ((local_8 != (int *)0x0) && (local_4 != 0)) {
+    ppuVar2 = *(undefined ***)(local_4 + 0x1c);
+    if (ppuVar2 == (undefined **)0x0) {
+      ppuVar2 = &PTR_00db3438;
+    }
+    FUN_004019c0(ppuVar2,0);
+    (**(code **)(*local_8 + 0x48))(4);
+  }
+  return 1;
+}
+
+

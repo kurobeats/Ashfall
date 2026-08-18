@@ -53,6 +53,17 @@ public class DecompileFns extends GhidraScript {
             if (fn == null) {
                 fn = fm.getFunctionContaining(a);
             }
+            if (fn == null) {
+                // Table-referenced handlers may lack analysis-created functions.
+                // Disassemble from the documented entry + create the function
+                // (byte-guarded by the caller's own validation).
+                new ghidra.app.cmd.disassemble.DisassembleCommand(a, null, true).applyTo(currentProgram);
+                ghidra.app.cmd.function.CreateFunctionCmd cmd = new ghidra.app.cmd.function.CreateFunctionCmd(
+                        "FUN_" + Long.toHexString(addr), a, null,
+                        ghidra.program.model.symbol.SourceType.USER_DEFINED);
+                cmd.applyTo(currentProgram);
+                fn = fm.getFunctionAt(a);
+            }
             out.add("/* ===== " + name + " @ 0x" + Long.toHexString(addr) + " ===== */");
             if (fn == null) {
                 out.add("// no function at or containing address");

@@ -1213,6 +1213,8 @@ pub unsafe fn apply_classic_vaultmp() -> bool {
 ///     pattern vaultmp uses on classic 0x71F05F, live-verified there)
 ///   - match_race (0x6F722C jne NOP — the +0x110 race-id compare,
 ///     Ghidra-decompiled 2026-08-18; forces the SameRace path)
+///   - ai_fix4 (0x63FB36 — NOP the 13-byte spawn-init call in the creation
+///     fn 0x63FA90; found via the spawn-init twin 0x734930's +0x464 marker)
 ///
 /// NOT applied (pending-live — documented in `fo3_steam_17_vaultmp`):
 ///   - fire_fix_jmp/patch: relay stub bytes must be re-derived for Steam
@@ -1310,6 +1312,23 @@ pub unsafe fn apply_steam_vaultmp() -> bool {
         ]
     {
         let p = memory::Patch::new((s::MATCH_RACE_PATCH + 0xC) as *const u8, &[0x90, 0x90]);
+        p.apply();
+        applied = true;
+    }
+    // ai_fix4: NOP the spawn-init call in the creation fn 0x63FA90 (the
+    // Steam twin of classic 0x42FBDC — found 2026-08-18 via the spawn-init
+    // twin 0x734930's [actor+0x60] vtable+0x464 marker). The NOP'd block is
+    // the full 13-byte call: `push 0; push obj; push [ebx+0x28]; mov
+    // edi,ecx; call 0x734930` — same shape as classic's 11-byte block
+    // (`push 0; push edi; push edx; mov ecx,ebx; call 0x559740`); thiscall
+    // callees clean their own stack args so NOP'ing the whole block is
+    // balanced. Guard = the exact block bytes.
+    if read_bytes(0x0063_FB36, 13)
+        == [
+            0x6A, 0x00, 0x50, 0xFF, 0x73, 0x28, 0x8B, 0xCF, 0xE8, 0xED, 0x4D, 0x0F, 0x00,
+        ]
+    {
+        let p = memory::Patch::new(0x0063_FB36 as *const u8, &[0x90; 13]);
         p.apply();
         applied = true;
     }

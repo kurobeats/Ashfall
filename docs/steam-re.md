@@ -1322,3 +1322,53 @@ Both assigners are byte-verified; the handlers' field-address resolution
 is convoluted and GOG's analysis doesn't bound 0x539D20 (table-referenced
 only). FNV is the clean path (consistent with get_name), so OP_SET_NAME
 is FNV-only until a live session reconciles the FO3/Steam fields.
+
+## Session 2026-08-18i — challenge pass: four "needs-live" items resolved statically
+
+A re-examination with sharper tools (CallGraph.java BFS + targeted marker
+fingerprints) resolved four items previously deferred as live-only:
+
+**1. fire_fix — double-report PROVEN; stays unwired (was "needs live
+overlap check").** Call-graph BFS: the fire-dispatch loop (0x8DA370, the
+fire_fix site's fn) reaches the fire routine 0x770880 via a DIFFERENT
+site (0x9CB2D0), NOT the wired hook's 0x7DF3F7. But the DELEGATOR
+(0x9B0740 — the script-command dispatcher the bridge already hooks)
+reaches BOTH paths: → 0x8DA370 (command execution) AND → 0x8CD9E0 →
+0x7DF210 (per-frame executor, wired site). One FireWeapon command
+therefore flows to both 0x770880 call sites — the wired hook reports the
+actual shot, fire_fix would report the command → **double EVENT_FIRE on
+command-issued fires. Keep fire_fix unwired (proof, not hedge).**
+
+**2. ai_fix4 — Steam site FOUND and WIRED (was "0 byte anchors").** The
+GOG NOP'd call = the spawn-init 0x559740 (AI/combat-target setup,
+[actor+0x60] vtable+0x464 marker). Fingerprinting the Steam `call
+[reg+0x464]` sites found the spawn-init twin **0x734930** (J=0.38, all
+markers: +0x16C array, 0x110/0x34 call, +0x60→0x464, player-singleton
+compare) → its caller FUN_0063FA90 = the creation fn twin of GOG
+0x42FB60 → the ai_fix4 call = **0x63FB3E** (`push 0; push obj; push
+[ebx+0x28]; mov edi,ecx; call 0x734930`, 13-byte block at 0x63FB36,
+byte-verified). Wired: 13-byte NOP in apply_steam_vaultmp (thiscall
+callee cleans its own stack args — balanced, same as classic's 11-byte
+NOP).
+
+**3. OP_SET_NAME field conflict — real discovery.** OP_GET_NAME is never
+sent by the client, so the bridge's get_name (+0x1C field) is
+UNEXERCISED — the "live-verified" claim was overstated. The engine's own
+GOG SetActorFullName (forced-decompiled at 0x539D20) writes
+`[base_form + 0xD4]` (ASM: `mov ecx,[esi+0x1C]; add ecx,0xD4`), while the
+bridge reads `[base_form + 0x1C]`. The SetCellFullName handler (0x539C90)
+writes `[name+0x1C]` (no +0xD4) — three different targets across
+handlers. FNV is internally consistent (+0x1C write = +0x1C read); FO3/
+Steam are ambiguous (engine writes +0xD4, bridge reads +0x1C) — one of
+them is wrong, resolvable only by observing a real name change. OP_SET_
+NAME stays FNV-only; get_name's FO3/Steam field is now flagged suspect.
+
+**4. 0x7D0A50 fire-rate — structurally HIGH.** Decompiled all 12
+predicate callers: 11 are huge per-frame actor-processing fns (1894–4405
+decompile lines, 7–11 loops — HighProcess-equivalent pipeline), 1 is the
+0x8CD9E0 chain. The predicate fires per-frame per-processed-actor — the
+discovery detour will fire continuously. The "fall back to HighProcess
+twin" contingency is unnecessary.
+
+New tool: scripts/re/ghidra/CallGraph.java (BFS call-graph reachability,
+body-wide call-ref walk).
