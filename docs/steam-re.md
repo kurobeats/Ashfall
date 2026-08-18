@@ -1265,3 +1265,32 @@ superseded by state sampling. Deferred: play_group wiring (needs re-
 authored relay + live validation), same bucket as fire_fix. All remaining
 RE items are now either resolved, documented as redundant/vaultmp-legacy,
 or gated on the live session.
+
+## Next live session (cyborg.wg) — pre-planned, probe-ready
+
+`bridge_probe.py --action verify` (new, 2026-08-18) byte-checks all 24
+wired patch sites in one shot (OP_PROBE_PTR reads; PASS = guard holds) and
+auto-identifies the build (gog_/steam_/fnv_ family match). This is the
+FIRST step — it proves the running build matches the tables before
+anything is exercised. Then, in order:
+
+1. **verify** — guards + build auto-detect (kills the old
+   "which build am I on" dance; the respawn action already covers the
+   death-path state).
+2. **0x7D0A50 fire-rate** — observe the NPC discovery event rate in the
+   server/client logs (the detour fires per processed actor per frame;
+   the collector → diff → spawn/remove event cadence in a populated cell
+   is the signal). The 2026-08-17 re-wire is untested live.
+3. **Steam kill (0x7F3200)** — issue a kill on a test NPC (server command
+   → OP_KILL) → remote death applies. The args (actor, cause, limb,
+   killer) are decompile-derived; this confirms the call shape live.
+4. **match_race (0x6F722C NOP)** — spawn actors, watch body-type
+   consistency (SameRace path forced). Cosmetic — low risk.
+5. **FNV lock (+0x3C bit 1)** — lock/unlock a door → state relays
+   (UpdateLock). Only on an FNV session.
+6. **play_sound (0x9CC980 / 0xBCFBB0 / 0x5C4B30)** — trigger a remote
+   sound → it plays (UpdateSound relay).
+7. **fire_fix overlap** — exercise a fire while watching the event log:
+   if EVENT_FIRE arrives twice per shot, fire_fix must stay unwired (the
+   stub recipe is ready in Session 2026-08-18f but wiring is gated on
+   this exact observation).

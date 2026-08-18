@@ -128,6 +128,85 @@ def action_respawn(conn):
         print(f"  death-handled flag 0x{STEAM_DEATH_HANDLED:x} = {dh} ({'set' if dh else 'clear'})")
 
 
+# ── Wired-patch verification (2026-08-18 — guards from the bridge's own
+# byte-guards; every site below is patched or called by the bridge, and its
+# guard bytes must hold in the running image). The probe reads 16 dwords at
+# each address via OP_PROBE_PTR and compares the first N bytes. Pass = the
+# build matches the site's guard (auto-detect: the winning guard set tells
+# you which build you are on). Run BEFORE exercising any patch.
+VERIFY_SITES = [
+    # (name, addr, expected_hex)
+    ("gog_frame_hook_0x6EEB2F", 0x6EEB2F, "e80c53ffff"),
+    ("gog_kill_0x71AC50", 0x71AC50, "558bec"),
+    ("gog_kill_death_0x71C280", 0x71C280, "558bec"),
+    ("gog_play_sound_0xBCFBB0", 0xBCFBB0, "6aff6868"),
+    ("gog_ai_pred_0x6FAE90", 0x6FAE90, "568bf1"),
+    ("steam_frame_hook_0x9B3D77", 0x9B3D77, "ff15e441f200"),
+    ("steam_ai_pred_0x7D0A50", 0x7D0A50, "568bf1"),
+    ("steam_aifix2_0x7D0AA5", 0x7D0AA5, "742a83f80374"),
+    ("steam_aifix3_0x7D0AD5", 0x7D0AD5, "cccccccccc"),
+    ("steam_place_at_me_0x79E556", 0x79E556, "e8255ff6ff"),
+    ("steam_fire_weapon_0x7DF3F7", 0x7DF3F7, "e88414f9ff"),
+    ("steam_respawn_A_0x9C43A5", 0x9C43A5, "7503"),
+    ("steam_respawn_B_0x8C9CE0", 0x8C9CE0, "0f8577000000"),
+    ("steam_respawn_B2_0x8C9D52", 0x8C9D52, "c6400201"),
+    # newly wired 2026-08-18 (Ghidra decompile-derived):
+    ("steam_kill_0x7F3200", 0x7F3200, "558bec51"),
+    ("steam_kill_death_0x7D4F40", 0x7D4F40, "558bec83"),
+    ("steam_kill_handler_0x798800", 0x798800, "558bec83"),
+    ("steam_match_race_0x6F7220", 0x6F7220, "8b82100100003b8110010000750c"),
+    ("steam_play_sound_0x9CC980", 0x9CC980, "558bec6aff"),
+    ("fnv_frame_hook_0x86B386", 0x86B386, "e82511bdff"),
+    ("fnv_kill_0x8B86E0", 0x8B86E0, "558bec83ec08"),
+    ("fnv_lock_setter_0x60CA30", 0x60CA30, "558bec51"),
+    ("fnv_lock_handler_0x5C7280", 0x5C7280, "558bec83"),
+    ("fnv_play_sound_0x5C4B30", 0x5C4B30, "538bdc83"),
+]
+
+
+def action_verify(conn):
+    """Byte-verify every wired patch site against the running image.
+
+    Pass = the guard bytes hold. The matching guard set identifies the
+    build (gog_*/steam_*/fnv_*). This is the FIRST thing to run on a live
+    session — it proves the loaded build matches the tables before any
+    patch is exercised.
+    """
+    passed = failed = 0
+    for name, addr, exp in VERIFY_SITES:
+        raw = cmd(conn, OP_PROBE_PTR, struct.pack("<I", addr))
+        if len(raw) < 64:
+            print(f"  FAIL {name}: short read ({raw.hex()})")
+            failed += 1
+            continue
+        dw = struct.unpack("<16I", raw[:64])
+        blob = b"".join(d.to_bytes(4, "little") for d in dw)
+        want = bytes.fromhex(exp)
+        got = blob[: len(want)]
+        if got == want:
+            print(f"  PASS {name}")
+            passed += 1
+        else:
+            print(f"  FAIL {name}: want {exp} got {got.hex()}")
+            failed += 1
+    print(f"== {passed} passed, {failed} failed")
+    # build guess: count PASSes per guard family
+    fams = {"gog": 0, "steam": 0, "fnv": 0}
+    for name, addr, exp in VERIFY_SITES:
+        raw = cmd(conn, OP_PROBE_PTR, struct.pack("<I", addr))
+        if len(raw) >= 64:
+            dw = struct.unpack("<16I", raw[:64])
+            blob = b"".join(d.to_bytes(4, "little") for d in dw)
+            if blob[: len(bytes.fromhex(exp))] == bytes.fromhex(exp):
+                for fam in fams:
+                    if name.startswith(fam + "_"):
+                        fams[fam] += 1
+    total = sum(fams.values())
+    if total:
+        print("guard family match: " + ", ".join(f"{k} {v}/{total}" for k, v in fams.items() if v)
+              + (" -> " + max(fams, key=fams.get) if total else ""))
+
+
 def action_dead(conn):
     """Stub-path command — safe everywhere; proves the pipe round-trip."""
     raw = cmd(conn, OP_GET_DEAD, struct.pack("<I", 0x14))
@@ -147,7 +226,7 @@ def action_pos(conn):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--action", required=True, choices=["probe", "dump", "dead", "pos", "ptr", "respawn"])
+    ap.add_argument("--action", required=True, choices=["probe", "dump", "dead", "pos", "ptr", "respawn", "verify"])
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=1771)
     ap.add_argument("--out", default="/tmp/fo3-image.bin")
@@ -168,6 +247,8 @@ def main():
             action_probe_ptr(conn, args.addr)
         elif args.action == "respawn":
             action_respawn(conn)
+        elif args.action == "verify":
+            action_verify(conn)
     finally:
         conn.close()
     return 0
