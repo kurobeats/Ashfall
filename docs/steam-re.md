@@ -1183,3 +1183,18 @@ NPC/projectile path. The player weapon-fire EVENT is already relayed by the
 wired fire_weapon hook (0x7DF3F7 → 0x770880). fire_fix wiring would relay
 the NPC-side dispatch — not core sync (owned-NPC simulation handles it) —
 kept pending-live, lowest priority.
+
+## Session 2026-08-18e — OP_PLAY_SOUND wired (last engine-blocked OP stub)
+
+PlaySound command handlers decompiled (Steam 0x79F9B0 / GOG 0x523590,
+cmdtable op 0x1026): both EXTRACT_ARGS then call a **cdecl**
+`sound_play(sound_form, refID, flags)` engine entry — Steam **0x9CC980**
+(SEH prologue `55 8b ec 6a ff`, plays via 0x9D2D70/0x9CF370), GOG
+**0xBCFBB0** (frameless SEH `6a ff 68`). Flags mirror the handler logic:
+0x40000101 default, 0x121 when the loop-count arg >= 1. Bridge
+`play_sound()` (hooks/mod.rs) resolves ref + sound form, byte-guards per
+build, calls the engine entry; OP_PLAY_SOUND (commands.rs) is wired —
+remote sound relay complete. FNV PlaySound path not derived (no-op).
+OP_PLACE_AT_ME remains an unused stub (documented); OP_SET_NAME's FNV
+engine path is resolved (0x489100, this=form+0x18) but the game-heap name
+buffer plumbing is deferred until naming sync has a caller.
