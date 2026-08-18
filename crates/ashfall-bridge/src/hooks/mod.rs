@@ -753,8 +753,14 @@ pub fn kill_actor(ref_id: u32, killer_id: u32, limb: i8, cause: i8) {
     // Steam/Anniversary: 2026-08-17 lane c1 — KillActor handler 0x798800
     // → engine Kill 0x7F3200 (killer [ebp+8], ? [ebp+0xC], limb
     // [ebp+0x10]) → death processor 0x7D4F40 (cause-of-death switch).
-    // The [ebp+0xC] arg is UNMAPPED and the death-processor arg order is
-    // not handler-derived — NOT wired (documented, needs live probe).
+    // WIRED 2026-08-18 (Ghidra decompile): 0x7F3200 is the structural twin
+    // of GOG 0x71C280 — thiscall(actor, cause, limb, killer); the former
+    // "unmapped" [ebp+0xC] arg is the LIMB (feeds the +99 limb-bit read,
+    // death-processor arg3, and the param_3==0 isPlayer test). The death
+    // processor 0x7D4F40 takes (0, limb_bit, limb, 0, cause, 0, 1000,
+    // isPlayer) — the same 8-arg shape as GOG 0x71BFE0. The Steam
+    // KillActor handler 0x798800 calls ONLY 0x7F3200 (no separate big
+    // Kill) — it is the complete Steam direct-kill entry.
     unsafe {
         let actor = crate::hooks::vtable::lookup_form_by_id(ref_id);
         if actor.is_null() {
@@ -774,12 +780,17 @@ pub fn kill_actor(ref_id: u32, killer_id: u32, limb: i8, cause: i8) {
             );
             return;
         }
-        // Steam build: engine Kill 0x7F3200 exists (55 8b ec 51 guard) but
-        // its [ebp+0xC] middle arg is UNMAPPED and the death processor
-        // arg order is not handler-derived — NOT wired (documented in
-        // data/re, needs live probe before calling).
+        // Steam: engine Kill 0x7F3200 (twin of GOG 0x71C280).
+        // 55 8b ec 51 guard (verified 2026-08-18, Ghidra decompile).
         if crate::hooks::read_bytes(0x007F_3200, 3) == [0x55, 0x8B, 0xEC] && !crate::hooks::is_fnv()
         {
+            let _: u32 = crate::hooks::address::call_thiscall_3::<u32, u32, u32, u32>(
+                0x7F3200,
+                actor,
+                cause as u32,
+                limb as u32,
+                killer as u32,
+            );
             return;
         }
         // Classic/GOG: engine Kill 0x71AC50(actor, killer, 0.0), then

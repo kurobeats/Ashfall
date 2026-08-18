@@ -266,9 +266,10 @@ pub mod fo3_steam_17_vaultmp {
     pub const PLACE_AT_ME_FIX_DEST: usize = 0x009C_BF97;
     /// match_race sites (Steam fn 0x6F71E0, restructured — +0x218 vtable
     /// slot GONE, new guard chain: actor-null + [reg+0x1c] base-form +
-    /// form-type 0x2a + cmove). Recipe bytes do NOT transfer; fix semantics
-    /// must be re-derived against the new guard chain (pending-live for
-    /// exact bytes). Sites for reference:
+    /// form-type 0x2a + cmove). Decompiled 2026-08-18: the +0x110 race-id
+    /// compare `mov 0x110(%edx); cmp 0x110(%ecx); jne +0xc` replaced the
+    /// classic +0x218 dispatch. Fix = NOP the jne @ PATCH+0xC (force the
+    /// SameRace scale set — vaultmp match_race semantics). Sites:
     pub const MATCH_RACE_NOP1: usize = 0x006F_71FA;
     pub const MATCH_RACE_NOP2: usize = 0x006F_720E;
     pub const MATCH_RACE_PATCH: usize = 0x006F_7220; // `8b 82 10 01 00 00 3b 81` unique (1 hit)
@@ -1210,12 +1211,17 @@ pub unsafe fn apply_classic_vaultmp() -> bool {
 ///   - fire_weapon_jmp (0x7DF3F7 E8→0x770880 reljump; E8 math + call-site
 ///     shape statically confirmed 2026-08-17 — same RelJumpHook-over-E8
 ///     pattern vaultmp uses on classic 0x71F05F, live-verified there)
+///   - match_race (0x6F722C jne NOP — the +0x110 race-id compare,
+///     Ghidra-decompiled 2026-08-18; forces the SameRace path)
 ///
 /// NOT applied (pending-live — documented in `fo3_steam_17_vaultmp`):
 ///   - fire_fix_jmp/patch: relay stub bytes must be re-derived for Steam
-///     register alloc (the 3-byte EB rel8 doesn't transfer)
-///   - match_race_*: recipe bytes don't transfer (restructured guard chain)
-///   - play_idle_fix_src: choice between the 2 twin instances pending-live
+///     register alloc (the 3-byte EB rel8 doesn't transfer; the site is a
+///     6-byte mov + 2-byte call needing a 5-byte E9 + relocated re-entry,
+///     pad too small — decompile-derived 2026-08-18, wiring deferred)
+///   - play_idle_fix_src: twin choice resolved 2026-08-18 (0x79F2BB = the
+///     PlayIdle command handler, 0x79DA88 = a thin wrapper) but the
+///     delegator-relay wiring stays pending-live
 ///
 /// # Safety
 ///
@@ -1290,6 +1296,22 @@ pub unsafe fn apply_steam_vaultmp() -> bool {
             memory::write_rel_jump(s::FIRE_WEAPON_JMP, hook);
             applied = true;
         }
+    }
+    // match_race: force the same-race path in the Steam race-matching fn
+    // 0x6F71E0 (Ghidra-decompiled 2026-08-18 — the +0x110 race-id compare
+    // replaced classic's +0x218 vtable helper call). NOP the `jne +0x0c`
+    // @ 0x6F722C so the "SameRace" scale (1.0) is always set — the Steam
+    // equivalent of the vaultmp match_race fix (prevents body-type desync).
+    // Guard: `8b 82 10 01 00 00 3b 81 10 01 00 00 75 0c` (mov 0x110(%edx);
+    // cmp 0x110(%ecx); jne +0xc), unique-1-hit per the 2026-08-17 sweep.
+    if read_bytes(s::MATCH_RACE_PATCH, 14)
+        == [
+            0x8B, 0x82, 0x10, 0x01, 0x00, 0x00, 0x3B, 0x81, 0x10, 0x01, 0x00, 0x00, 0x75, 0x0C,
+        ]
+    {
+        let p = memory::Patch::new((s::MATCH_RACE_PATCH + 0xC) as *const u8, &[0x90, 0x90]);
+        p.apply();
+        applied = true;
     }
 
     applied

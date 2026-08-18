@@ -1045,3 +1045,72 @@ slot VALUES were all confirmed).
 
 Next: live session (cyborg.wg) — unchanged from 2026-08-17c, plus
 OP_PROBE_FORM the corrected GOG actor vtable 0xE18110 slots.
+
+## Session 2026-08-18b — Ghidra decompile pass: Steam kill + match_race WIRED (no game)
+
+Same Ghidra setup (see Session 2026-08-18). Decompiled the Steam kill
+trio, match_race fn, play_idle twins, play_group dispatcher, AI predicate,
+and the GOG counterparts (artifacts: scripts/re/ghidra/decomp_*.txt).
+
+**Steam kill_actor WIRED (was no-op):** decompile proved 0x7F3200 is the
+structural twin of GOG **0x71C280**, not of 0x71AC50 — bodies match
+param-for-param ([this+0x1D0] killer lookup → [baseForm+0x180] → fn(limb)
+→ +99 limb bit → vtable +0x3A8 damage → death processor). The former
+"unmapped [ebp+0xC] arg" = **the LIMB** (feeds the +99 limb-bit read,
+death-processor arg3, and the param_3==0 isPlayer test). Death processor
+0x7D4F40 = 8-arg (0, limb_bit, limb, 0, cause, 0, 1000, isPlayer) — same
+shape as GOG 0x71BFE0. Steam KillActor handler 0x798800 calls ONLY
+0x7F3200 (no separate big-Kill) — the wrapper is the complete Steam kill.
+Bridge: `call_thiscall_3(0x7F3200, actor, cause, limb, killer)`, guarded
+`55 8b ec`, replacing the old no-op branch.
+
+**Steam match_race WIRED (was pending-live):** decompiled fn 0x6F71E0 —
+the +0x218 vtable helper call is gone; the race check is now the inline
++0x110 race-id compare `mov 0x110(%edx); cmp 0x110(%ecx); jne +0xc` @
+0x6F7220/0x6F7226, with the SameRace scale (1.0) set on match. Bridge NOPs
+the `75 0c` jne @ 0x6F722C (14-byte guard) → always same-race, the
+vaultmp match_race semantics (prevents body-type desync).
+
+**play_idle twin choice RESOLVED (decompile, still not wired):**
+0x79DA88 site1 sits in FUN_0079D9C0 = a 3-arg thin wrapper; 0x79F2BB
+site2 sits in FUN_0079F160 = the full 8-arg PlayIdle command handler
+(EXTRACT_ARGS 0x787530, SEH cookie 0x1202954, form resolve via 0x711E90).
+The handler site is the canonical script/console entry — hook 0x79F2BB
+when the delegator relay lands.
+
+**fire_fix derivation (decompile, still deferred):** Steam site 0x8DA397
+is a 6-byte `mov eax,[eax+0x224]` + 2-byte `call eax` inside the
+fire-loop fn 0x8DA370 (list @ +8, flags test 0x200820, then +0x220/
++0x314/0x83E3C0 fallbacks). No 3-byte fit (classic's EB-rel8 doesn't
+transfer); a 5-byte E9 needs the mov+call relocated into a stub, and the
+int3 pad at 0x8DA3CE is only 2 bytes — the stub needs a code cave.
+Relay wiring stays pending-live (enhancement, not core sync).
+
+**play_group:** 0x580BD0 confirmed as the anim-group dispatcher
+(thiscall; group-id mapping 0x14→1/0x15→4, anim table @ +0xE0, timing
+reads) — the vaultmp play_group fix rewrites its caller flow through the
+delegator; entry byte still unpinnable — pending-live as before.
+
+**AI predicate decompiler-confirmed 1:1 twin:** 0x7D0A50 vs GOG 0x6FAE90
+decompile to the same structure (slots +0x234/+0x22C/+0x3E0/+0x230/+0x214,
+death-state [actor+0xFC] cmp 5/3, player singleton 0x123C674 vs
+0x107A104) — the identification is no longer just byte-pattern.
+
+**FNV lock + naming (decompile/byte):** FNV GetLocked handler 0x5C03D0
+dispatches ref vtable +0x1D0 → lock object; 0x57B410 sits at slot +0xB8
+of ~19 FNV lock-object vtables (docs claim confirmed). FNV SetActorFullName
+handler 0x5D1890 → engine name-setter **0x489100** (thiscall, writes via
+0x4037F0) — the OP_SET_NAME engine hook for FNV. No FNV GetFullName
+command exists (table has SetCellFullName 0x5D1870, SetActorFullName
+0x5D1890, GetPlayerName 0x5DA060).
+
+**Command-table bases now all known + dumped (scripts/re/tables/):**
+GOG 810 entries @ 0xF525D0 (opcodes 0x0000+, events first), Steam 569 @
+0x110B388 (opcodes 0x1000+), FNV 569 @ 0x1190950. All format name@+0 is a
+POINTER; handlers @+0x18 (FO3/Steam) or three handlers @+0/+4/+8 with
+name @+0x10 (FNV).
+
+**Steam Ghidra analysis notes:** full raw-dump analysis takes ~50-60 min
+(-process needs the saved program; the first run was killed before save).
+xrefs on the analyzed project: LookupFormByID 894 refs, AI predicate
+exactly 12 — matching the python E8-count (895/12).
