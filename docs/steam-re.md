@@ -1489,7 +1489,16 @@ tetsuo, Steam build confirmed by family match). Results:
 
 ### Follow-up (static, battlecruiser, no game)
 
-1. Re-decompile Steam KillActor handler 0x798800 push order → fix kill args.
+1. Steam kill needs the HANDLER FLOW, not the lone engine call. Disasm
+   (2026-08-18k): 0x798800 = 0x7EFAF0 (kill flow, mid-body call) + death-
+   state check [esi+0xFC] cmp 6 + `push [ebp-8]; push [ebp-4]; push
+   [ebp-C]; call 0x7F3200` (arg1=[ebp-C] f4=-1, arg2=[ebp-4] fc=-1,
+   arg3=[ebp-8] f8=0 — matches the decompile's (cause, limb, killer)) +
+   0x7F4060 post-call. Direct 0x7F3200 alone never completes a death —
+   live-verified no-op with every (cause, limb) combo. Right path: the
+   vaultmp delegator relay — run the KillActor command through the
+   engine's command dispatch on the game thread (the game-thread queue
+   from session 18k is the transport).
 2. Re-derive Steam play_sound entry (0x9CC980 is wrong — crashes).
 3. Frame hook 0x9B3D77: why zero player-state events despite the 0x244
    correction.
