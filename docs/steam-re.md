@@ -887,10 +887,13 @@ wrong function returns a small int → the anim field reads fault → SEH
 swallows it → no event. Added a result-pointer guard (`< 0x10000` → return
 defaults) so `report_player_state` completes (pos/angle/health correct, anim
 state zero) until the real anim-data slot is pinned. **The correct slot is
-likely classic 0x1EC (Steam 0x244) — needs live OP_PROBE_FORM before wiring.**
+likely classic 0x1EC (Steam 0x244) — CONFIRMED 2026-08-18: Steam actor
+vtable +0x244 = 0x8B8D40 / +0x248 = 0x8B8F60 (slot reads) and both fns are
+32B BYTE-IDENTICAL to GOG 0x76CD00 (classic +0x1EC) / 0x76FED0 (+0x1F0).
+The bridge's steam_slot_for() already maps them; no live probe needed.**
 
-Next: live-verify 0x7D0A50 fire-rate (re-wired 2026-08-17) + OP_PROBE_FORM the anim-data slot
-(0x1EC/0x244) on the game host.
+Next: live-verify 0x7D0A50 fire-rate (re-wired 2026-08-17). The anim-data
+slot is resolved statically (see above) — no probe needed.
 
 ## Session 2026-08-17c — static follow-up: Steam command table + FNV signatures (no game)
 
