@@ -1299,7 +1299,8 @@ reading run, not a debugging session. Order matters (verify first).
 
 Fire_fix: NOT wired (proven redundant 2026-08-18i — the delegator
 reaches both fire paths; wiring would double-report). play_group/
-play_idle delegator relays: vaultmp-legacy, deferred (low priority).
+play_idle delegator relays: proven redundant from the vaultmp source
+(18j — event-based anim forwarding, superseded by state-based sync).
 
 ## Session 2026-08-18h — OP_SET_NAME (FNV) wired; FO3/Steam setters identified
 

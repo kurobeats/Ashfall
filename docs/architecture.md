@@ -1482,10 +1482,11 @@ GOG Actor vtable base corrected to 0xE18110. Remaining live-host work is
 narrow (see steam-re.md sessions 2026-08-18b–i): live-verify the wired
 patches (Steam kill/match_race/ai_fix4, FNV lock, play_sound), confirm
 the 0x7D0A50 discovery fire-rate (structurally high), reconcile the
-FO3/Steam name field (+0xD4 vs +0x1C), and the play_group/play_idle
-delegator relays (vaultmp-legacy, low priority). fire_fix was proven
-redundant (the delegator reaches both fire paths — wiring would
-double-report) and stays unwired.
+FO3/Steam name field (+0xD4 vs +0x1C), and the play_group/play_idle/fire_fix relays — proven redundant from the
+vaultmp source (session 18j: they are vaultmp's event-based anim/fire
+forwarding, superseded by Ashfall's state-based sync; fire_fix also proven
+double-reporting by the call graph). ai_fix4's rationale found (vaultmp
+issue #96 rad-suit bug) and wired on both builds.
 
 ---
 
